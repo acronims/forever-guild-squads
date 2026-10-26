@@ -1,0 +1,16 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Guild Squads — diagramas</title>
+<style>body{font-family:system-ui,sans-serif;max-width:1100px;margin:40px auto;padding:0 20px;color:#1e293b;background:#f8fafc}
+ul{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
+li{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px}img{width:100%;border-radius:6px;border:1px solid #e2e8f0}
+a{color:#0f766e;text-decoration:none}b{display:block;margin-top:8px}p{margin:6px 0 0;font-size:14px;color:#475569}</style>
+<h1>Guild Squads — diagramas</h1><p>Generados con archify desde <code>src/*.json</code>. English → <a href="../../en/diagrams/index.html">index.html</a></p>
+<ul>
+<li><a href="01-architecture.html"><img src="png/01-architecture.png" alt="01-architecture"><b>01-architecture</b></a><p>Módulos del cliente (Core puro, pegamento WoW, UI), SavedVariables, canal GUILD/WHISPER, otros clientes, Overlord opcional, diag y lo que nunca ocurre.</p></li>
+<li><a href="02-squad-lifecycle.html"><img src="png/02-squad-lifecycle.png" alt="02-squad-lifecycle"><b>02-squad-lifecycle</b></a><p>Estados del squad y de la membresía: crear, aprobar, solicitud/invitación, miembro, transferir, expulsar/salir, disolver, squad inactivo y rechazos sincronizados.</p></li>
+<li><a href="03-sync.html"><img src="png/03-sync.png" alt="03-sync"><b>03-sync</b></a><p>Secuencia de sincronización: hello con hashes, respuesta con jitter, merge LWW + autoridad, refresco de UI, bloqueo en encuentro, export/import.</p></li>
+<li><a href="04-gm-settings.html"><img src="png/04-gm-settings.png" alt="04-gm-settings"><b>04-gm-settings</b></a><p>El GM guarda los ajustes: registro versionado, difusión, validación de rango 0 en cada cliente y aplicación (p. ej., squads desactivados ocultan pestañas).</p></li>
+<li><a href="05-scoring.html"><img src="png/05-scoring.png" alt="05-scoring"><b>05-scoring</b></a><p>Flujo de puntos: eventos → MetricEvent → réplica → membresía por wipe y testigos → normalización y tope → wipe → temporada.</p></li>
+<li><a href="06-wipe-season.html"><img src="png/06-wipe-season.png" alt="06-wipe-season"><b>06-wipe-season</b></a><p>Wipe semanal (miércoles 09:00, hora del reino) abierto → cerrado → archivado; temporada del GM y «Nueva temporada»; logros del wipe y de la temporada.</p></li>
+<li><a href="07-raids.html"><img src="png/07-raids.png" alt="07-raids"><b>07-raids</b></a><p>Bandas 10/20/40: roster, composición, squads enteros G1–G8, cobertura, RSVP, publicar → invitar, cerrar + asistencia firmada, copia semanal. No incluye calendario ni botín.</p></li>
+<li><a href="08-hall-of-fame.html"><img src="png/08-hall-of-fame.png" alt="08-hall-of-fame"><b>08-hall-of-fame</b></a><p>Salón de la fama: observaciones → ventana en vivo / «?» no verificado → testigos → carreras Top N (Confirmar/Anular) → logros → claim → chat de la guild.</p></li>
+</ul></html>

@@ -1,0 +1,243 @@
+{
+ "schema_version": 1,
+ "diagram_type": "sequence",
+ "meta": {
+  "title": "Guild Squads — client-to-client sync",
+  "output": "03-sync.html",
+  "quality_profile": "showcase",
+  "column_fit": "spread",
+  "viewBox": [
+   1050,
+   1136
+  ],
+  "locale": "en"
+ },
+ "participants": [
+  {
+   "id": "ui",
+   "type": "frontend",
+   "label": "UI",
+   "sublabel": "Main · Panels"
+  },
+  {
+   "id": "glue",
+   "type": "backend",
+   "label": "GuildSquads.lua",
+   "sublabel": "client A"
+  },
+  {
+   "id": "sync",
+   "type": "backend",
+   "label": "Sync.lua",
+   "sublabel": "client A"
+  },
+  {
+   "id": "model",
+   "type": "database",
+   "label": "Core/Model",
+   "sublabel": "pure Lua"
+  },
+  {
+   "id": "comm",
+   "type": "messagebus",
+   "label": "Comm + Queue",
+   "sublabel": "1 msg/s · burst 4"
+  },
+  {
+   "id": "chan",
+   "type": "messagebus",
+   "label": "Addon channel",
+   "sublabel": "GUILD / WHISPER"
+  },
+  {
+   "id": "peer",
+   "type": "external",
+   "label": "Client B",
+   "sublabel": "Sync.onHello"
+  }
+ ],
+ "segments": [
+  {
+   "from": 150,
+   "to": 324,
+   "label": "Login"
+  },
+  {
+   "from": 354,
+   "to": 570,
+   "label": "Peer reply"
+  },
+  {
+   "from": 600,
+   "to": 774,
+   "label": "Merge and validation"
+  },
+  {
+   "from": 804,
+   "to": 894,
+   "label": "Encounter lock"
+  },
+  {
+   "from": 924,
+   "to": 1056,
+   "label": "Export / import"
+  }
+ ],
+ "messages": [
+  {
+   "from": "glue",
+   "to": "sync",
+   "y": 180,
+   "label": "roster ready → FlushPending",
+   "variant": "default"
+  },
+  {
+   "from": "glue",
+   "to": "sync",
+   "y": 222,
+   "label": "After 3–10 s → Sync.Hello",
+   "variant": "emphasis"
+  },
+  {
+   "from": "sync",
+   "to": "comm",
+   "y": 264,
+   "label": "H: bucketHashes ×16 + ec",
+   "variant": "emphasis"
+  },
+  {
+   "from": "comm",
+   "to": "chan",
+   "y": 306,
+   "label": "GUILD",
+   "variant": "emphasis"
+  },
+  {
+   "from": "chan",
+   "to": "peer",
+   "y": 384,
+   "label": "hello",
+   "variant": "default"
+  },
+  {
+   "from": "peer",
+   "to": "chan",
+   "y": 426,
+   "label": "D: diffRecords (p=8/online, 2–8 s)",
+   "variant": "emphasis"
+  },
+  {
+   "from": "peer",
+   "to": "chan",
+   "y": 468,
+   "label": "E over WHISPER: its own events",
+   "variant": "dashed"
+  },
+  {
+   "from": "chan",
+   "to": "comm",
+   "y": 510,
+   "label": "Chunk.feed → decode",
+   "variant": "default"
+  },
+  {
+   "from": "comm",
+   "to": "sync",
+   "y": 552,
+   "label": "onRecords / OnEvents",
+   "variant": "emphasis"
+  },
+  {
+   "from": "sync",
+   "to": "model",
+   "y": 630,
+   "label": "M.apply: schema + LWW + authority",
+   "variant": "security"
+  },
+  {
+   "from": "model",
+   "to": "sync",
+   "y": 672,
+   "label": "applied · stale · denied · dup",
+   "variant": "return"
+  },
+  {
+   "from": "sync",
+   "to": "chan",
+   "y": 714,
+   "label": "stale → resend mine (3–10 s)",
+   "variant": "dashed"
+  },
+  {
+   "from": "sync",
+   "to": "ui",
+   "y": 756,
+   "label": "UI.Dirty → refresh",
+   "variant": "emphasis"
+  },
+  {
+   "from": "glue",
+   "to": "comm",
+   "y": 834,
+   "label": "ENCOUNTER_START → setBlocked",
+   "variant": "security"
+  },
+  {
+   "from": "comm",
+   "to": "chan",
+   "y": 876,
+   "label": "ENCOUNTER_END → drain queue",
+   "variant": "default"
+  },
+  {
+   "from": "ui",
+   "to": "glue",
+   "y": 954,
+   "label": "/gsq export · import (GSQ1:)",
+   "variant": "default"
+  },
+  {
+   "from": "glue",
+   "to": "model",
+   "y": 996,
+   "label": "M.import: settings → squad → profile",
+   "variant": "emphasis"
+  },
+  {
+   "from": "glue",
+   "to": "sync",
+   "y": 1038,
+   "label": "if applied → Sync.Hello",
+   "variant": "dashed"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Hello and reply",
+   "items": [
+    "Hello: 16 bucket hashes per kind (settings, squad, profile) + event count per author",
+    "Only a fraction replies (8/online) after 2–8 s; max 60 records, batches of 3",
+    "E events are accepted only if sender == author"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "Merge (Core/Model.lua)",
+   "items": [
+    "LWW: ts, then sq, then author",
+    "Local authority from the roster: GM, officer, captain, own profile",
+    "Records without roster wait in pending (max 1000)"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Queue (Comm.lua · Core/Queue.lua)",
+   "items": [
+    "Nothing is sent during encounters, PvP, M+ or chat lockdown",
+    "PLAYER_ENTERING_WORLD clears stale locks",
+    "Export/import: text backup, revalidated on import"
+   ]
+  }
+ ]
+}
