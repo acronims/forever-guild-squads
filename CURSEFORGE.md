@@ -2,7 +2,7 @@
 
 Guild Squads is a guild-only addon for **World of Warcraft: Forever** (interface 16001). Build a squad of five with your guildmates, find people who play when you play, compete as squads every week, race for the guild's Hall of Fame and organise 10, 20 and 40-player raid rosters. The guild master stays in control of the rules.
 
-**Version 1.0.1.** It is tested outside the game with a mocked client and a multi-client simulator; please report anything that misbehaves in the client on the issue tracker.
+It is tested outside the game with a mocked client and a multi-client simulator; please report anything that misbehaves in the client on the issue tracker.
 
 **The guild master shapes the achievements.** In Settings > Achievements (visible to the guild master only) you can enable or disable every achievement and Hall of Fame race, one by one, per group or all at once; change the size and the visible name of an open Top; create up to 50 achievements of your own on what the addon already measures (a level, a boss, squad battleground wins, a profession skill, an Exalted reputation, or a badge you grant); and grant badges by hand with a reason. Disabled entries keep counting quietly and what players already earned stays visible under **Legacy**. A granted badge never puts anyone in a Top.
 

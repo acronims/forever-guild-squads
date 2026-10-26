@@ -2,11 +2,11 @@
 
 # Guild Squads
 
-[![CI](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml/badge.svg)](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml)
+[![CI](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml/badge.svg)](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml) [![CurseForge](https://img.shields.io/curseforge/v/1760070?label=CurseForge)](https://www.curseforge.com/wow/addons/guild-squads) [![Release](https://img.shields.io/github/v/tag/acronims/forever-guild-squads?sort=semver&label=version)](https://github.com/acronims/forever-guild-squads/tags)
 
 **Español → [README.es.md](README.es.md)**
 
-Addon for **World of Warcraft: Forever** (client 1.60.1, `## Interface: 16001`). Version **1.0.1**. MIT license. Author: Raul Illana.
+Addon for **World of Warcraft: Forever** (client 1.60.1, `## Interface: 16001`). Current version: see the badges above or [CHANGELOG.md](CHANGELOG.md). MIT license. Author: Raul Illana.
 
 ## What it is
 Guild-only squads of 5, with the guild master in control:
@@ -85,7 +85,7 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
 - No squad chat.
 
 ## Status
-**1.0.1.** Logic (`Core/`), transport and the full flow are tested outside the game with unit tests and a multi-client simulator ([SIMULATOR-RESULTS.md](docs/en/SIMULATOR-RESULTS.md)). Architecture: [ARCHITECTURE.md](docs/en/ARCHITECTURE.md). Changes: [CHANGELOG.md](CHANGELOG.md).
+**Stable.** Logic (`Core/`), transport and the full flow are tested outside the game with unit tests and a multi-client simulator ([SIMULATOR-RESULTS.md](docs/en/SIMULATOR-RESULTS.md)). Architecture: [ARCHITECTURE.md](docs/en/ARCHITECTURE.md). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Docs
 [docs/en/INDEX.md](docs/en/INDEX.md) · Players: [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md) · GM/officers/RL: [GM-GUIDE.md](docs/en/GM-GUIDE.md) · Achievements: [ACHIEVEMENTS.md](docs/en/ACHIEVEMENTS.md) · Architecture: [ARCHITECTURE.md](docs/en/ARCHITECTURE.md) · Simulator: [SIMULATOR-RESULTS.md](docs/en/SIMULATOR-RESULTS.md) · Release: [RELEASE.md](docs/en/RELEASE.md) · Diagrams: [docs/en/diagrams](docs/en/diagrams/README.md) · Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) · Security: [SECURITY.md](SECURITY.md)
