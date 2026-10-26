@@ -2,11 +2,11 @@
 
 # Guild Squads
 
-[![CI](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml/badge.svg)](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml)
+[![CI](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml/badge.svg)](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml) [![CurseForge](https://img.shields.io/curseforge/v/1760070?label=CurseForge)](https://www.curseforge.com/wow/addons/guild-squads) [![Release](https://img.shields.io/github/v/tag/acronims/forever-guild-squads?sort=semver&label=version)](https://github.com/acronims/forever-guild-squads/tags)
 
 **English → [README.md](README.md)**
 
-Addon para **World of Warcraft: Forever** (cliente 1.60.1, `## Interface: 16001`). Versión **1.0.1**. Licencia MIT. Autor: Raul Illana.
+Addon para **World of Warcraft: Forever** (cliente 1.60.1, `## Interface: 16001`). Versión actual: mira las insignias de arriba o el [CHANGELOG.md](CHANGELOG.md). Licencia MIT. Autor: Raul Illana.
 
 ## Qué es
 Squads de 5 dentro de la guild, con el GM al mando:
@@ -85,7 +85,7 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
 - Sin chat de squad.
 
 ## Estado
-**1.0.1.** La lógica (`Core/`), el transporte y el flujo completo se prueban fuera del juego con tests unitarios y un simulador multi-cliente ([SIMULATOR-RESULTS.md](docs/es/SIMULATOR-RESULTS.md)). Arquitectura: [ARCHITECTURE.md](docs/es/ARCHITECTURE.md). Cambios: [CHANGELOG.md](CHANGELOG.md).
+**Estable.** La lógica (`Core/`), el transporte y el flujo completo se prueban fuera del juego con tests unitarios y un simulador multi-cliente ([SIMULATOR-RESULTS.md](docs/es/SIMULATOR-RESULTS.md)). Arquitectura: [ARCHITECTURE.md](docs/es/ARCHITECTURE.md). Cambios: [CHANGELOG.md](CHANGELOG.md).
 
 ## Documentación
 [docs/es/INDEX.md](docs/es/INDEX.md) · Jugador: [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md) · GM/oficiales/RL: [GM-GUIDE.md](docs/es/GM-GUIDE.md) · Logros: [ACHIEVEMENTS.md](docs/es/ACHIEVEMENTS.md) · Arquitectura: [ARCHITECTURE.md](docs/es/ARCHITECTURE.md) · Simulador: [SIMULATOR-RESULTS.md](docs/es/SIMULATOR-RESULTS.md) · Publicar: [RELEASE.md](docs/es/RELEASE.md) · Diagramas: [docs/es/diagrams](docs/es/diagrams/README.md) · Contribuir: [CONTRIBUTING.md](CONTRIBUTING.md) (en inglés) · Seguridad: [SECURITY.md](SECURITY.md) (en inglés)
