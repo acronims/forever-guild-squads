@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.1 — 2026-10-26 — Preparing the repository release
+
+### ES
+
+Versión de preparación del repositorio: documentación, textos y traducciones. Sin cambios de lógica.
+
+- **Documentación bilingüe por carpetas**: `docs/en/` y `docs/es/` con los mismos documentos y los mismos nombres (INDEX, PLAYER-GUIDE, GM-GUIDE, ACHIEVEMENTS, ARCHITECTURE, SIMULATOR-RESULTS, RELEASE); cada uno enlaza arriba con su par. Nuevas traducciones: el catálogo de logros, los resultados del simulador y la publicación al inglés, y la arquitectura al español.
+- **Diagramas en los dos idiomas**: los 8 diagramas (HTML y PNG) en `docs/en/diagrams/` y `docs/es/diagrams/`, con índice en cada idioma; los ingleses se regeneran desde las fuentes traducidas.
+- **README en inglés** (`README.md`) con enlace a **`README.es.md`** en español.
+- **Contenido del juego traducido entero (EN/ES)**: logros y carreras de serie, celebraciones y estados. Los nombres de raza de las carreras y del asistente de logros propios salen traducidos (antes, el token crudo: «Nightelf», «Scourge»), igual que «Top N» y los minutos. Los anuncios en el chat de la guild salen en el idioma del cliente que anuncia.
+- Correcciones de texto: «Hall of Fame» unificado en inglés, «Every open raid», «Overall» en la descripción de Constancia, «Color» en inglés, títulos de los tests en inglés.
+- Comprobación de enlaces de la documentación en la CI (`tests/tools/check-links.js`), el zip no lleva `README.es.md` y las plantillas de incidencias enlazan a la guía del jugador.
+
+### EN
+
+Repository preparation release: docs, texts and translations. No logic changes.
+
+- **Bilingual docs by folder**: `docs/en/` and `docs/es/` hold the same documents under the same names (INDEX, PLAYER-GUIDE, GM-GUIDE, ACHIEVEMENTS, ARCHITECTURE, SIMULATOR-RESULTS, RELEASE); each links to its pair at the top. New translations: the achievements catalog, the simulator results and the release process into English, and the architecture into Spanish.
+- **Diagrams in both languages**: the 8 diagrams (HTML and PNG) in `docs/en/diagrams/` and `docs/es/diagrams/`, with an index per language; the English ones are regenerated from translated sources.
+- **English README** (`README.md`) linking to **`README.es.md`** in Spanish.
+- **In-game content fully translated (EN/ES)**: default achievements, races, celebrations, statuses. Race names in race titles and in the custom achievement wizard are now translated (they showed the raw token, e.g. "Nightelf", "Scourge"), as are "Top N" and minutes. Guild-chat announcements use the language of the announcing client.
+- Text fixes: "Hall of Fame" unified in English, "Every open raid", "Overall" in the Consistency description, "Color" in English, test titles in English.
+- Docs link check in CI (`tests/tools/check-links.js`), `README.es.md` kept out of the zip, and the issue templates link to the player guide.
+
 ## 1.0.0 — 2026-10-27
 
 ### ES

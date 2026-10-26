@@ -10,7 +10,7 @@ Lua puro (`Core/`, sin API de WoW, con tests unitarios fuera del juego):
 
 | Fichero | Responsabilidad |
 |---|---|
-| `Locales/enUS.lua`, `Locales/esES.lua` | Tablas de textos (las mismas claves en los dos). |
+| `Locales/enUS.lua`, `Locales/esES.lua` | Tablas de textos (las mismas claves en los dos). Todo texto que ve el jugador, incluidos los nombres de los logros y carreras de serie, los estados y los mensajes al chat de la guild, sale de ellas; los ids replicados nunca se traducen. Los mensajes al chat de la guild usan la tabla del cliente que anuncia. |
 | `Core/Serialize.lua` | Serializador determinista con tipos, escapado para el transporte, hash; `ns.apiFn`, que resuelve la API en el momento de la llamada. |
 | `Core/Permissions.lua` | Decisiones de rango sobre una función `roster(name)` inyectada: `isGM` (rango 0), `isOfficer` (`settings.officerRanks`), `canEditSettings`, `canCreateSquad`, `canManageSquad`. |
 | `Core/Chunk.lua` | Parte un payload escapado en mensajes de ≤255 bytes y los vuelve a montar. |

@@ -10,7 +10,7 @@ Pure Lua (`Core/`, no WoW API, unit-tested outside the game):
 
 | File | Responsibility |
 |---|---|
-| `Locales/enUS.lua`, `Locales/esES.lua` | String tables (same keys in both). |
+| `Locales/enUS.lua`, `Locales/esES.lua` | String tables (same keys in both). Every text the player sees, including default achievement and race names, statuses and guild-chat messages, comes from them; replicated ids are never localized. Guild-chat messages use the announcing client's table. |
 | `Core/Serialize.lua` | Deterministic type-tagged serializer, transport escaping, hash; `ns.apiFn` call-time API resolver. |
 | `Core/Permissions.lua` | Rank decisions over an injected `roster(name)` function: `isGM` (rank 0), `isOfficer` (`settings.officerRanks`), `canEditSettings`, `canCreateSquad`, `canManageSquad`. |
 | `Core/Chunk.lua` | Splits an escaped payload into ≤255-byte messages and reassembles them. |
