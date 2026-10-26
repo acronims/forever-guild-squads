@@ -24,7 +24,7 @@ Repository preparation release: docs, texts and translations. No logic changes.
 - Text fixes: "Hall of Fame" unified in English, "Every open raid", "Overall" in the Consistency description, "Color" in English, test titles in English.
 - Docs link check in CI (`tests/tools/check-links.js`), `README.es.md` kept out of the zip, and the issue templates link to the player guide.
 
-## 1.0.0 — 2026-10-27
+## 1.0.0 — 2026-10-26
 
 ### ES
 
