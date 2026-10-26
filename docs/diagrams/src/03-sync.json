@@ -1,0 +1,242 @@
+{
+ "schema_version": 1,
+ "diagram_type": "sequence",
+ "meta": {
+  "title": "Guild Squads — sincronización entre clientes",
+  "output": "03-sync.html",
+  "quality_profile": "showcase",
+  "column_fit": "spread",
+  "viewBox": [
+   1050,
+   1136
+  ]
+ },
+ "participants": [
+  {
+   "id": "ui",
+   "type": "frontend",
+   "label": "UI",
+   "sublabel": "Main · Panels"
+  },
+  {
+   "id": "glue",
+   "type": "backend",
+   "label": "GuildSquads.lua",
+   "sublabel": "cliente A"
+  },
+  {
+   "id": "sync",
+   "type": "backend",
+   "label": "Sync.lua",
+   "sublabel": "cliente A"
+  },
+  {
+   "id": "model",
+   "type": "database",
+   "label": "Core/Model",
+   "sublabel": "Lua puro"
+  },
+  {
+   "id": "comm",
+   "type": "messagebus",
+   "label": "Comm + Queue",
+   "sublabel": "1 msg/s · ráfaga 4"
+  },
+  {
+   "id": "chan",
+   "type": "messagebus",
+   "label": "Canal addon",
+   "sublabel": "GUILD / WHISPER"
+  },
+  {
+   "id": "peer",
+   "type": "external",
+   "label": "Cliente B",
+   "sublabel": "Sync.onHello"
+  }
+ ],
+ "segments": [
+  {
+   "from": 150,
+   "to": 324,
+   "label": "Login"
+  },
+  {
+   "from": 354,
+   "to": 570,
+   "label": "Respuesta de pares"
+  },
+  {
+   "from": 600,
+   "to": 774,
+   "label": "Merge y validación"
+  },
+  {
+   "from": 804,
+   "to": 894,
+   "label": "Bloqueo en encuentro"
+  },
+  {
+   "from": 924,
+   "to": 1056,
+   "label": "Export / import"
+  }
+ ],
+ "messages": [
+  {
+   "from": "glue",
+   "to": "sync",
+   "y": 180,
+   "label": "roster listo → FlushPending",
+   "variant": "default"
+  },
+  {
+   "from": "glue",
+   "to": "sync",
+   "y": 222,
+   "label": "After 3–10 s → Sync.Hello",
+   "variant": "emphasis"
+  },
+  {
+   "from": "sync",
+   "to": "comm",
+   "y": 264,
+   "label": "H: bucketHashes ×16 + ec",
+   "variant": "emphasis"
+  },
+  {
+   "from": "comm",
+   "to": "chan",
+   "y": 306,
+   "label": "GUILD",
+   "variant": "emphasis"
+  },
+  {
+   "from": "chan",
+   "to": "peer",
+   "y": 384,
+   "label": "hello",
+   "variant": "default"
+  },
+  {
+   "from": "peer",
+   "to": "chan",
+   "y": 426,
+   "label": "D: diffRecords (p=8/online, 2–8 s)",
+   "variant": "emphasis"
+  },
+  {
+   "from": "peer",
+   "to": "chan",
+   "y": 468,
+   "label": "E por WHISPER: sus propios eventos",
+   "variant": "dashed"
+  },
+  {
+   "from": "chan",
+   "to": "comm",
+   "y": 510,
+   "label": "Chunk.feed → decode",
+   "variant": "default"
+  },
+  {
+   "from": "comm",
+   "to": "sync",
+   "y": 552,
+   "label": "onRecords / OnEvents",
+   "variant": "emphasis"
+  },
+  {
+   "from": "sync",
+   "to": "model",
+   "y": 630,
+   "label": "M.apply: esquema + LWW + autoridad",
+   "variant": "security"
+  },
+  {
+   "from": "model",
+   "to": "sync",
+   "y": 672,
+   "label": "applied · stale · denied · dup",
+   "variant": "return"
+  },
+  {
+   "from": "sync",
+   "to": "chan",
+   "y": 714,
+   "label": "stale → reenvía la mía (3–10 s)",
+   "variant": "dashed"
+  },
+  {
+   "from": "sync",
+   "to": "ui",
+   "y": 756,
+   "label": "UI.Dirty → refresco",
+   "variant": "emphasis"
+  },
+  {
+   "from": "glue",
+   "to": "comm",
+   "y": 834,
+   "label": "ENCOUNTER_START → setBlocked",
+   "variant": "security"
+  },
+  {
+   "from": "comm",
+   "to": "chan",
+   "y": 876,
+   "label": "ENCOUNTER_END → vacía la cola",
+   "variant": "default"
+  },
+  {
+   "from": "ui",
+   "to": "glue",
+   "y": 954,
+   "label": "/gsq export · import (GSQ1:)",
+   "variant": "default"
+  },
+  {
+   "from": "glue",
+   "to": "model",
+   "y": 996,
+   "label": "M.import: settings → squad → profile",
+   "variant": "emphasis"
+  },
+  {
+   "from": "glue",
+   "to": "sync",
+   "y": 1038,
+   "label": "si aplicó → Sync.Hello",
+   "variant": "dashed"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Hello y respuesta",
+   "items": [
+    "Hello: hashes de 16 cubos por tipo (settings, squad, profile) + recuento de eventos por autor",
+    "Solo responde una fracción (8/en línea) tras 2–8 s; máx. 60 registros, lotes de 3",
+    "Los eventos E solo los acepta el cliente si sender == autor"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "Merge (Core/Model.lua)",
+   "items": [
+    "LWW: ts, luego sq, luego autor",
+    "Autoridad local con el roster: GM, oficial, capitán, propio perfil",
+    "Registros sin roster esperan en pending (máx. 1000)"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Cola (Comm.lua · Core/Queue.lua)",
+   "items": [
+    "Nada sale en encuentro, PvP, M+ o lockdown de chat",
+    "PLAYER_ENTERING_WORLD limpia bloqueos obsoletos",
+    "Exportar/importar: copia de seguridad en texto, revalidada al importar"
+   ]
+  }
+ ]
+}

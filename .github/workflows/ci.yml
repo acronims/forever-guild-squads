@@ -1,0 +1,63 @@
+# Guild Squads CI: the same commands as the local check (CONTRIBUTING.md). No secrets, nothing is published.
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the Lua VM (fengari) and the Lua 5.1 parser (luaparse)
+        run: npm i --no-save --prefix /tmp/gsq-node fengari@0.1.4 luaparse@0.3.1
+      - name: Tests
+        run: NODE_PATH=/tmp/gsq-node/node_modules node tests/run.js
+      - name: Syntax gate
+        run: NODE_PATH=/tmp/gsq-node/node_modules node tests/gates.js
+  static:
+    # Static checks: secret-value lint (the 16001 client has C_Secrets / issecretvalue; pinned, non-strict) and the
+    # API/TOC/locale gates. luacheck is not part of CI; .luacheckrc is provided for local use.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Secret lint (wow-secret-lint 1.10.2)
+        run: npx -y wow-secret-lint@1.10.2 .
+      - name: Install the Lua 5.1 parser (luaparse)
+        run: npm i --no-save --prefix /tmp/gsq-node luaparse@0.3.1
+      - name: API / TOC / locale gates
+        run: NODE_PATH=/tmp/gsq-node/node_modules node tests/gates.js
+      - name: Gates self-test (unguarded calls in conditions must fail the gate)
+        run: NODE_PATH=/tmp/gsq-node/node_modules node tests/tools/gates-selftest.js
+  sim:
+    # Multi-client simulator: one scenario group per job (GitHub runners have 2 vCPU; one process per job).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - "S1 S3 S4 S5 --seed 7303 --s5seeds 5"
+          - "S2 S6 --seed 7303"
+          - "S7 --seed 7303"
+          - "S8 --seed 7303 --s8min 3"
+          - "S9 --seed 7303 --s9min 15"
+          - "S9 --seed 8303 --s9min 15"
+          - "S9 --seed 9303 --s9min 15"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the Lua VM (fengari) and the Lua 5.1 parser (luaparse)
+        run: npm i --no-save --prefix /tmp/gsq-node fengari@0.1.4 luaparse@0.3.1
+      - name: Simulator ${{ matrix.group }}
+        run: NODE_PATH=/tmp/gsq-node/node_modules node tests/sim/run.js ${{ matrix.group }}

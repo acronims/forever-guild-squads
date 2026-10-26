@@ -1,0 +1,27 @@
+# Guild Squads package dry run: builds the zip on every pull request and keeps it as an artifact.
+# "-d" = skip upload. No secrets, nothing is published.
+# Run it by hand on a tag (Actions > Package dry run > Run workflow > pick the tag) to get a cleanly
+# versioned zip without publishing anything (docs/RELEASE.md).
+name: Package dry run
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package without uploading (BigWigs packager v2.6.1, pinned by SHA)
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0 # v2.6.1
+        with:
+          args: -d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GuildSquads-zip
+          path: .release/*.zip
+          if-no-files-found: error
+          include-hidden-files: true

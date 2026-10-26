@@ -1,0 +1,17 @@
+# BigWigs packager metadata. Shipped zip: GuildSquads/ with the TOC, Lua, Bindings.xml, LICENSE and CHANGELOG.md.
+package-as: GuildSquads
+enable-nolib-creation: no
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+ignore:
+  - tests
+  - docs
+  - .github
+  - node_modules
+  - .luacheckrc
+  - .gitignore
+  - README.md
+  - CURSEFORGE.md
+  - SECURITY.md
+  - CONTRIBUTING.md

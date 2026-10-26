@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="GUILDSQUADS_TOGGLE" header="GUILDSQUADS" category="ADDONS">
+    if SlashCmdList and SlashCmdList.GUILDSQUADS then SlashCmdList.GUILDSQUADS("toggle") end
+  </Binding>
+</Bindings>

@@ -1,0 +1,207 @@
+{
+ "schema_version": 1,
+ "diagram_type": "dataflow",
+ "meta": {
+  "title": "Guild Squads — Salón de la fama",
+  "output": "08-salon-de-la-fama.html",
+  "quality_profile": "showcase",
+  "viewBox": [
+   1070,
+   640
+  ]
+ },
+ "stages": [
+  {
+   "label": "Observación (Hall.lua)"
+  },
+  {
+   "label": "Réplica + ventana"
+  },
+  {
+   "label": "Testigos (Core/Races)"
+  },
+  {
+   "label": "Carreras Top N"
+  },
+  {
+   "label": "Celebración"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "obs",
+   "type": "frontend",
+   "label": "Observaciones",
+   "sublabel": "nivel·jefe·BG·HK",
+   "stage": 0,
+   "row": 0
+  },
+  {
+   "id": "roster",
+   "type": "frontend",
+   "label": "Roster de la guild",
+   "sublabel": "niveles sin addon",
+   "stage": 0,
+   "row": 2
+  },
+  {
+   "id": "live",
+   "type": "messagebus",
+   "label": "Ventana en vivo",
+   "sublabel": "envío ±300 s",
+   "stage": 1,
+   "row": 0
+  },
+  {
+   "id": "uv",
+   "type": "security",
+   "label": "No verificado",
+   "sublabel": "«?» no puntúa",
+   "stage": 1,
+   "row": 2
+  },
+  {
+   "id": "wit",
+   "type": "backend",
+   "label": "Testigos",
+   "sublabel": "2+ en 10/3 min",
+   "stage": 2,
+   "row": 0
+  },
+  {
+   "id": "gm",
+   "type": "security",
+   "label": "GM / oficial",
+   "sublabel": "Confirmar · Anular",
+   "stage": 2,
+   "row": 2
+  },
+  {
+   "id": "races",
+   "type": "database",
+   "label": "Carreras",
+   "sublabel": "Top N · medallas",
+   "stage": 3,
+   "row": 0
+  },
+  {
+   "id": "ach",
+   "type": "database",
+   "label": "Mis logros",
+   "sublabel": "de las entradas",
+   "stage": 3,
+   "row": 2
+  },
+  {
+   "id": "claim",
+   "type": "messagebus",
+   "label": "Claim anunciante",
+   "sublabel": "1 msg / 10 s",
+   "stage": 4,
+   "row": 0
+  },
+  {
+   "id": "chat",
+   "type": "external",
+   "label": "Chat de la guild",
+   "sublabel": "nunca en encuentro",
+   "stage": 4,
+   "row": 2
+  }
+ ],
+ "flows": [
+  {
+   "from": "obs",
+   "to": "live",
+   "label": "propias",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "from": "roster",
+   "to": "live",
+   "label": "nivel"
+  },
+  {
+   "from": "live",
+   "to": "wit",
+   "label": "en ventana",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "from": "live",
+   "to": "uv",
+   "label": "tarde",
+   "variant": "dashed",
+   "labelDy": 24
+  },
+  {
+   "from": "uv",
+   "to": "gm",
+   "label": "vconfirm",
+   "variant": "security"
+  },
+  {
+   "from": "wit",
+   "to": "races",
+   "label": "válidas",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "from": "gm",
+   "to": "races",
+   "label": "anular",
+   "variant": "security"
+  },
+  {
+   "from": "races",
+   "to": "ach",
+   "label": "derivar",
+   "labelDy": 24
+  },
+  {
+   "from": "races",
+   "to": "claim",
+   "label": "puesto",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "from": "claim",
+   "to": "chat",
+   "label": "ganador",
+   "labelDy": 24
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Reglas de entrada",
+   "items": [
+    "Solo el autor envía en vivo; páginas reenviadas solo de GM/oficial",
+    "Contadores: no bajan ni saltan más de lo plausible",
+    "Primer avistamiento del roster: no retroactivo"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Verificar / anular",
+   "items": [
+    "«?» = no verificado: visible, no puntúa",
+    "Confirmar: registro firmado vconfirm del GM/oficial",
+    "Anular: motivo obligatorio, queda en el historial"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Celebraciones (Ajustes)",
+   "items": [
+    "Puesto 1 / Top 3 / Cualquiera; logros de squad opcional",
+    "Claim previo: el candidato mejor situado gana",
+    "Caduca a los 10 min: nunca se anuncia tarde"
+   ]
+  }
+ ]
+}

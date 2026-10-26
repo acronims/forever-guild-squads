@@ -1,0 +1,18 @@
+name: Idea
+description: Suggest a feature or a change
+labels: [idea]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version (first line of /gsq diag)
+      description: Type /gsq diag in the game and copy its first line.
+    validations:
+      required: false
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: What would you like and why (who in the guild benefits?).
+    validations:
+      required: true

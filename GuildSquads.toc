@@ -1,0 +1,50 @@
+## Interface: 16001
+## Title: Guild Squads
+## Notes: Squads of 5, member profiles and an in-guild finder.
+## Notes-esES: Squads de 5, perfiles de miembro y buscador dentro de la guild.
+## Notes-esMX: Squads de 5, perfiles de miembro y buscador dentro de la guild.
+## Notes-enUS: Squads of 5, member profiles and an in-guild finder.
+## Category: Guild
+## Group: GuildSquads
+## IconTexture: Interface\Icons\INV_Banner_02
+## Author: Raul Illana
+## Version: @project-version@
+## SavedVariables: GuildSquadsDB
+## OptionalDeps: Overlord
+## X-License: MIT
+## X-Website: https://github.com/acronims/forever-guild-squads
+## X-Curse-Project-ID: 1760070
+# ## X-Wago-ID:
+
+Locales\enUS.lua
+Locales\esES.lua
+Core\Serialize.lua
+Core\Permissions.lua
+Core\Chunk.lua
+Core\Queue.lua
+Core\Model.lua
+Core\Match.lua
+Core\Logo.lua
+Core\Call.lua
+Core\Content.lua
+Core\Roster.lua
+Core\Progress.lua
+Core\Races.lua
+Core\Catalog.lua
+Core\Celebrate.lua
+Core\Diag.lua
+Comm.lua
+Sync.lua
+UI\Widgets.lua
+UI\Main.lua
+GuildSquads.lua
+Progress.lua
+Hall.lua
+Raids.lua
+Diag.lua
+UI\Panels.lua
+UI\Ranking.lua
+UI\Raids.lua
+UI\Hall.lua
+UI\Catalog.lua
+UI\Minimap.lua

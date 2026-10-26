@@ -1,0 +1,8 @@
+# Keeps the SHA-pinned GitHub Actions up to date (weekly PR).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

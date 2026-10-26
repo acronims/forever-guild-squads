@@ -1,0 +1,31 @@
+name: Bug
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version (first line of /gsq diag)
+      description: Type /gsq diag in the game and copy its first line.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: diag
+    attributes:
+      label: "/gsq diag"
+      description: Type /gsq diag in the game and paste the full output here.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: errors
+    attributes:
+      label: Lua errors (BugSack or the default error frame)
+      render: text

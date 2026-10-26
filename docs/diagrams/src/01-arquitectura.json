@@ -1,0 +1,337 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "Guild Squads — arquitectura del addon",
+  "output": "01-arquitectura.html",
+  "quality_profile": "showcase",
+  "viewBox": [
+   1250,
+   680
+  ]
+ },
+ "components": [
+  {
+   "id": "ui",
+   "type": "frontend",
+   "label": "UI",
+   "sublabel": "Main · Panels · Ranking",
+   "pos": [
+    30,
+    130
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "glue",
+   "type": "backend",
+   "label": "GuildSquads.lua",
+   "sublabel": "Actions A.* · roster",
+   "pos": [
+    280,
+    130
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "sync",
+   "type": "backend",
+   "label": "Sync.lua",
+   "sublabel": "Publish · Hello · D/H/E",
+   "pos": [
+    530,
+    130
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "comm",
+   "type": "backend",
+   "label": "Comm.lua",
+   "sublabel": "Queue · Chunk · bloqueos",
+   "pos": [
+    780,
+    130
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "channel",
+   "type": "messagebus",
+   "label": "Canal addon",
+   "sublabel": "GSquads · GUILD/WHISPER",
+   "pos": [
+    1040,
+    130
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "model",
+   "type": "backend",
+   "label": "Core/Model + Permissions",
+   "sublabel": "esquema · LWW · autoridad",
+   "pos": [
+    280,
+    330
+   ],
+   "size": [
+    175,
+    64
+   ],
+   "tag": "Lua puro"
+  },
+  {
+   "id": "pglue",
+   "type": "backend",
+   "label": "Progress.lua",
+   "sublabel": "eventos → MetricEvent",
+   "pos": [
+    530,
+    330
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "pcore",
+   "type": "backend",
+   "label": "Core/Progress",
+   "sublabel": "testigos · puntos · wipes",
+   "pos": [
+    780,
+    330
+   ],
+   "size": [
+    175,
+    64
+   ],
+   "tag": "Lua puro"
+  },
+  {
+   "id": "peers",
+   "type": "external",
+   "label": "Otros clientes",
+   "sublabel": "guild con el addon",
+   "pos": [
+    1040,
+    330
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "sv",
+   "type": "database",
+   "label": "SavedVariables",
+   "sublabel": "GuildSquadsDB",
+   "pos": [
+    280,
+    530
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "diag",
+   "type": "backend",
+   "label": "Diag.lua",
+   "sublabel": "/gsq diag · contadores",
+   "pos": [
+    530,
+    530
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "overlord",
+   "type": "external",
+   "label": "Overlord (opcional)",
+   "sublabel": "addon aparte · solo lectura",
+   "pos": [
+    780,
+    530
+   ],
+   "size": [
+    175,
+    64
+   ]
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "Cliente WoW Forever — addon Guild Squads",
+   "wraps": [
+    "ui",
+    "glue",
+    "sync",
+    "comm",
+    "model",
+    "pglue",
+    "pcore",
+    "sv",
+    "diag",
+    "overlord"
+   ],
+   "pad": 24
+  },
+  {
+   "kind": "security-group",
+   "label": "Core puro (sin API WoW, con tests)",
+   "wraps": [
+    "model",
+    "pcore"
+   ],
+   "pad": 10
+  }
+ ],
+ "connections": [
+  {
+   "id": "ui-actions",
+   "from": "ui",
+   "to": "glue",
+   "label": "acciones",
+   "variant": "emphasis"
+  },
+  {
+   "id": "glue-publish",
+   "from": "glue",
+   "to": "sync",
+   "label": "write → Publish",
+   "variant": "emphasis",
+   "labelDy": -44
+  },
+  {
+   "id": "sync-send",
+   "from": "sync",
+   "to": "comm",
+   "label": "Comm.Send",
+   "variant": "emphasis",
+   "labelDy": -44
+  },
+  {
+   "id": "comm-channel",
+   "from": "comm",
+   "to": "channel",
+   "label": "SendAddonMessage",
+   "variant": "emphasis",
+   "labelDy": -44
+  },
+  {
+   "id": "channel-peers",
+   "from": "channel",
+   "to": "peers",
+   "label": "mismo protocolo",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    1127,
+    262
+   ]
+  },
+  {
+   "id": "sync-model",
+   "from": "sync",
+   "to": "model",
+   "label": "M.apply",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "variant": "security"
+  },
+  {
+   "id": "pglue-pcore",
+   "from": "pglue",
+   "to": "pcore",
+   "label": "compute"
+  },
+  {
+   "id": "glue-sv",
+   "from": "glue",
+   "to": "sv",
+   "label": "logout",
+   "variant": "dashed",
+   "fromSide": "left",
+   "toSide": "left",
+   "via": [
+    [
+     258,
+     162
+    ],
+    [
+     258,
+     562
+    ]
+   ]
+  },
+  {
+   "id": "diag-sv",
+   "from": "diag",
+   "to": "sv",
+   "label": "diag",
+   "variant": "dashed"
+  },
+  {
+   "id": "overlord-diag",
+   "from": "overlord",
+   "to": "pglue",
+   "label": "capturas",
+   "variant": "dashed",
+   "fromSide": "top",
+   "toSide": "bottom"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "emerald",
+   "title": "Capas",
+   "items": [
+    "Core/*.lua: Lua puro, sin API WoW, cubierto por tests",
+    "Glue: GuildSquads, Sync, Comm, Progress, Diag",
+    "UI: Main, Panels, Ranking, Widgets, Minimap"
+   ]
+  },
+  {
+   "dot": "cyan",
+   "title": "Canal",
+   "items": [
+    "Solo SendAddonMessage, prefijo GSquads",
+    "GUILD para difusión; WHISPER para respuestas de eventos y Llamar al squad",
+    "Cola 1 msg/s (ráfaga 4); nada durante encuentro/PvP/M+"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Nunca ocurre",
+   "items": [
+    "Sin red externa ni servidor propio",
+    "Sin oro, comercio ni economía (esquema en lista blanca)",
+    "Nunca se transmiten totales de puntos"
+   ]
+  }
+ ]
+}

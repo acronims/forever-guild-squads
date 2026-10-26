@@ -1,0 +1,30 @@
+# Guild Squads release: package and upload to CurseForge + Wago + GitHub Releases on a pushed tag v*.
+# Release type comes from the tag name (the packager marks pre-release tags as such; a plain vX.Y.Z is a release).
+# GUARD: the job is skipped unless the repository variable RELEASE_ENABLED is exactly 'true'
+# (Settings > Secrets and variables > Actions > Variables). Without it, pushing a tag publishes nothing.
+# Steps for the owner: docs/RELEASE.md. WoWInterface is not used (it has no Forever game type).
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+permissions:
+  contents: write   # needed to create the GitHub release ("Resource not accessible by integration" otherwise)
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    if: ${{ vars.RELEASE_ENABLED == 'true' }}
+    environment: release   # publishing secrets live only in this environment (protected, needs approval)
+    runs-on: ubuntu-latest
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+      GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # the packager reads GITHUB_API_TOKEN, not GITHUB_TOKEN
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package and upload (BigWigs packager v2.6.1, pinned by SHA)
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0 # v2.6.1
