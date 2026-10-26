@@ -1,3 +1,5 @@
+<p align="center"><img src="media/logo.png" alt="Guild Squads logo" width="256"></p>
+
 # Guild Squads
 
 [![CI](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml/badge.svg)](https://github.com/acronims/forever-guild-squads/actions/workflows/ci.yml)
