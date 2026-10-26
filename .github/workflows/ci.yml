@@ -37,6 +37,8 @@ jobs:
         run: NODE_PATH=/tmp/gsq-node/node_modules node tests/gates.js
       - name: Gates self-test (unguarded calls in conditions must fail the gate)
         run: NODE_PATH=/tmp/gsq-node/node_modules node tests/tools/gates-selftest.js
+      - name: Docs links (relative links and anchors resolve; docs/en and docs/es hold the same files)
+        run: node tests/tools/check-links.js
   sim:
     # Multi-client simulator: one scenario group per job (GitHub runners have 2 vCPU; one process per job).
     runs-on: ubuntu-latest

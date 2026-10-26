@@ -1,0 +1,223 @@
+{
+ "schema_version": 1,
+ "diagram_type": "dataflow",
+ "meta": {
+  "title": "Guild Squads — scoring flow",
+  "output": "05-scoring.html",
+  "quality_profile": "showcase",
+  "viewBox": [
+   1070,
+   760
+  ],
+  "locale": "en"
+ },
+ "stages": [
+  {
+   "label": "Capture (Progress.lua)"
+  },
+  {
+   "label": "Event + replication"
+  },
+  {
+   "label": "Validation (Core/Progress)"
+  },
+  {
+   "label": "Wipe (P.compute)"
+  },
+  {
+   "label": "Season"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "enc",
+   "type": "frontend",
+   "label": "ENCOUNTER_END",
+   "sublabel": "boss · party/raid",
+   "stage": 0,
+   "row": 0
+  },
+  {
+   "id": "lvl",
+   "type": "frontend",
+   "label": "PLAYER_LEVEL_UP",
+   "sublabel": "level",
+   "stage": 0,
+   "row": 1
+  },
+  {
+   "id": "bg",
+   "type": "frontend",
+   "label": "BG end",
+   "sublabel": "bg · win 1/0",
+   "stage": 0,
+   "row": 2
+  },
+  {
+   "id": "hk",
+   "type": "frontend",
+   "label": "HK (deltas)",
+   "sublabel": "hk · batch every 5 min",
+   "stage": 0,
+   "row": 3
+  },
+  {
+   "id": "ovl",
+   "type": "external",
+   "label": "Overlord",
+   "sublabel": "cap · optional",
+   "stage": 0,
+   "row": 4
+  },
+  {
+   "id": "ev",
+   "type": "messagebus",
+   "label": "MetricEvent",
+   "sublabel": "E replica · sender=who",
+   "stage": 1,
+   "row": 2
+  },
+  {
+   "id": "wit",
+   "type": "security",
+   "label": "Witnesses",
+   "sublabel": "≥2 · 180 s · 1/day",
+   "stage": 2,
+   "row": 0
+  },
+  {
+   "id": "self",
+   "type": "backend",
+   "label": "Self-report",
+   "sublabel": "level ±1 roster",
+   "stage": 2,
+   "row": 2
+  },
+  {
+   "id": "mem",
+   "type": "security",
+   "label": "Wipe membership",
+   "sublabel": "P.memberAt · snapshot",
+   "stage": 2,
+   "row": 4
+  },
+  {
+   "id": "wipe",
+   "type": "database",
+   "label": "Wipe points",
+   "sublabel": "÷max(3,active) · cap 100",
+   "stage": 3,
+   "row": 2
+  },
+  {
+   "id": "season",
+   "type": "database",
+   "label": "Season",
+   "sublabel": "Σ capped wipes",
+   "stage": 4,
+   "row": 2
+  }
+ ],
+ "flows": [
+  {
+   "from": "enc",
+   "to": "ev",
+   "label": "boss",
+   "labelSegment": 0
+  },
+  {
+   "from": "lvl",
+   "to": "ev",
+   "label": "level",
+   "labelSegment": 0
+  },
+  {
+   "from": "bg",
+   "to": "ev",
+   "label": "bg",
+   "labelSegment": 0,
+   "labelDx": -34,
+   "route": "straight"
+  },
+  {
+   "from": "hk",
+   "to": "ev",
+   "label": "hk",
+   "labelSegment": 0
+  },
+  {
+   "from": "ovl",
+   "to": "ev",
+   "variant": "dashed",
+   "label": "cap",
+   "labelSegment": 0
+  },
+  {
+   "from": "ev",
+   "to": "wit",
+   "label": "boss / bg",
+   "variant": "emphasis"
+  },
+  {
+   "from": "ev",
+   "to": "self",
+   "label": "own",
+   "route": "straight",
+   "labelDy": 32
+  },
+  {
+   "from": "wit",
+   "to": "wipe",
+   "label": "kills×weight",
+   "variant": "emphasis"
+  },
+  {
+   "from": "self",
+   "to": "wipe",
+   "label": "pts",
+   "route": "straight",
+   "labelDx": -28
+  },
+  {
+   "from": "mem",
+   "to": "wipe",
+   "label": "who counts",
+   "variant": "security"
+  },
+  {
+   "from": "wipe",
+   "to": "season",
+   "label": "sum",
+   "variant": "emphasis"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "amber",
+   "title": "Rules per category",
+   "items": [
+    "Leveling: 1/level, +2 at 10/20/…/60",
+    "Dungeon: boss × (1 + minLevel/20); Raid: 5 × present/5, +10 guild first",
+    "PvP: BG won 10 / lost 3; World: 1 per 5 HK, 2 per capture"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Light anti-cheat",
+   "items": [
+    "Bosses and BGs only with ≥2 squad members within ≤180 s",
+    "Level and HK are self-reported by the player's own client",
+    "Totals are never transmitted: each client computes"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "Membership per wipe",
+   "items": [
+    "Leavers lose only their current-wipe points",
+    "Closed wipes use that wipe's membership snapshot",
+    "No snapshot: current membership (fallback)"
+   ]
+  }
+ ]
+}

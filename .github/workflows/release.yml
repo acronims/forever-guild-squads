@@ -2,7 +2,7 @@
 # Release type comes from the tag name (the packager marks pre-release tags as such; a plain vX.Y.Z is a release).
 # GUARD: the job is skipped unless the repository variable RELEASE_ENABLED is exactly 'true'
 # (Settings > Secrets and variables > Actions > Variables). Without it, pushing a tag publishes nothing.
-# Steps for the owner: docs/RELEASE.md. WoWInterface is not used (it has no Forever game type).
+# Steps for the owner: docs/en/RELEASE.md. WoWInterface is not used (it has no Forever game type).
 name: Release
 on:
   push:

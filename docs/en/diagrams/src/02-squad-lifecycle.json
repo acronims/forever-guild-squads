@@ -1,0 +1,245 @@
+{
+ "schema_version": 2,
+ "diagram_type": "workflow",
+ "meta": {
+  "title": "Guild Squads — squad and membership lifecycle",
+  "output": "02-squad-lifecycle.html",
+  "quality_profile": "showcase",
+  "locale": "en"
+ },
+ "lanes": [
+  {
+   "id": "squad",
+   "label": "Squad (squad record)"
+  },
+  {
+   "id": "entry",
+   "label": "Joining (profile ↔ list)"
+  },
+  {
+   "id": "member",
+   "label": "Membership"
+  }
+ ],
+ "mainPath": [
+  "create",
+  "pending",
+  "active",
+  "request",
+  "member",
+  "out"
+ ],
+ "nodes": [
+  {
+   "id": "create",
+   "lane": "squad",
+   "col": 0,
+   "type": "frontend",
+   "label": "Create",
+   "sublabel": "A.CreateSquad",
+   "tag": "rank ≤ minCreateRank"
+  },
+  {
+   "id": "pending",
+   "lane": "squad",
+   "col": 1,
+   "type": "security",
+   "label": "Pending",
+   "sublabel": "approved = false",
+   "tag": "requireApproval"
+  },
+  {
+   "id": "active",
+   "lane": "squad",
+   "col": 2,
+   "type": "backend",
+   "label": "Active",
+   "sublabel": "open / closed",
+   "tag": "open"
+  },
+  {
+   "id": "inactive",
+   "lane": "squad",
+   "col": 4,
+   "type": "external",
+   "label": "Inactive",
+   "sublabel": "N days offline",
+   "tag": "M.isInactive"
+  },
+  {
+   "id": "disbanded",
+   "lane": "squad",
+   "col": 5,
+   "type": "database",
+   "label": "Disbanded",
+   "sublabel": "disbanded = true",
+   "tag": "A.Disband"
+  },
+  {
+   "id": "request",
+   "lane": "entry",
+   "col": 2,
+   "type": "messagebus",
+   "label": "Request",
+   "sublabel": "profile.squad = id",
+   "tag": "A.RequestJoin"
+  },
+  {
+   "id": "invite",
+   "lane": "entry",
+   "col": 3,
+   "type": "messagebus",
+   "label": "Invitation",
+   "sublabel": "captain lists the name",
+   "tag": "A.AddMember"
+  },
+  {
+   "id": "rejected",
+   "lane": "entry",
+   "col": 4,
+   "type": "external",
+   "label": "Rejected",
+   "sublabel": "Reject record",
+   "tag": "A.Reject"
+  },
+  {
+   "id": "member",
+   "lane": "member",
+   "col": 2,
+   "type": "backend",
+   "label": "Member",
+   "sublabel": "list + profile",
+   "tag": "M.isMember"
+  },
+  {
+   "id": "captain",
+   "lane": "member",
+   "col": 1,
+   "type": "security",
+   "label": "New captain",
+   "sublabel": "A.Transfer",
+   "tag": "xferFrom"
+  },
+  {
+   "id": "out",
+   "lane": "member",
+   "col": 4,
+   "type": "external",
+   "label": "Out",
+   "sublabel": "A.Kick / A.Leave",
+   "tag": "loses current wipe"
+  }
+ ],
+ "edges": [
+  {
+   "id": "e-approval",
+   "from": "create",
+   "to": "pending",
+   "label": "if approval",
+   "variant": "security"
+  },
+  {
+   "id": "e-approved",
+   "from": "pending",
+   "to": "active",
+   "label": "A.Approve",
+   "variant": "emphasis"
+  },
+  {
+   "id": "e-request",
+   "from": "active",
+   "to": "request",
+   "label": "request",
+   "variant": "emphasis"
+  },
+  {
+   "id": "e-invite",
+   "from": "active",
+   "to": "invite",
+   "label": "invite",
+   "role": "branch"
+  },
+  {
+   "id": "e-accept-req",
+   "from": "request",
+   "to": "member",
+   "label": "captain accepts",
+   "variant": "emphasis"
+  },
+  {
+   "id": "e-accept-inv",
+   "from": "invite",
+   "to": "member",
+   "label": "accepts",
+   "role": "branch"
+  },
+  {
+   "id": "e-reject",
+   "from": "invite",
+   "to": "rejected",
+   "label": "reject",
+   "variant": "dashed",
+   "role": "error"
+  },
+  {
+   "id": "e-transfer",
+   "from": "member",
+   "to": "captain",
+   "label": "transfer",
+   "role": "branch"
+  },
+  {
+   "id": "e-out",
+   "from": "member",
+   "to": "out",
+   "label": "kick / leave",
+   "variant": "security",
+   "role": "error"
+  },
+  {
+   "id": "e-inactive",
+   "from": "active",
+   "to": "inactive",
+   "label": "no activity",
+   "variant": "dashed",
+   "role": "branch"
+  },
+  {
+   "id": "e-disband",
+   "from": "inactive",
+   "to": "disbanded",
+   "label": "disband",
+   "variant": "security",
+   "role": "error"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Rules (Core/Model.lua · validateSquad)",
+   "items": [
+    "One squad per character: profile.squad is a single id (oneSquad error)",
+    "Member = captain's list AND profile pointing to the squad",
+    "5 starters + 0–2 bench per settings; captain and GM edit"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Approval and captaincy",
+   "items": [
+    "Optional GM/officer approval (requireApproval)",
+    "Officers only change approved / disbanded",
+    "Transfer: the new captain is already a member and captains no other squad"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Inactivity and rejections",
+   "items": [
+    "Inactive = no member online for N days (7/14/30/never): badge and sorted last",
+    "Reject is synced and persistent: a request is rejected by the captain or the GM; an invitation, only by the invitee",
+    "Leave/kick: only the current wipe's points are lost"
+   ]
+  }
+ ]
+}

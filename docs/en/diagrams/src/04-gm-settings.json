@@ -1,0 +1,182 @@
+{
+ "schema_version": 1,
+ "diagram_type": "sequence",
+ "meta": {
+  "title": "Guild Squads — GM settings",
+  "output": "04-gm-settings.html",
+  "quality_profile": "showcase",
+  "column_fit": "spread",
+  "viewBox": [
+   1050,
+   784
+  ],
+  "locale": "en"
+ },
+ "participants": [
+  {
+   "id": "gm",
+   "type": "frontend",
+   "label": "GM · Settings",
+   "sublabel": "UI/Panels.lua"
+  },
+  {
+   "id": "glue",
+   "type": "backend",
+   "label": "GuildSquads.lua",
+   "sublabel": "A.SaveSettings"
+  },
+  {
+   "id": "ma",
+   "type": "database",
+   "label": "Core/Model",
+   "sublabel": "GM client"
+  },
+  {
+   "id": "chan",
+   "type": "messagebus",
+   "label": "Addon channel",
+   "sublabel": "GUILD"
+  },
+  {
+   "id": "peer",
+   "type": "backend",
+   "label": "Sync.lua",
+   "sublabel": "client B"
+  },
+  {
+   "id": "mb",
+   "type": "security",
+   "label": "Permissions",
+   "sublabel": "+ Model · client B"
+  },
+  {
+   "id": "ub",
+   "type": "frontend",
+   "label": "UI",
+   "sublabel": "client B"
+  }
+ ],
+ "segments": [
+  {
+   "from": 150,
+   "to": 288,
+   "label": "Editing (GM only)"
+  },
+  {
+   "from": 318,
+   "to": 412,
+   "label": "Broadcast"
+  },
+  {
+   "from": 442,
+   "to": 580,
+   "label": "Validation on every client"
+  },
+  {
+   "from": 610,
+   "to": 704,
+   "label": "Apply"
+  }
+ ],
+ "messages": [
+  {
+   "from": "gm",
+   "to": "glue",
+   "y": 180,
+   "label": "Save and share",
+   "variant": "emphasis"
+  },
+  {
+   "from": "glue",
+   "to": "ma",
+   "y": 224,
+   "label": "write: ts + sq → M.apply",
+   "variant": "emphasis"
+  },
+  {
+   "from": "ma",
+   "to": "glue",
+   "y": 268,
+   "label": "sanitize · bench 0–2 · LWW",
+   "variant": "return"
+  },
+  {
+   "from": "glue",
+   "to": "chan",
+   "y": 348,
+   "label": "Sync.Publish → D {k=settings}",
+   "variant": "emphasis"
+  },
+  {
+   "from": "chan",
+   "to": "peer",
+   "y": 392,
+   "label": "settings record v(ts.sq.a)",
+   "variant": "default"
+  },
+  {
+   "from": "peer",
+   "to": "mb",
+   "y": 472,
+   "label": "M.apply(rec)",
+   "variant": "emphasis"
+  },
+  {
+   "from": "mb",
+   "to": "peer",
+   "y": 516,
+   "label": "canEditSettings: rank 0 (GM)",
+   "variant": "security"
+  },
+  {
+   "from": "mb",
+   "to": "peer",
+   "y": 560,
+   "label": "newer? if not → stale / dup",
+   "variant": "return"
+  },
+  {
+   "from": "peer",
+   "to": "ub",
+   "y": 640,
+   "label": "UI.Dirty → settingsOf",
+   "variant": "emphasis"
+  },
+  {
+   "from": "peer",
+   "to": "ub",
+   "y": 684,
+   "label": "squadsEnabled=false → hides tabs",
+   "variant": "dashed"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Versioned record",
+   "items": [
+    "A single record k=settings, id=settings",
+    "Version = ts (GetServerTime) · sq (local counter) · author",
+    "Whitelisted fields: M.SCHEMA.settings"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Authority",
+   "items": [
+    "Only guild-roster rank 0 (GM) can write it",
+    "Non-GMs see Settings read-only",
+    "If the author is not in the roster yet, the record waits in pending"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Effects",
+   "items": [
+    "squadsEnabled=false: no squads or Ranking; the Finder only lists players",
+    "compEnabled, weights (0–3), cap per wipe, season, Overlord",
+    "Late joiners get it through the hello (diagram 03)"
+   ]
+  }
+ ]
+}

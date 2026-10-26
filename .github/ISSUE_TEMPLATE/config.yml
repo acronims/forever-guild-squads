@@ -1,1 +1,8 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Player guide (English)
+    url: https://github.com/acronims/forever-guild-squads/blob/main/docs/en/PLAYER-GUIDE.md#troubleshooting
+    about: Common problems and what /gsq diag shows, before opening an issue.
+  - name: Guía del jugador (español)
+    url: https://github.com/acronims/forever-guild-squads/blob/main/docs/es/PLAYER-GUIDE.md#problemas-frecuentes
+    about: Problemas frecuentes y qué trae /gsq diag, antes de abrir una incidencia.

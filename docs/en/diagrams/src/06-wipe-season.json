@@ -1,0 +1,218 @@
+{
+ "schema_version": 2,
+ "diagram_type": "workflow",
+ "meta": {
+  "title": "Guild Squads — Wipes and Seasons",
+  "output": "06-wipe-season.html",
+  "quality_profile": "showcase",
+  "locale": "en"
+ },
+ "lanes": [
+  {
+   "id": "wipe",
+   "label": "Wipe (weekly)"
+  },
+  {
+   "id": "ach",
+   "label": "Addon achievements"
+  },
+  {
+   "id": "season",
+   "label": "Season (GM)"
+  }
+ ],
+ "mainPath": [
+  "wopen",
+  "wclose",
+  "sactive",
+  "snew",
+  "spast"
+ ],
+ "nodes": [
+  {
+   "id": "wopen",
+   "lane": "wipe",
+   "col": 0,
+   "type": "backend",
+   "label": "Open wipe",
+   "sublabel": "W<n> · P.wipeOf",
+   "tag": "Wed 09:00 realm",
+   "width": 132
+  },
+  {
+   "id": "wclose",
+   "lane": "wipe",
+   "col": 1,
+   "type": "security",
+   "label": "Closed wipe",
+   "sublabel": "membership snapshot",
+   "tag": "+7 days",
+   "width": 132
+  },
+  {
+   "id": "warch",
+   "lane": "wipe",
+   "col": 2,
+   "type": "database",
+   "label": "Archived",
+   "sublabel": "last 8 wipes",
+   "tag": "P.prune",
+   "width": 132
+  },
+  {
+   "id": "awipe",
+   "lane": "ach",
+   "col": 2,
+   "type": "frontend",
+   "label": "Squad of the wipe",
+   "sublabel": "1st in Overall",
+   "tag": "achievement",
+   "width": 132
+  },
+  {
+   "id": "aseason",
+   "lane": "ach",
+   "col": 4,
+   "type": "frontend",
+   "label": "Squad of the season",
+   "sublabel": "1st at close",
+   "tag": "achievement",
+   "width": 132
+  },
+  {
+   "id": "sdef",
+   "lane": "season",
+   "col": 0,
+   "type": "external",
+   "label": "Season 1",
+   "sublabel": "4-Nov-2026 09:00",
+   "tag": "default",
+   "width": 132
+  },
+  {
+   "id": "sactive",
+   "lane": "season",
+   "col": 2,
+   "type": "backend",
+   "label": "Active season",
+   "sublabel": "Σ capped wipes",
+   "tag": "P.seasonScore",
+   "width": 132
+  },
+  {
+   "id": "snew",
+   "lane": "season",
+   "col": 3,
+   "type": "security",
+   "label": "New season",
+   "sublabel": "GM · P.newSeason",
+   "tag": "confirmation",
+   "width": 132
+  },
+  {
+   "id": "spast",
+   "lane": "season",
+   "col": 4,
+   "type": "database",
+   "label": "Past seasons",
+   "sublabel": "seasonsPast (8)",
+   "tag": "read-only",
+   "width": 132
+  }
+ ],
+ "edges": [
+  {
+   "id": "e-close",
+   "from": "wopen",
+   "to": "wclose",
+   "label": "Wed 09:00",
+   "variant": "emphasis"
+  },
+  {
+   "id": "e-next",
+   "from": "wclose",
+   "to": "wopen",
+   "label": "opens W<n+1>",
+   "role": "return",
+   "variant": "dashed"
+  },
+  {
+   "id": "e-arch",
+   "from": "wclose",
+   "to": "warch",
+   "label": "save",
+   "role": "branch"
+  },
+  {
+   "id": "e-awipe",
+   "from": "wclose",
+   "to": "awipe",
+   "label": "1st Overall",
+   "role": "branch"
+  },
+  {
+   "id": "e-sum",
+   "from": "wclose",
+   "to": "sactive",
+   "label": "add wipe",
+   "variant": "emphasis"
+  },
+  {
+   "id": "e-start",
+   "from": "sdef",
+   "to": "sactive",
+   "label": "start",
+   "role": "branch"
+  },
+  {
+   "id": "e-new",
+   "from": "sactive",
+   "to": "snew",
+   "label": "GM",
+   "variant": "security"
+  },
+  {
+   "id": "e-past",
+   "from": "snew",
+   "to": "spast",
+   "label": "closes",
+   "variant": "emphasis"
+  },
+  {
+   "id": "e-aseason",
+   "from": "spast",
+   "to": "aseason",
+   "label": "1st Overall",
+   "role": "branch"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Wipe (Core/Progress.lua)",
+   "items": [
+    "Wednesday 09:00 EU realm time (CET/CEST, P.realmOffset)",
+    "Deterministic W<n> id from GetServerTime()",
+    "Cap 100 per category and wipe (max 500)"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Season",
+   "items": [
+    "The GM sets name, start and end in Settings > Season",
+    "New season closes the current one and opens another (replicated in settings)",
+    "A wipe belongs to the season containing its start"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "Achievements",
+   "items": [
+    "Squad of the wipe: first in Overall when the wipe closes",
+    "Squad of the season: first in the season total",
+    "Dated; RaidNotice_AddMessage notice (fallback: chat)"
+   ]
+  }
+ ]
+}

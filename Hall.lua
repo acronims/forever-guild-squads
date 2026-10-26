@@ -60,7 +60,7 @@ function H.SeasonId()
 end
 -- APIs that do not exist in this client -> "pendiente de datos"
 function H.NoData()
-  local nd = { legacy = true } -- no known Legacy Points API (see docs/LOGROS.md §5)
+  local nd = { legacy = true } -- no known Legacy Points API (see docs/en/ACHIEVEMENTS.md §5)
   if not (ns.apiFn("GetProfessions", "GetSkillLineInfo", "C_SkillInfo.GetSkillLineInfo")) then nd.prof = true end
   if not ((C_Reputation and (C_Reputation.GetFactionDataByIndex or C_Reputation.GetNumFactions)) or GetFactionInfo) then nd.rep = true end
   return nd

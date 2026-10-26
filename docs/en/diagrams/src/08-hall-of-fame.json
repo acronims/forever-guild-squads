@@ -1,0 +1,208 @@
+{
+ "schema_version": 1,
+ "diagram_type": "dataflow",
+ "meta": {
+  "title": "Guild Squads — Hall of Fame",
+  "output": "08-hall-of-fame.html",
+  "quality_profile": "showcase",
+  "viewBox": [
+   1070,
+   640
+  ],
+  "locale": "en"
+ },
+ "stages": [
+  {
+   "label": "Observation (Hall.lua)"
+  },
+  {
+   "label": "Replication + window"
+  },
+  {
+   "label": "Witnesses (Core/Races)"
+  },
+  {
+   "label": "Top N races"
+  },
+  {
+   "label": "Celebration"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "obs",
+   "type": "frontend",
+   "label": "Observations",
+   "sublabel": "level·boss·BG·HK",
+   "stage": 0,
+   "row": 0
+  },
+  {
+   "id": "roster",
+   "type": "frontend",
+   "label": "Guild roster",
+   "sublabel": "levels without addon",
+   "stage": 0,
+   "row": 2
+  },
+  {
+   "id": "live",
+   "type": "messagebus",
+   "label": "Live window",
+   "sublabel": "sent ±300 s",
+   "stage": 1,
+   "row": 0
+  },
+  {
+   "id": "uv",
+   "type": "security",
+   "label": "Unverified",
+   "sublabel": "\"?\" does not score",
+   "stage": 1,
+   "row": 2
+  },
+  {
+   "id": "wit",
+   "type": "backend",
+   "label": "Witnesses",
+   "sublabel": "2+ within 10/3 min",
+   "stage": 2,
+   "row": 0
+  },
+  {
+   "id": "gm",
+   "type": "security",
+   "label": "GM / officer",
+   "sublabel": "Confirm · Annul",
+   "stage": 2,
+   "row": 2
+  },
+  {
+   "id": "races",
+   "type": "database",
+   "label": "Races",
+   "sublabel": "Top N · medals",
+   "stage": 3,
+   "row": 0
+  },
+  {
+   "id": "ach",
+   "type": "database",
+   "label": "My achievements",
+   "sublabel": "from the entries",
+   "stage": 3,
+   "row": 2
+  },
+  {
+   "id": "claim",
+   "type": "messagebus",
+   "label": "Announcer claim",
+   "sublabel": "1 msg / 10 s",
+   "stage": 4,
+   "row": 0
+  },
+  {
+   "id": "chat",
+   "type": "external",
+   "label": "Guild chat",
+   "sublabel": "never in an encounter",
+   "stage": 4,
+   "row": 2
+  }
+ ],
+ "flows": [
+  {
+   "from": "obs",
+   "to": "live",
+   "label": "own",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "from": "roster",
+   "to": "live",
+   "label": "level"
+  },
+  {
+   "from": "live",
+   "to": "wit",
+   "label": "in window",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "from": "live",
+   "to": "uv",
+   "label": "late",
+   "variant": "dashed",
+   "labelDy": 24
+  },
+  {
+   "from": "uv",
+   "to": "gm",
+   "label": "vconfirm",
+   "variant": "security"
+  },
+  {
+   "from": "wit",
+   "to": "races",
+   "label": "valid",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "from": "gm",
+   "to": "races",
+   "label": "annul",
+   "variant": "security"
+  },
+  {
+   "from": "races",
+   "to": "ach",
+   "label": "derive",
+   "labelDy": 24
+  },
+  {
+   "from": "races",
+   "to": "claim",
+   "label": "place",
+   "variant": "emphasis",
+   "route": "straight"
+  },
+  {
+   "from": "claim",
+   "to": "chat",
+   "label": "winner",
+   "labelDy": 24
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "Entry rules",
+   "items": [
+    "Only the author sends live; relayed pages only from GM/officer",
+    "Counters: never go down or jump beyond plausible",
+    "First roster sighting: not retroactive"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "Verify / annul",
+   "items": [
+    "\"?\" = unverified: visible, does not score",
+    "Confirm: signed vconfirm record from GM/officer",
+    "Annul: reason required, kept in the history"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Celebrations (Settings)",
+   "items": [
+    "Place 1 / Top 3 / Any; squad achievements optional",
+    "Claim first: the best-placed candidate wins",
+    "Expires after 10 min: never announced late"
+   ]
+  }
+ ]
+}

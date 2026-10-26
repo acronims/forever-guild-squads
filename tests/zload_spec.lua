@@ -326,7 +326,7 @@ end)
 
 -- smoke: Ranking 5 categories + General x Wipe/Temporada, Overlord hint (absent, dismiss) and mock
 -- present, Ajustes > Temporada (save + nueva temporada), /gsq diag, fake BG end and HK readings. Fake API only.
-test("smoke: ranking 6 chips x wipe/season, overlord, Ajustes > Temporada, /gsq diag, PvP events", function()
+test("smoke: ranking 6 chips x wipe/season, overlord, Settings > Season, /gsq diag, PvP events", function()
   local G = ns.ProgressGlue
   local id = ns.Actions.MySquadId(); ok(id, "has squad")
   -- settings record (no season fields) still loads: defaults filled
@@ -414,7 +414,7 @@ local function acceptPopups()
   return #list
 end
 
-test("smoke: Ajustes sections as GM, save and share, unsaved-changes guard", function()
+test("smoke: Settings sections as GM, save and share, unsaved-changes guard", function()
   clock = clock + 30
   ok(ns.Actions.SaveSettings({ squadsEnabled = true, bench = 1, minCreateRank = 4, officerRanks = { 1 }, banned = {},
                                compEnabled = true, weekCap = 100, guildGoal = 30 }))
@@ -463,7 +463,7 @@ test("smoke: Ajustes sections as GM, save and share, unsaved-changes guard", fun
   eq(#ns.Model.settingsOf(ns.state).seasonsPast, pastBefore + 1, "season closed into the read-only list")
 end)
 
-test("smoke: Ajustes as non-GM is read only", function()
+test("smoke: Settings as non-GM is read only", function()
   roster[1][3] = 4; fire("GUILD_ROSTER_UPDATE"); tick(2) --[[coalesced roster]]
   ok(not ns.Permissions.isGM(ns.roster, ns.me()), "Ann is no longer GM")
   ns.UI.Select("settings"); eq(ns.UI.Current(), "settings", "tab visible to members")
@@ -480,7 +480,7 @@ test("smoke: Ajustes as non-GM is read only", function()
   roster[1][3] = 0; fire("GUILD_ROSTER_UPDATE"); tick(2) --[[coalesced roster]]
 end)
 
-test("smoke: Mi squad with Este wipe panel, achievement progress, Reject buttons", function()
+test("smoke: My squad with This wipe panel, achievement progress, Reject buttons", function()
   clock = clock + 10
   local id = ns.Actions.MySquadId()
   if not id then
@@ -618,7 +618,7 @@ end
 -- smoke: Salón de la fama (every filter + a detail), Mis logros, Ajustes > Celebraciones and
 -- Contenido, GM annulment, export; detection glue (roster levels incl. non-addon members, kills, catalog),
 -- celebrations (single announcer, never in an encounter, GM off = silent), missing profession/rep APIs.
-test("smoke: hall of fame, detection, annulment, export, celebrations, settings, Mis logros", function()
+test("smoke: hall of fame, detection, annulment, export, celebrations, settings, My achievements", function()
   clock = clock + 40
   local H, R = ns.HallGlue, ns.Races
   ok(H and H.Enabled(), "hall enabled")
@@ -746,7 +746,7 @@ test("smoke: hall of fame, detection, annulment, export, celebrations, settings,
   ok(ns.HallGlue.Adoption() >= 1, "hello counted for adoption")
 end)
 
-test("geometry: Salón de la fama top row clear of the portrait, chips centred, tab present", function()
+test("geometry: Hall of Fame top row clear of the portrait, chips centred, tab present", function()
   local win = ns.UI.Window()
   ns.UI.Select("hall"); eq(ns.UI.Current(), "hall")
   local root = ns.UI.panels.hall.frame
@@ -824,7 +824,7 @@ test("MetricEvents relayed only by GM/officers; far-future events refused", func
   eq(n(), n0 + 2, "live from the author accepted")
 end)
 
-test("Mi perfil keeps unsaved edits and asks before leaving; actions give feedback", function()
+test("My profile keeps unsaved edits and asks before leaving; actions give feedback", function()
   local UI = ns.UI
   UI.Select("profile")
   local pr = UI.profileState
@@ -914,7 +914,7 @@ test("closed-wipe live score = canonical summary, not the local snapshot", funct
 end)
 
 -- the unsaved-profile prompt offers a third button "Guardar y salir" that saves, then leaves
-test("Mi perfil unsaved prompt has 'Guardar y salir' (button3/OnAlt) that saves and leaves", function()
+test("My profile unsaved prompt has 'Save and exit' (esES 'Guardar y salir', button3/OnAlt) that saves and leaves", function()
   local UI, A = ns.UI, ns.Actions
   UI.Select("profile")
   local pr = UI.profileState
@@ -938,7 +938,7 @@ test("Mi perfil unsaved prompt has 'Guardar y salir' (button3/OnAlt) that saves 
 end)
 
 -- "!" on the Mi perfil tab while the profile has no role or no main goal
-test("'!' marker on Mi perfil while the profile is incomplete", function()
+test("'!' marker on My profile while the profile is incomplete", function()
   local UI, A = ns.UI, ns.Actions
   ok(A.SaveProfile({ role = "TANK", goals = {} }), "saved without goals")
   ok(A.ProfileIncomplete(), "no goals -> incomplete")

@@ -1,6 +1,6 @@
 -- Guild Squads (MIT) - Core/Races.lua
 -- Pure Lua (no WoW API). "Salón de la fama": races (Top 100 / 10 / 3) computed locally from replicated
--- observations, witness rules, squad-alliance crediting (docs/LOGROS.md §3), GM annulments with history,
+-- observations, witness rules, squad-alliance crediting (docs/en/ACHIEVEMENTS.md §3), GM annulments with history,
 -- frozen (immutable) closed races, compaction, paginated sync helpers, achievements and guild adoption.
 --
 -- RaceObs (whitelisted fields only, see R.SCHEMA). `by` = the reporting client (must equal the sender).

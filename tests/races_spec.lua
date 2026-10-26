@@ -181,7 +181,7 @@ test("races: GM annulment (GM only, reason, next moves up, history) also on a cl
   ok(not keys(r):find("P050%-R"), "annulled entry gone")
 end)
 
-test("races: PvP rank races per season, class rank 14, counters 'informado por el jugador'", function()
+test("races: PvP rank races per season, class rank 14, counters 'reported by the player'", function()
   local function cnt(who, ts, k, n, extra)
     local e = { t = "cnt", who = who, by = who, ts = ts, k = k, n = n }
     for a, b in pairs(extra or {}) do e[a] = b end

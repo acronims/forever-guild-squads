@@ -12,6 +12,7 @@ ignore:
   - .luacheckrc
   - .gitignore
   - README.md
+  - README.es.md
   - CURSEFORGE.md
   - SECURITY.md
   - CONTRIBUTING.md

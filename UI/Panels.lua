@@ -998,7 +998,7 @@ end, function()
     prof.ach = UI.AchGrid(UI.panels.profile.frame, 18, 2); prof.ach:SetPoint("TOPLEFT", UI.panels.profile.frame, "TOPLEFT", 224, -336)
   end
   if prof.ach then local got, n = prof.ach:Fill(); prof.achT:SetText(L.MY_ACH .. " (" .. got .. "/" .. n .. ")") end
-  prof.last:SetText(rec and L.LAST_SHARED:format(math.max(0, math.floor((now - rec.ts) / 60)) .. " min") or "")
+  prof.last:SetText(rec and L.LAST_SHARED:format(L.MINUTES:format(math.max(0, math.floor((now - rec.ts) / 60)))) or "")
   profUpdate()
 end, nil, { icon = function()
   local _, class = UnitClass("player")
@@ -1562,7 +1562,7 @@ settingsRefresh = function(f, bar, keepDraft)
   else
     local rec = ns.state.settings
     local now = (GetServerTime and GetServerTime()) or 0
-    bar.status:SetText(rec and L.SETTINGS_FOOT:format(rec.sq or 0, math.max(0, math.floor((now - rec.ts) / 60)) .. " min") or "")
+    bar.status:SetText(rec and L.SETTINGS_FOOT:format(rec.sq or 0, L.MINUTES:format(math.max(0, math.floor((now - rec.ts) / 60)))) or "")
   end
 end
 

@@ -25,6 +25,11 @@ local function className(token)
   return token:sub(1, 1) .. token:sub(2):lower()
 end
 UI.ClassName = className
+local function raceName(token)
+  token = tostring(token or "")
+  return rawget(L, "RACE_" .. token:upper()) or (token:sub(1, 1) .. token:sub(2):lower())
+end
+UI.RaceName = raceName
 local function instName(key)
   local e = Content.get(key)
   return e and e.name or tostring(key):gsub("_", " ")
@@ -42,7 +47,7 @@ function UI.RaceTitle(id)
   local c, hc = id:match("^lvl%.class%.([^.]+)%.(%d+)$")
   if c then return L.RT_LVL_OF:format(className(c), tonumber(hc)) end
   local rc, hr = id:match("^lvl%.race%.([^.]+)%.(%d+)$")
-  if rc then return L.RT_LVL_OF:format(rc:sub(1, 1) .. rc:sub(2):lower(), tonumber(hr)) end
+  if rc then return L.RT_LVL_OF:format(raceName(rc), tonumber(hr)) end
   if id == "dng.all" then return L.RT_DNG_ALL end
   if id == "raid.all" then return L.RT_RAID_ALL end
   local fs = id:match("^full%.(%d+)$")
