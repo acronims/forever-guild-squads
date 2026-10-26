@@ -208,7 +208,7 @@ test("wipe summary: two different local snapshots, same records -> identical sum
 end)
 
 -- confirmations -----------------------------------------------------------------------------------------------
-test("Confirmar: only GM or officers sign it; it clears the unverified mark", function()
+test("Confirm: only GM or officers sign it; it clears the unverified mark", function()
   local s = fresh()
   local store = Ra.newStore()
   local ev = { t = "kill", who = "Ali-R", by = "Ali-R", ts = T0 - 30 * 86400, inst = "Ragefire Chasm", it = "party", enc = 1, boss = "Taragaman", pres = { "Ali-R" } }
@@ -252,7 +252,7 @@ end)
 
 -- glue (runs inside tests/zload_spec.lua with the fake client; Ann-Realm is the GM)
 SMOKE_CHECKS = SMOKE_CHECKS or {}
-SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "glue: auto-close without seeing the raid leaves attendance pending; the RL/GM signs it; Confirmar", function(c)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "glue: auto-close without seeing the raid leaves attendance pending; the RL/GM signs it; Confirm", function(c)
   local ns, click = c.ns, c.click
   local UI, G, Rr = ns.UI, ns.RaidGlue, ns.Roster
   local origTime = GetServerTime

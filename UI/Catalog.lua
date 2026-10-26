@@ -108,7 +108,7 @@ local function paramItems(spec, nextStep)
     for _, r in pairs(ns.rosterList and ns.rosterList() or {}) do if type(r.class) == "string" then classes[r.class] = true end end
     for _, c in ipairs(sortedKeys(classes)) do add(L.CAT_P_CLASS:format(UI.ClassName and UI.ClassName(c) or c), "class:" .. c) end
     for _, rc in ipairs(sortedKeys(R.RACE_OK)) do
-      if #items < 30 then add(L.CAT_P_RACE:format(rc:sub(1, 1) .. rc:sub(2):lower()), "race:" .. rc) end
+      if #items < 30 then add(L.CAT_P_RACE:format(UI.RaceName(rc)), "race:" .. rc) end
     end
   elseif spec.metric == "boss" then
     for _, b in ipairs(ns.Content.bossList and ns.Content.bossList() or {}) do
@@ -152,7 +152,7 @@ function UI.CatalogWizard(owner)
   local function stepSize()
     if spec.metric == "manual" then return step4() end
     local items = { { text = L.CAT_W3_SIZE, title = true } }
-    for _, n in ipairs(sizes(spec)) do items[#items + 1] = { text = "Top " .. n, func = function() spec.size = n; step4() end } end
+    for _, n in ipairs(sizes(spec)) do items[#items + 1] = { text = L.TOP_N:format(n), func = function() spec.size = n; step4() end } end
     W.Menu(owner, items)
   end
   local function step3()
@@ -307,7 +307,7 @@ local function fillRow(r, row)
   local closed = row.r and row.r.state == "closed"
   r.size:SetShown(row.race)
   if row.race then
-    r.size:SetText("Top " .. tostring(row.r and row.r.size or Cat.sizeMax(row.id, Cat.def(row.id))))
+    r.size:SetText(L.TOP_N:format(row.r and row.r.size or Cat.sizeMax(row.id, Cat.def(row.id))))
     if r.size.SetEnabled then pcall(r.size.SetEnabled, r.size, not closed) end
     W.Tooltip(r.size, L.CAT_SIZE_T, closed and L.CAT_CLOSED_TIP or L.CAT_SIZE_TIP:format(Cat.sizeMax(row.id, Cat.def(row.id))))
   end

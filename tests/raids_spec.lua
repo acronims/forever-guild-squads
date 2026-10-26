@@ -302,7 +302,7 @@ end)
 -- smoke (runs inside tests/zload_spec.lua with the fake client): Bandas tab, roster of 10 with 2 squads, publish,
 -- RSVP (own + replicated + forged relay), invite with a mock group API (combat first), close, export, geometry.
 SMOKE_CHECKS = SMOKE_CHECKS or {}
-SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "smoke: Bandas tab, 10 with 2 squads, publish, RSVP, invite (mock), close, export, geometry", function(c)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "smoke: Raids tab, 10 with 2 squads, publish, RSVP, invite (mock), close, export, geometry", function(c)
   local ns, click, geo, win = c.ns, c.click, c.geo, c.win
   local UI, G, Rr = ns.UI, ns.RaidGlue, ns.Roster
   -- two squads as fixtures (captains count as members)

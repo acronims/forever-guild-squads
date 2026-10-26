@@ -23,7 +23,7 @@ SMOKE_CHECKS = SMOKE_CHECKS or {}
 
 -- raid editor: changing only the name (or "Cada semana") marks the draft dirty, enables "Guardar" and shows
 -- the "sin guardar" label.
-SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Bandas: renombrar un roster habilita Guardar", function(c)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Raids: renaming a roster enables Save", function(c)
   local ns, UI, G = c.ns, c.ns.UI, c.ns.RaidGlue
   local wall = G.WallNow()
   local rid = G.Create({ raid = "custom", size = 10, name = "Raid P3", at = wall + 2 * 86400 })
@@ -40,7 +40,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Bandas: renombrar un roster habilita Guarda
 end }
 
 -- "Firmar asistencia" with nobody marked tells the raid leader why nothing was signed.
-SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Bandas: firmar asistencia vacía avisa al RL", function(c)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Raids: signing an empty attendance warns the RL", function(c)
   local ns, UI, G, Rr = c.ns, c.ns.UI, c.ns.RaidGlue, c.ns.Roster
   local origTime = GetServerTime
   GetServerTime = function() return 1796000000 end
@@ -68,7 +68,7 @@ end }
 
 -- a failed action from a panel prints its error once (scenario: a banned word in the squad name, the
 -- captain toggles open/closed and the edit is refused with nameBanned).
-SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Mi squad: un error de acción sale una sola vez en el chat", function(c)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "My squad: an action error is shown once in chat", function(c)
   local ns, UI, M = c.ns, c.ns.UI, c.ns.Model
   local my = ns.Actions.MySquadId()
   ok(my and ns.state.squads[my].d.captain == ns.me(), "Ann es capitana")
@@ -96,7 +96,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Mi squad: un error de acción sale una sola
 end }
 
 -- Salón: a failed annulment shows the translated error text, not the internal code.
-SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Salón: anular con error muestra texto traducido, no el código", function(c)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "Hall of Fame: a failed annulment shows translated text, not the error code", function(c)
   local ns, UI = c.ns, c.ns.UI
   local Hg = ns.HallGlue
   local said = {}

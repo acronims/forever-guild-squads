@@ -1,5 +1,5 @@
 -- Guild Squads (MIT) - Core/Celebrate.lua
--- Pure Lua. Celebrations (docs/LOGROS.md §7): what gets announced (GM settings), who announces (a single
+-- Pure Lua. Celebrations (docs/en/ACHIEVEMENTS.md §7): what gets announced (GM settings), who announces (a single
 -- client per event), rate limit (1 message / 10 s) and the plain message text. The WoW glue decides when it may
 -- talk (never during an encounter, never under C_ChatInfo.InChatMessagingLockdown).
 -- CelebrationMsg = { key, kind = "race"|"ach", pos?, who (protagonists), what } - no economy fields.

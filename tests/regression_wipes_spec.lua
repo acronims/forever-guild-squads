@@ -20,7 +20,7 @@ end
 
 -- the wipe summary is computed at prune time (~8 weeks later) with the CURRENT squad record: a member who left
 -- after the wipe still counts in that wipe's summary.
-test("un miembro que se fue DESPUÉS del wipe sigue contando en el resumen de ese wipe", function()
+test("a member who left AFTER the wipe still counts in that wipe's summary", function()
   local events, wipe, T = wipeEvents()
   local profiles = { ["A-R"] = { ts = T0, d = { squad = "X" } }, ["C-R"] = { ts = T0, d = { squad = "X" } },
                      ["B-R"] = { ts = T + 30 * 86400, d = {} } }                       -- B left a month later
@@ -33,7 +33,7 @@ test("un miembro que se fue DESPUÉS del wipe sigue contando en el resumen de es
 end)
 
 -- a squad disbanded after the wipe keeps its summary for that wipe.
-test("un squad disuelto DESPUÉS del wipe conserva su resumen de ese wipe", function()
+test("a squad disbanded AFTER the wipe keeps its summary of that wipe", function()
   local events, wipe, T = wipeEvents()
   local profiles = { ["A-R"] = { ts = T0, d = { squad = "X" } }, ["B-R"] = { ts = T0, d = { squad = "X" } },
                      ["C-R"] = { ts = T0, d = { squad = "X" } } }
@@ -44,7 +44,7 @@ end)
 
 -- a rename onto another squad's name converges on every client (a client that already held the other squad
 -- and a fresh client end in the same state).
-test("un rename que choca converge en todos los clientes (cliente nuevo vs cliente antiguo)", function()
+test("a clashing rename converges on every client (new client vs old client)", function()
   local function fresh() local s = M.newState(); ap(s, rec("settings", "settings", "Gm-R", { squadsEnabled = true }, T0)); return s end
   local b0 = rec("squad", "B", "Cb-R", { name = "Bar", captain = "Cb-R", members = { "Cb-R" } }, T0 + 100)
   local a0 = rec("squad", "A", "Ca-R", { name = "Foo", captain = "Ca-R", members = { "Ca-R" } }, T0 + 200)
@@ -57,7 +57,7 @@ test("un rename que choca converge en todos los clientes (cliente nuevo vs clien
 end)
 
 -- encode and decode accept the same range of numbers.
-test("encode y decode aceptan el mismo rango de números", function()
+test("encode and decode accept the same number range", function()
   local okE, txt = pcall(S.encode, { v = 2e15 })
   local okD, back = false, nil
   if okE then okD, back = S.decode(txt) end

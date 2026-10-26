@@ -1,4 +1,4 @@
-// Guild Squads simulator scenarios S1-S10 (results: docs/SIM-RESULTADOS.md). Each returns
+// Guild Squads simulator scenarios S1-S10 (results: docs/en/SIMULATOR-RESULTS.md). Each returns
 // { pass, checks: [ [label, ok, detail] ], metrics }. Positive assertions only: every check names the value it expects.
 'use strict';
 const { Sim, luaStr, sourcesAt } = require('./sim.js');

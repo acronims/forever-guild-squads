@@ -54,7 +54,7 @@ test("achdef{on=false} hides the race in R.list; observations stay; on=true brin
   eq(keys(races["lvl.all.10"]), before .. ",P4-R", "same entries (+ the one earned while hidden)")
 end)
 
-test("achievements: a disabled achievement is hidden, the one already earned goes to Legado", function()
+test("achievements: a disabled achievement is hidden, the one already earned goes to Legacy", function()
   local st = fresh()
   ok(apply(st, rec("achdef", "hallOfFame", GM, T, { on = false })), "GM disables hallOfFame")
   ok(apply(st, rec("achdef", "allRoles", GM, T + 1, { on = false })), "GM disables allRoles")
@@ -155,7 +155,7 @@ test("name: 40 characters are cut, |c / |H codes cleaned; the replicated id neve
 end)
 
 -------------------------------------------------------------------------------
-test("custom prof 'primeros 3 en 300 de herrería' from existing prof observations", function()
+test("custom prof 'first 3 to 300 in blacksmithing (herrería)' from existing prof observations", function()
   local st, store = fresh(), R.newStore()
   for i = 1, 4 do   -- baseline 100 (never scored), then 300 later at a plausible pace
     local who = "P" .. i .. "-R"

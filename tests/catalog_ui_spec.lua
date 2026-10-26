@@ -142,7 +142,7 @@ local function gmRec(ns, kind, id, d, dt)
 end
 local function fromGM(ns, kind, id, d, dt) return ns.Sync.Apply(gmRec(ns, kind, id, d, dt), GMN) end
 
-test("Ajustes > Logros: only the GM sees the section; a member sees the GM's names and not what is disabled", function()
+test("Settings > Achievements: only the GM sees the section; a member sees the GM's names and not what is disabled", function()
   -- GM
   local ns = run10({ roster = roster10(), me = "Gm" })
   ok(ns.Permissions.isGM(ns.roster, ns.me()), "GM client")
@@ -176,7 +176,7 @@ test("Ajustes > Logros: only the GM sees the section; a member sees the GM's nam
   ok(keys.lvl20 and not keys.lvl10, "disabled achievement not listed (never earned)")
 end)
 
-test("strip: granted badge shown with its reason; disabled + earned -> Legado at the end; disabled in progress hidden", function()
+test("strip: granted badge shown with its reason; disabled + earned -> Legacy at the end; disabled in progress hidden", function()
   local nm = run10({ roster = roster10(), me = "Fire" })
   local me = nm.me()
   ok(fromGM(nm, "achgrant", "guildFirst60|" .. me, { ach = "guildFirst60", who = me, reason = "evento", on = true }), "grant received")
