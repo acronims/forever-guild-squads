@@ -255,6 +255,8 @@ function X.expire(state, now)
     if next(byId) == nil then st.pend[kid] = nil end
   end
   for vk, c in pairs(st.contra) do if now - (c.t or 0) > X.CONTRA_TTL then st.contra[vk] = nil end end
+  -- relay provenance of verified records: kept 30 days (the author's live version wins over it meanwhile)
+  for kid, v in pairs(st.via) do if now - (v.t or 0) > X.REPUDIATE_TTL then st.via[kid] = nil end end
   for n, e in pairs(st.rep) do if now - (e.t or 0) > X.BLOCK_TTL then st.rep[n] = nil end end
   for id, r in pairs(state.repudiates or {}) do if now - r.ts > X.REPUDIATE_TTL then state.repudiates[id] = nil end end
 end
