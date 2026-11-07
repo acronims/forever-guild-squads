@@ -29,7 +29,7 @@ simulador S1 S2 S3 S4 S5(5 semillas) S6 S7 = 7/7 PASS.
 | AC6 | verificado | `p2p_spec` «AC6…» + smoke «v1.1: /gsq diag…» | pasa |
 | AC7 | verificado (simulador) | sim `S14` (2 clientes 1.0.1 entre 8) | 0 errores Lua, los viejos descartan presence/repudiate (`bad` 48 y 46) y siguen sincronizando lo suyo. **Falta** la prueba real con BugSack en el juego (BRO). |
 | AC8 | ver abajo | sim `S13` | pendiente de resultado |
-| AC9 | ver abajo | `tests/run.js`, `gates.js`, sim S1–S9 | `RESULT: 266 passed, 0 failed`, `GATES: OK`; sim pendiente |
+| AC9 | **parcial: S8 en rojo** | `tests/run.js`, `gates.js`, `check-links.js`, `gates-selftest.js`, `wow-secret-lint`, sim S1–S9 | unidad `RESULT: 266 passed, 0 failed`; `GATES: OK`; enlaces 0 rotos; secret lint 0 errores. Simulador (seed 7303): S1, S2, S3, S4, S5 (5 semillas), S6, S7, S9 (15 min) PASS; **S8 (3 min) FAIL**: `send queue never above X = 500 -> 553` (repetido: 547). La 1.0.1 con la misma semilla: maxQueue 379, meanAll 0,218 msg/s; la 1.1: maxQueue 547-553, meanAll 0,264 (+21 %). CHANGELOG ES/EN y línea `p2p pend= verified= repudiated= blocked=` en `/gsq diag` (smoke «v1.1: /gsq diag…») hechos. |
 
 ## Tests existentes cuya expectativa cambia por el spec (no se debilitan: se cambia lo que el spec cambia)
 - `tests/sync_spec.lua:32-41`: un perfil reenviado por un no oficial pasa de `relay` a `pending` (y se comprueba que no se guarda).
@@ -44,6 +44,11 @@ simulador S1 S2 S3 S4 S5(5 semillas) S6 S7 = 7/7 PASS.
   `presence`/`repudiate`. S1 queda en 478 partes (la 1.0.1, 312) y S4 (sin oficiales) en 450 (1.0.1: 353).
 - Lo que queda de más es sobre todo la `presence` (un registro nuevo por miembro que los oficiales reenvían en cada
   hello). Probé empaquetar más registros pequeños por mensaje y lo revertí: rompía 3 tests de paginación y estimación.
+
+- S8 por emisor (herramienta `wt/tools/tally.js`, 3 min): en la 1.1 los oficiales mandan 1894 perfiles y 310 presence;
+  en la 1.0.1, 1562 perfiles en total. Los miembros mandan solo lo suyo (el corte por oficial conectado funciona), así
+  que el exceso viene de las respuestas de los oficiales. Probé enviar las presence de 10 en 10: no cambió la cola
+  (547), descartado.
 
 ## Qué falta / siguiente paso
 1. Resultado de S13 (AC8) y de la regresión del simulador S1–S9 (AC9).
