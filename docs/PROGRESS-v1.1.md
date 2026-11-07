@@ -88,3 +88,21 @@ y 40 clientes (Gm, Of1, Of2, Mb3, Mb8 … Mb183), mismos checks que S8, cola ≤
 - Checks (todos ok en las 4): 438 registros generados; meanBusiest ≤1,05; pico 1 s ≤10; 0 rechazos del throttle; cola ≤500; convergencia; 0 errores Lua.
 - La 1.1 encola un 27 % más que la 1.0.1 (299 frente a 236), lejos del umbral (500). meanAll es ~2× (la presence), igual que en S8.
 - Las primeras corridas (lanzadas a las 11:06 a /tmp/s8g) se perdieron al reciclarse el contenedor a las 11:28; se relanzaron a las 11:28 con logs en `wt/s8g/`.
+
+## 7-nov 14:xx — cierre: QA a ciegas + regresión sobre af68330
+Copia congelada de af68330 (`wt/close/src`), `--seed 7303`. Logs fuera del repo, en `wt/close/` (`unit.log`, `sim-S1..S9.log`, `qa.md`).
+| Prueba | Resultado |
+|---|---|
+| Unidad | `RESULT: 266 passed, 0 failed`, `GATES: OK` (sintaxis 70/70, enUS/esES 782 claves) |
+| S1 S2 S3 S4 S6 S7 S8 S9 | PASS (S8: cola 409 ≤500, meanBusiest 0,924, pico 4; S2: ajustes en 2,0 s; S7: asistencia firmada 15/15) |
+| S5, 100 semillas (por defecto) | **EXIT=124**: timeout de 25 min, sin salida. Cada semilla tarda ~40 s, 100 semillas no caben. No es un fallo del addon |
+| S5, 5 semillas (`--s5seeds 5`) | PASS: 1 mensaje de guild por evento en 5/5 semillas (15 eventos, 15 mensajes), 0 errores Lua, 203 s |
+| S13 (AC8) | sigue sin terminar en este entorno: **AC8 FAIL / sin medir** |
+
+QA a ciegas (agente nuevo; leídos 20/31 ficheros del diff + SPEC entero): AC1-AC7 y AC9 PASS (AC1 con reserva: `verified` no se asserta en S11; AC7 sin ejecutar), AC8 FAIL (S13).
+- **H1 (alta)**: `Sync.lua:86-91` susurra la versión sin verificar (u=1) al autor sin comprobar que sea 1.1. Un 1.0.x ignora `u`, y `M.provenance` (`Core/Model.lua:545`) acepta cualquier registro de un oficial: si la ts es más nueva, el autor sobrescribe su propio perfil con la versión falsa. Arreglo propuesto: susurrar solo a quien envió `p2=X.PROTO`. Estado: código leído por Anton, falta un test que lo reproduzca.
+- **H2 (media)**: el capitán verifica al instante perfiles falsos de cualquiera con `d.squad=A` (`P2P.lua:73,:150`) sin comprobar que el autor sea miembro de A.
+- **H3 (media)**: 2 cómplices pueden meter con quórum un repudiate falso a nombre de X (`P2P.lua:382-397`), borrar su perfil real y bloquear a reenviadores honestos; el autor no puede desmentirlo.
+- H4 (baja): `P2P.lua:183` `before()` borra `st.via[kid]` en dup sin restaurarlo. H5 (baja): `P2P.lua:140-142` y `:147-149` duplicados.
+
+Siguiente paso: arreglar H1 (con test) antes de la beta → prueba en el juego con 2-3 jugadores y BugSack → GO de BRO para la beta en CurseForge.
