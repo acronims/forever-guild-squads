@@ -108,6 +108,7 @@ L.EXPORT_HELP = "Ctrl+A, Ctrl+C para copiar. Pega aquí una copia y pulsa Import
 L.IMPORT = "Importar"
 L.IMPORTED = "Importados %d registros (%d rechazados)."
 L.SYNCED = "Guild Squads: sincronizado (%d registros, %d pendientes de verificar)"
+L.OLD_PEERS = "Guild Squads: %d miembros de la hermandad usan una versión antigua y no se sincronizan hasta que actualicen"
 L.SYNC_SENT = "Petición de sincronización enviada a la guild."
 L.SYNC_COOLDOWN = "Ya se pidió una sincronización hace menos de un minuto. Prueba otra vez en un momento."
 

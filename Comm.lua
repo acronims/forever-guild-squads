@@ -9,7 +9,15 @@ ns.Comm = Comm
 local S, C, Q = ns.Serialize, ns.Chunk, ns.Queue
 
 Comm.PREFIX = "GSquads"
-Comm.PROTO = 1
+Comm.PROTO = 2   -- v1.2 (BRO 7-nov 21:20): 1.0.x / 1.1 speak 1 and drop every v ~= 1, so they get nothing from a 1.2
+-- distinct senders seen on an older protocol (members who still have to update); local count only, never sent
+Comm.oldPeers = {}
+Comm.OLD_PEERS_MAX = 1000
+function Comm.OldPeerCount()
+  local n = 0
+  for _ in pairs(Comm.oldPeers) do n = n + 1 end
+  return n
+end
 Comm.stats = { sent = 0, recv = 0, failed = 0, badProto = 0 }
 
 local function now() return (GetTime and GetTime()) or 0 end
@@ -180,7 +188,14 @@ function Comm.OnEvent(event, ...)
     if not full then return end
     local ok, data = S.decode(S.unescape(full))
     if not ok or type(data) ~= "table" then return end
-    if data.v ~= Comm.PROTO then Comm.stats.badProto = Comm.stats.badProto + 1; return end
+    if data.v ~= Comm.PROTO then
+      Comm.stats.badProto = Comm.stats.badProto + 1
+      local v = tonumber(data.v)
+      if v and v < Comm.PROTO and not Comm.oldPeers[sender] and Comm.OldPeerCount() < Comm.OLD_PEERS_MAX then
+        Comm.oldPeers[sender] = true
+      end
+      return
+    end
     Comm.stats.recv = Comm.stats.recv + 1
     -- a broken payload never raises inside CHAT_MSG_ADDON
     if Comm.handler then

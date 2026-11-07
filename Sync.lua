@@ -198,10 +198,19 @@ local function fireSynced()
   synced.done = true
   local n, m = Sync.SyncedCounts()
   local fmt = (ns.L and ns.L.SYNCED) or "Guild Squads: synced (%d records, %d pending verification)"
-  local line = fmt:format(n, m)
-  if Sync.chatSink then Sync.chatSink(line); return end
-  local f = DEFAULT_CHAT_FRAME
-  if f and f.AddMessage then pcall(f.AddMessage, f, line) end
+  local lines = { fmt:format(n, m) }
+  -- v1.2 (BRO 7-nov 21:20): members still on 1.0.x / 1.1 cannot sync with us (PROTO 2); say how many, locally
+  local old = ns.Comm and ns.Comm.OldPeerCount and ns.Comm.OldPeerCount() or 0
+  if old > 0 then
+    lines[2] = ((ns.L and ns.L.OLD_PEERS) or "Guild Squads: %d guild members use an old version and cannot sync until they update"):format(old)
+  end
+  for _, line in ipairs(lines) do
+    if Sync.chatSink then Sync.chatSink(line)
+    else
+      local f = DEFAULT_CHAT_FRAME
+      if f and f.AddMessage then pcall(f.AddMessage, f, line) end
+    end
+  end
 end
 function Sync.NoteRecord(now) synced.lastNew = now end
 -- end of a hello round: `n` records learned in it; `more` = another round follows

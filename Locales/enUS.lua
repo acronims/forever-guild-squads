@@ -117,6 +117,7 @@ L.IMPORT = "Import"
 L.IMPORTED = "Imported %d records (%d rejected)."
 L.SYNC_SENT = "Sync request sent to the guild."
 L.SYNCED = "Guild Squads: synced (%d records, %d pending verification)"
+L.OLD_PEERS = "Guild Squads: %d guild members use an old version and cannot sync until they update"
 L.SYNC_COOLDOWN = "Sync was requested less than a minute ago. Try again in a moment."
 L.DEBUG = "Debug: %s"
 

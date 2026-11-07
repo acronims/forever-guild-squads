@@ -45,3 +45,17 @@ test("comm: receive path reassembles and checks protocol version", function()
   frame.scripts.OnEvent(frame, "CHAT_MSG_ADDON", "GSquads", "zz:1/1:" .. NS.Serialize.encode({ v = 99, t = "X" }), "GUILD", "Eve")
   eq(handled[#handled][1], "R", "wrong protocol ignored"); eq(Comm.stats.badProto, 1)
 end)
+-- v1.2 (BRO 7-nov 21:20): PROTO 2 cuts 1.0.x / 1.1 off; their messages (v = 1) are dropped and their senders counted
+test("comm: v1.2 speaks PROTO 2, drops v = 1 and counts the distinct old-version senders", function()
+  eq(Comm.PROTO, 2)
+  local n, bad = #handled, Comm.stats.badProto
+  local old = NS.Serialize.encode({ v = 1, t = "H", p = { a = 1 } })
+  frame.scripts.OnEvent(frame, "CHAT_MSG_ADDON", "GSquads", "zz:1/1:" .. old, "GUILD", "Old-Realm")
+  frame.scripts.OnEvent(frame, "CHAT_MSG_ADDON", "GSquads", "zy:1/1:" .. old, "GUILD", "Old-Realm")
+  frame.scripts.OnEvent(frame, "CHAT_MSG_ADDON", "GSquads", "zx:1/1:" .. old, "GUILD", "Older-Realm")
+  eq(#handled, n, "v = 1 never reaches the handler"); eq(Comm.stats.badProto, bad + 3)
+  eq(Comm.OldPeerCount(), 2, "two distinct members on an old version")
+  -- a newer protocol is not an old version
+  frame.scripts.OnEvent(frame, "CHAT_MSG_ADDON", "GSquads", "zw:1/1:" .. NS.Serialize.encode({ v = 3, t = "H" }), "GUILD", "New-Realm")
+  eq(Comm.OldPeerCount(), 2)
+end)

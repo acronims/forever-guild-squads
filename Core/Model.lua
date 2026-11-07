@@ -9,7 +9,7 @@ ns.Model = M
 local P = ns.Permissions
 local S = ns.Serialize
 
-M.PROTO = 1
+M.PROTO = 2
 M.SQUAD_SIZE = 5
 M.ROLES = { "TANK", "HEALER", "DAMAGER" }
 M.GOALS = { "leveling", "dungeons", "farm", "worldpvp", "bg", "raid" }
