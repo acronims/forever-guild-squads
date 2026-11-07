@@ -171,6 +171,41 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: with <= SAMPLE_MIN_ONLINE online a 1.
   if not okAll then error(err, 0) end
 end }
 
+-- v1.2 AC3 (S8g newcomer stuck, d5a17e9): an empty newcomer of a big guild gets its first replies from members, as
+-- pending copies (quorum), not verified records; the extra hello rounds must go on while replies bring new pending
+-- copies, or the newcomer never gets the second copies that verify them
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello rounds go on while replies bring new pending copies", function(c)
+  local ns = c.ns
+  local S, Comm = ns.Sync, ns.Comm
+  local cache = ns.rosterList()
+  local extra = {}
+  for i = 1, 40 do local n = ("Pr%02d-Realm"):format(i); cache[n] = { rank = 5, online = true, level = 20 }; extra[#extra + 1] = n end
+  local origSend = Comm.Send
+  local hellos = 0
+  Comm.Send = function(tag, ...) if tag == "H" then hellos = hellos + 1 end end
+  local okAll, err = pcall(function()
+    S.Hello()
+    eq(hellos, 1, "first hello")
+    -- one member relays 12 profiles of others: they stay pending (quorum 2), none verified
+    local recs = {}
+    for i = 1, 12 do
+      local a = extra[i + 1]
+      recs[#recs + 1] = { k = "profile", id = a, a = a, ts = GetServerTime() - 1000 + i, sq = 1, d = { note = "r" .. i } }
+    end
+    S.OnMessage("D", { r = recs }, "Pr01-Realm")
+    ok(ns.state.profiles[extra[2]] == nil, "a relayed profile is not verified by a single relayer")
+    ok(ns.state.p2p and ns.state.p2p.pend and ns.state.p2p.pend["profile:" .. extra[2]], "it is held pending")
+    runTimers(c, 31)
+    eq(hellos, 2, "a second hello after replies that only brought pending copies")
+  end)
+  Comm.Send = origSend
+  for _, n in ipairs(extra) do cache[n] = nil; ns.state.profiles[n] = nil end
+  if ns.state.p2p and ns.state.p2p.pend then
+    for k in pairs(ns.state.p2p.pend) do if k:find("Pr%d%d%-Realm") then ns.state.p2p.pend[k] = nil end end
+  end
+  if not okAll then error(err, 0) end
+end }
+
 -- v1.2 AC5 (S8 load): a 1.2 hello carries fine buckets h2 (Sync.FINE_NB) for the big kinds; a 1.2 replier diffs
 -- on them, so it does not resend a whole coarse bucket the requester already holds
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a 1.2 replier diffs profiles on the fine buckets h2 of the hello", function(c)

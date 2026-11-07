@@ -923,9 +923,12 @@ function S8g(seed, minutes) {
   const tn = sim.t;
   nc.login();
   let t95 = null, t100 = null;
+  const pendCnt = `(function() local n = 0 for _ in pairs((NS.state.p2p and NS.state.p2p.pend) or {}) do n = n + 1 end return n end)()`;
+  const curve = [];   // measured: [s, held, pending ids] every 30 s, to see where the newcomer stalls
   for (let k = 0; k < 60 && t100 === null; k++) {
     sim.run(10);
     const h = Number(nc.val(cnt)[0]);
+    if (k % 3 === 2) curve.push([Math.round(sim.t - tn), h, Number(nc.val(pendCnt)[0])]);
     if (t95 === null && h >= 0.95 * target) t95 = Math.round(sim.t - tn);
     if (h >= target) t100 = Math.round(sim.t - tn);
   }
@@ -950,7 +953,7 @@ function S8g(seed, minutes) {
   return { pass: pass(), checks, metrics: { clients: cs.length, officerHellos: hs, seconds: Math.round(dur), records: n, partsTotal: total,
     partsTopClient: top.slice(0, 5).map((e) => e.join(':')).join(','), topShare: +(top[0][1] / Math.max(1, total)).toFixed(3),
     maxQueue: maxQ, throttled: thr, meanAll: +(total / cs.length / dur).toFixed(3), newcomerTarget: target,
-    newcomerT95: t95, newcomerT100: t100, convergeAfterNewcomer: tConv, ...sim.stats } };
+    newcomerT95: t95, newcomerT100: t100, newcomerCurve: curve, convergeAfterNewcomer: tConv, ...sim.stats } };
 }
 
 module.exports = { S8g, S15, S16, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };

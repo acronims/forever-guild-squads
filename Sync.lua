@@ -420,8 +420,10 @@ local function onRecords(payload, sender)
         else seen.by[from] = t end
       end
       local ok, why = Sync.Apply(rec, from)
-      -- presences do not keep the hello rounds going (one per member, low value; the next hello brings them)
-      if ok and rec.k ~= "presence" then learned = learned + 1; syncUntil = math.max(syncUntil, t + 60) end
+      -- presences do not keep the hello rounds going (one per member, low value; the next hello brings them).
+      -- v1.2 (AC3): a new pending copy counts too: a newcomer's first replies come from members (quorum), and
+      -- without more rounds it never gets the second copies that verify them
+      if (ok or why == "pending") and rec.k ~= "presence" then learned = learned + 1; syncUntil = math.max(syncUntil, t + 60) end
       if ns.debug then ns.debug(("rec %s/%s from %s: %s"):format(tostring(rec.k), rec.id, tostring(sender), ok and "applied" or tostring(why))) end
       if why == "stale" and not corrections[rec.id] then
         -- the sender has an older copy; re-broadcast ours unless someone else does it first
