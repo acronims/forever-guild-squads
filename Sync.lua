@@ -251,9 +251,10 @@ function Sync.CubeOf(id, nonce)
   local h = ns.Serialize.hash(tostring(id) .. "/" .. tostring(nonce))
   return (tonumber(h:sub(1, 8), 16) + tonumber(h:sub(9, 16), 16)) % Sync.CUBES
 end
-local function pickCubes()
+local function pickCubes(base)
   local c, n = {}, 0
-  while n < Sync.CUBES_PICK do
+  for x in pairs(base or {}) do c[x] = true; n = n + 1 end
+  while n < Sync.CUBES_PICK * (base and 2 or 1) do
     local x = math.random(0, Sync.CUBES - 1)
     if not c[x] then c[x] = true; n = n + 1 end
   end
@@ -311,14 +312,28 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
   local nonce = proto >= 2 and tonumber(payload.nonce) or nil
   local online = ns.onlineCount and ns.onlineCount() or 1
   if nonce and online > Sync.SAMPLE_MIN_ONLINE then
-    local cubes, inCubes = pickCubes(), {}
-    for _, e in ipairs(all) do if cubes[Sync.CubeOf(e.r.id, nonce)] then inCubes[#inCubes + 1] = e.r end end
-    for i = 1, math.min(Sync.MAX_SAMPLE, #inCubes) do
-      local j = math.random(i, #inCubes)
-      inCubes[i], inCubes[j] = inCubes[j], inCubes[i]
+    -- v1.2 (AC3 intento 3): records in a bucket where the requester holds pending copies (ph) are the ones it
+    -- needs a second / third copy of: twice the cubes for them, and they go first (the tail of S8g is pending)
+    local cubes = pickCubes()
+    local wide = pickCubes(cubes)
+    local ph = type(payload.ph) == "table" and payload.ph or {}
+    local prio, rest = {}, {}
+    for _, e in ipairs(all) do
+      local cb = Sync.CubeOf(e.r.id, nonce)
+      local pk = ph[e.r.k]
+      local inPend = type(pk) == "table" and pk[M.bucketOf(e.r.id, M.NBUCKETS)]
+      if inPend and inPend ~= "0" and wide[cb] then prio[#prio + 1] = e.r
+      elseif cubes[cb] then rest[#rest + 1] = e.r end
     end
-    for i = #inCubes, Sync.MAX_SAMPLE + 1, -1 do inCubes[i] = nil end
-    return inCubes
+    local function shuffle(t)
+      for i = 1, #t - 1 do local j = math.random(i, #t); t[i], t[j] = t[j], t[i] end
+    end
+    shuffle(prio); shuffle(rest)
+    local out = {}
+    for _, t in ipairs({ prio, rest }) do
+      for _, r in ipairs(t) do if #out < Sync.MAX_SAMPLE then out[#out + 1] = r end end
+    end
+    return out
   end
   local last = cursor[sender]
   local start = 1
