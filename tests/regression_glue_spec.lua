@@ -171,6 +171,31 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a 1.2 replier diffs profiles on the f
   if not okAll then error(err, 0) end
 end }
 
+-- v1.2 AC5 (traffic, attempt 3): replies are packed, Sync.PACK records per D message (<= 20, the receiver's cap), so
+-- the small replies of many members do not each waste a half-empty last part
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: records are packed Sync.PACK per D message, fewer parts than 3 per message", function(c)
+  local ns = c.ns
+  local S, Comm = ns.Sync, ns.Comm
+  ok(type(S.PACK) == "number" and S.PACK >= 6 and S.PACK <= 20, "Sync.PACK in [6, 20]")
+  ok(type(S.PackRecords) == "function", "Sync.PackRecords exists")
+  local list = {}
+  for i = 1, 24 do
+    local id = ("Pk%03d-Realm"):format(i)
+    list[i] = { k = "profile", id = id, a = id, ts = 1795000000 + i, sq = 1, d = { role = "DAMAGER", note = "x" } }
+  end
+  local batches = S.PackRecords(list)
+  local n, packed, old = 0, 0, 0
+  for _, b in ipairs(batches) do
+    ok(#b <= S.PACK, #b .. " records in one D")
+    n = n + #b
+    packed = packed + Comm.Parts("D", { r = b })
+  end
+  eq(n, 24, "every record is sent once")
+  for i = 1, 24, 3 do old = old + Comm.Parts("D", { r = { list[i], list[i + 1], list[i + 2] } }) end
+  ok(packed < old, packed .. " parts packed vs " .. old .. " at 3 per message")
+  eq(S.EstimateParts(list), packed, "EstimateParts matches the packing")
+end }
+
 -- leaving the guild and joining another in-session switches the per-guild data partition
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "leaving the guild and joining another in-session switches the per-guild data", function(c)
   local ns = c.ns

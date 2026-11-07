@@ -136,11 +136,19 @@ local function sendRecords(list, to)
     if Comm.Send("D", { r = batch }, nil, nil, done) == false then done() end
     batch = {}
   end
-  for _, r in ipairs(list) do
-    batch[#batch + 1] = r
-    if #batch >= Sync.BATCH then flush() end
+  for _, b in ipairs(Sync.PackRecords(list)) do batch = b; flush() end
+end
+-- v1.2 AC5: records go Sync.PACK per D message (the receiver reads at most 20); Comm chunks it in 255-byte parts,
+-- so fewer, fuller messages waste fewer half-empty last parts than the old 3 per message
+Sync.PACK = 8
+function Sync.PackRecords(list)
+  local out, b = {}, {}
+  for _, r in ipairs(list or {}) do
+    b[#b + 1] = r
+    if #b >= Sync.PACK then out[#out + 1] = b; b = {} end
   end
-  if #batch > 0 then flush() end
+  if #b > 0 then out[#out + 1] = b end
+  return out
 end
 -- a bulk write (the GM's "activar/desactivar todo") = N ordinary records, applied locally and
 -- sent 3 per message through the normal throttled queue (1 msg/s, burst 4), no special record. -> applied, refused
@@ -160,11 +168,8 @@ function Sync.PublishMany(list)
 end
 -- messages (parts) that list would take in the queue = seconds at 1 msg/s
 function Sync.EstimateParts(list)
-  local parts, batch = 0, {}
-  for i, rec in ipairs(list or {}) do
-    batch[#batch + 1] = rec
-    if #batch >= Sync.BATCH or i == #list then parts = parts + Comm.Parts("D", { r = batch }); batch = {} end
-  end
+  local parts = 0
+  for _, b in ipairs(Sync.PackRecords(list)) do parts = parts + Comm.Parts("D", { r = b }) end
   return parts
 end
 function Sync.Resend(rec) if rec then sendRecords({ rec }) end end
@@ -377,11 +382,7 @@ local function onHello(payload, sender)
     if p2pOff then return end
     -- unverified versions only go to the requester (a 1.0 client would trust them from an officer)
     local fw = Sync.ForwardsFor(payload)
-    for i = 1, #fw, Sync.BATCH do
-      local batch = {}
-      for j = i, math.min(#fw, i + Sync.BATCH - 1) do batch[#batch + 1] = fw[j] end
-      Comm.Send("D", { r = batch }, "WHISPER", from)
-    end
+    for _, b in ipairs(Sync.PackRecords(fw)) do Comm.Send("D", { r = b }, "WHISPER", from) end
   end)
 end
 
