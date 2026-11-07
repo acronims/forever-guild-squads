@@ -36,7 +36,18 @@ simulador S1 S2 S3 S4 S5(5 semillas) S6 S7 = 7/7 PASS.
 - `tests/catalog_spec.lua:242`: `presence` y `repudiate` van detrás de `achdef`/`achgrant` en `M.EXT_ORDER` (las posiciones antiguas no cambian).
 - `tests/sim/scenarios.js` S3(b): sin oficiales el recién llegado recibe ahora los 200 perfiles (antes, solo los de los 3 autores conectados).
 
+## Carga en el canal (AC8): cambios hechos al medir
+- Primera medida (S1, con el GM conectado): 1124 partes frente a 312 de la 1.0.1. Causas: los miembros reenviaban registros
+  ajenos aunque hubiera un oficial, la `presence` alargaba las rondas de hello y los tipos nuevos engordaban el hello.
+- Arreglo (commit 74fb618): mientras un GM/oficial con el addon está conectado (oído en los últimos 15 min) los miembros
+  responden como en la 1.0 (solo lo suyo); `presence` no cuenta para alargar las rondas; hash vacío compacto para
+  `presence`/`repudiate`. S1 queda en 478 partes (la 1.0.1, 312) y S4 (sin oficiales) en 450 (1.0.1: 353).
+- Lo que queda de más es sobre todo la `presence` (un registro nuevo por miembro que los oficiales reenvían en cada
+  hello). Probé empaquetar más registros pequeños por mensaje y lo revertí: rompía 3 tests de paginación y estimación.
+
 ## Qué falta / siguiente paso
 1. Resultado de S13 (AC8) y de la regresión del simulador S1–S9 (AC9).
-2. Medir el tamaño de SavedVariables con 200 miembros (riesgo del spec).
+2. ~~Medir el tamaño de SavedVariables con 200 miembros~~ hecho (script de medida con el simulador, cliente Mb1, 200 miembros):
+   200 perfiles + 20 squads = 63 KB; + 200 presence = 89 KB; + 2000 pendientes (el máximo) = 663 KB. Los pendientes pesan
+   ~290 bytes cada uno; en una guild normal hay pocos (caducan a los 7 días), pero el peor caso son ~0,6 MB.
 3. Revisión QA a ciegas y prueba de BRO en el juego (AC7 con BugSack).
