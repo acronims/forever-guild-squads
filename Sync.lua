@@ -342,8 +342,8 @@ local function onHello(payload, sender)
     ns.ProgressGlue.OnSummaries(payload.ws, sender)
   end
   if ns.HallGlue then ns.HallGlue.OnHello(payload.rh, sender) end
-  -- only a fraction of the guild answers, after random jitter, to avoid a reply storm. Officers always answer:
-  -- their relays are trusted, so a fresh client can converge even when the authors are offline.
+  -- only a fraction of the guild answers, after random jitter, to avoid a reply storm. Officers always answer a
+  -- 1.0 / 1.1 requester (their relays are the trusted ones there); a 1.2 requester gets them as one more node.
   local online = ns.onlineCount and ns.onlineCount() or 1
   local p = math.min(1, 8 / math.max(1, online))
   local officer = isOfficerMe()
