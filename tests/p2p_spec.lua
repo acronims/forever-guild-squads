@@ -350,3 +350,32 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AC3: the 'synced' chat line fires once
   DEFAULT_CHAT_FRAME = old
   ok(seen and seen:find("^Guild Squads: "), "DEFAULT_CHAT_FRAME:AddMessage")
 end }
+
+-- H4 (QA 1.1, baja): X.before() dropped st.via[kid] as soon as the author spoke, even when the author's record then
+-- failed to apply (dup); the relayed version lost its relayers (a later repudiate of it counts them)
+test("H4: a failed apply of the author's own record keeps the relay trail (st.via) of the relayed version", function()
+  local s = newState()
+  local rel = prof("Au-R", T0 + 10, { note = "por relevo" })
+  ap(s, rel, "Y-R"); ap(s, rel, "Z-R")
+  local via = X.st(s).via
+  local n0 = 0; for _ in pairs(via) do n0 = n0 + 1 end
+  ok(n0 >= 1, "the relayed version is applied by quorum and leaves a via entry")
+  local okA, whyA = ap(s, rel, "Au-R")
+  ok(not okA, "the author's copy of the same version does not apply again (" .. tostring(whyA) .. ")")
+  local n1 = 0; for _ in pairs(via) do n1 = n1 + 1 end
+  eq(n1, n0, "the via entry survives the failed apply")
+end)
+
+-- H5 (QA 1.1, baja): the ledger check in X.offer was written twice (the second copy unreachable); now once. This
+-- pins its behaviour: a relayed version of MY record, newer than my ledger start and not in it, is refused as "mine"
+test("H5: X.offer refuses, once, a relayed version of my own record that my ledger never signed", function()
+  local s = newState()
+  local fake = prof("Au-R", T0 + 20, { note = "no la escribí" })
+  local ledger = { since = T0, v = {} }
+  local okR, why = M.apply(s, copy(fake), { roster = roster, sender = "Y-R", me = "Au-R", now = NOW, ledger = ledger })
+  ok(not okR, "not applied")
+  eq(why, "mine", "refused as mine")
+  ledger.v[X.vkey(fake)] = T0 + 20
+  local okS, whyS = M.apply(s, copy(fake), { roster = roster, sender = "Y-R", me = "Au-R", now = NOW, ledger = ledger })
+  ok(whyS ~= "mine" or okS, "a version in my ledger is not refused as mine (" .. tostring(whyS) .. ")")
+end)

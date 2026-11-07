@@ -28,6 +28,11 @@ for _, k in ipairs(M.EXT_ORDER or {}) do KINDS[#KINDS + 1] = k end
 local MAX_REPLY = 60          -- records per hello reply (1.0 / 1.1 requesters)
 Sync.MAX_SAMPLE = 30          -- v1.2: records per reply to a 1.2 requester (random sample of 2 of 8 cubes)
 Sync.CUBES, Sync.CUBES_PICK = 8, 2
+-- v1.2 AC3 arreglo 2: a requester catching up (cu = 1 in its hello) gets up to MAX_SAMPLE_CATCHUP records of its
+-- 2 cubes, at most once per CATCHUP_COOLDOWN s per requester (a modified client flooding cu hellos gets MAX_SAMPLE)
+Sync.MAX_SAMPLE_CATCHUP = 120
+Sync.CATCHUP_COOLDOWN = 25
+local bigReply = {}           -- requester -> GetTime() of the last catch-up sized reply
 Sync.SAMPLE_MIN_ONLINE = 8    -- v1.2 (AC1): the sample only with more online than this (p < 1); else MAX_REPLY + cursor
 -- v1.2: fine bucket hashes (h2) of the big kinds in a 1.2 hello; a 1.2 replier diffs on them, so it does not resend
 -- a whole coarse bucket (~1/16 of the guild) the requester already holds (S8: members relay P2P now)
@@ -35,7 +40,12 @@ Sync.FINE_NB = 64
 Sync.FINE_KINDS = { profile = true, squad = true }
 local MAX_PENDING = 5000      -- records waiting for the guild roster (own disk + early network)
 local MAX_ROUNDS = 6          -- extra hellos while a fresh client keeps learning
-local MAX_PEND_ROUNDS = 12    -- v1.2 (AC3): extra hellos, every 30 s, while copies wait for quorum (6 min at most)
+-- v1.2 AC3 arreglo 1: only a client catching up (its first hello round taught >= CATCHUP_MIN records, e.g. a
+-- newcomer) asks every 30 s while it learns anything or holds pending copies, up to MAX_CATCHUP_ROUNDS (10 min);
+-- the members keep the 1.1 rounds (their pending rounds were 1960 parts of hellos in AC5)
+Sync.CATCHUP_MIN = 50
+local MAX_CATCHUP_ROUNDS = 20
+local catchup = false
 local MAX_FORWARD = 20        -- unverified versions (u = 1) whispered per hello reply
 local pending = {}            -- { rec, sender } waiting for the guild roster
 local seenAfter = {}          -- id -> version string seen on the wire (reply suppression)
@@ -128,14 +138,14 @@ end
 -- a record version already waiting in our send queue is not queued again for the next
 -- hello (otherwise 30 logins would queue 30 copies of the same records: ~470 messages, 8 minutes of backlog per officer)
 local queued = {}             -- id -> version string waiting in the send queue
-local function sendRecords(list, to)
+local function sendRecords(list, to, urgent)
   -- group a few records per message; Comm chunks large payloads
   local batch = {}
   local function flush()
     local ids = {}
     for i, r in ipairs(batch) do ids[i] = { r.id, vkey(r) }; queued[r.id] = vkey(r) end
     local function done() for _, x in ipairs(ids) do if queued[x[1]] == x[2] then queued[x[1]] = nil end end end
-    if Comm.Send("D", { r = batch }, to and "WHISPER" or nil, to, done) == false then done() end
+    if Comm.Send("D", { r = batch }, to and "WHISPER" or nil, to, done, urgent) == false then done() end
     batch = {}
   end
   for _, b in ipairs(Sync.PackRecords(list)) do batch = b; flush() end
@@ -280,16 +290,22 @@ function Sync.Hello(again)
       if next(M.kindTable(ns.state, k)) then h2 = h2 or {}; h2[k] = M.bucketHashes(ns.state, k, Sync.FINE_NB) end
     end
     msg.h2 = h2
+    if catchup and again then msg.cu = 1 end      -- AC3 arreglo 2: bigger samples while catching up
   end
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
   if ns.After then
-    -- v1.2 (AC3): while copies wait for quorum, a flat +30 s and no need to have learned anything new: the
-    -- second copies only come as answers to the pending hashes (ph) of the next hello
-    local pend = X and X.hasPend and X.hasPend(ns.state)
-    ns.After(pend and 30 or (30 + 15 * round), function()
-      local more = (learned >= 10 and round < MAX_ROUNDS)
-        or (X and X.hasPend and X.hasPend(ns.state) and round < MAX_PEND_ROUNDS)
+    -- v1.2 (AC3): while catching up, a flat +30 s and no need to have learned anything new: the second copies
+    -- only come as answers to the pending hashes (ph) of the next hello
+    if round == 0 then catchup = false end
+    ns.After(catchup and 30 or (30 + 15 * round), function()
+      if round == 0 and learned >= Sync.CATCHUP_MIN then catchup = true end
+      local more
+      if catchup then
+        more = round < MAX_CATCHUP_ROUNDS and (learned > 0 or (X and X.hasPend and X.hasPend(ns.state)) and true or false)
+      else
+        more = learned >= 10 and round < MAX_ROUNDS
+      end
       Sync.NoteRound(learned, now(), more)
       if more then
         round = round + 1; Sync.Hello(true)
@@ -397,11 +413,19 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
       for i = 1, #t - 1 do local j = math.random(i, #t); t[i], t[j] = t[j], t[i] end
     end
     shuffle(prio); shuffle(rest)
+    local cap, big = Sync.MAX_SAMPLE, nil
+    if payload.cu == 1 then
+      local t = GetTime and GetTime() or 0
+      local last = bigReply[sender]
+      if not last or t - last >= Sync.CATCHUP_COOLDOWN or t < last then
+        bigReply[sender] = t; cap = Sync.MAX_SAMPLE_CATCHUP; big = true
+      end
+    end
     local out = {}
     for _, t in ipairs({ prio, rest }) do
-      for _, r in ipairs(t) do if #out < Sync.MAX_SAMPLE then out[#out + 1] = r end end
+      for _, r in ipairs(t) do if #out < cap then out[#out + 1] = r end end
     end
-    return out
+    return out, big
   end
   local last = cursor[sender]
   local start = 1
@@ -468,7 +492,9 @@ local function onHello(payload, sender)
   -- v1.2: only for 1.0 / 1.1 requesters; a 1.2 requester is served P2P whoever is online (officers are one more node)
   local p2pOff = (not officer) and (not X or X.protoOf(payload) < 2) and Sync.TrustedOnline()
   ns.After(2 + math.random() * 6, function()
-    local out = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff, officer)
+    -- AC3 arreglo 3: the catch-up sized reply (once per cooldown per requester) skips our send queue, like
+    -- Sync.Publish; otherwise it waits behind the S8 backlog (~150 s at 1 msg/s) and the newcomer stalls
+    local out, urgent = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff, officer)
     if ns.debug then ns.debug(("hello from %s: replying %d records"):format(tostring(sender), #out)) end
     -- v1.2 (AC6): a member's relay of someone else's authority record goes by WHISPER to the 1.2 requester only; on
     -- the GUILD channel every 1.0 / 1.1 client online would take it and refuse it as "relay"
@@ -479,8 +505,8 @@ local function onHello(payload, sender)
         if r.a == onlyMe or M.isP2P(r) then pub[#pub + 1] = r else priv[#priv + 1] = r end
       end
     end
-    sendRecords(pub)
-    if priv and #priv > 0 then sendRecords(priv, from) end
+    sendRecords(pub, nil, urgent)
+    if priv and #priv > 0 then sendRecords(priv, from, urgent) end
     if p2pOff then return end
     -- unverified versions only go to the requester (a 1.0 client would trust them from an officer)
     local fw = Sync.ForwardsFor(payload)

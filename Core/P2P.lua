@@ -184,16 +184,14 @@ function X.offer(state, rec, ctx, settings, u)
     if ctx.me and rec.a == ctx.me then return false, "mine" end      -- my signature, not my content
     return false, "conflict"
   end
+  -- my name, a version newer than my ledger start and not in it: I never wrote it (whatever its ts). H5: checked
+  -- once, here (it used to be repeated after the stale check, unreachable)
   if ctx.me and rec.a == ctx.me and type(ctx.ledger) == "table" and X.ledgerSays(ctx.ledger, rec, vk) == false then
     return false, "mine"
   end
   if stored and not M.newer(rec, stored) then return false, "stale" end
   -- my own record in a version I never wrote (I hold an older one): refuse it and repudiate it
   if ctx.me and rec.a == ctx.me and stored then return false, "mine" end
-  -- my name, a version newer than my ledger start and not in it: I never wrote it (whatever its ts)
-  if ctx.me and rec.a == ctx.me and type(ctx.ledger) == "table" and X.ledgerSays(ctx.ledger, rec, vk) == false then
-    return false, "mine"
-  end
   if not u and M.isP2P(rec) and X.captainNode(state, rec, sender) then return commit(state, rec, ctx, vk, kid, { sender }) end
   local byId = st.pend[kid]
   if not byId then byId = {}; st.pend[kid] = byId end
@@ -240,7 +238,8 @@ function X.before(state, rec, ctx)
     setStored(state, rec.k, rec.id, nil)
     return true, nil, function() setStored(state, rec.k, rec.id, cur); st.via[kid] = via; st.contra[via.v] = nil; X.outbox[#X.outbox] = nil end
   end
-  return true
+  -- H4: if the author's record then fails to apply (dup, stale...), the relay trail comes back
+  return true, nil, function() st.via[kid] = via end
 end
 
 -- the ledger of the versions I signed (per guild, SavedVariables): { since = ts, v = { [vkey] = ts } }.

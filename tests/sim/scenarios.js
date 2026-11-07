@@ -814,8 +814,12 @@ function S13(seed, minutes) {
   return { pass: pass(), checks, metrics };
 }
 
-// S14 (AC7): 2 clients on v1.0.1 (GSQ_REF) among 6 on v1.1, no officers online. The old clients get relays, presence
-// and repudiate records they do not know: no Lua error, and their own records still reach everybody.
+// S14 (v1.2, adaptada a PROTO 2; la de la 1.1 probaba la interoperabilidad 1.0.1 <-> 1.1, que BRO corta el 7-nov
+// 21:20): 2 clients on v1.0.1 (GSQ_REF) among 6 on v1.2, no officers online. Everyone saves a profile, a 1.2 client
+// forges Mb1's profile, Mb1 reloads. Criteria: no old client holds anything from a 1.2 client (nor the forgery) and no
+// 1.2 client holds anything from an old one; the 1.2 clients sync among themselves and refuse the forgery; the old
+// clients still sync between them (author's own records); every 1.2 client online through the logins counts the 2 old
+// members; 0 Lua errors. S17 covers the same cut with 1.1 clients and officers.
 function S14(seed) {
   const sim = new Sim({ seed });
   const { check, checks, pass } = checker();
@@ -828,23 +832,29 @@ function S14(seed) {
   sim.run(30);
   for (const c of cs) { c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`); sim.run(2); }
   sim.run(120);
-  // a forged record and its repudiation travel the guild too
   const M1 = full(sim, 'Mb1');
   cs[2].run(`NS.Comm.Send("D", { r = { { k = "profile", id = ${luaStr(M1)}, a = ${luaStr(M1)}, ts = GetServerTime() + 200, sq = 555, d = { note = "falso" } } } })`);
   sim.run(60);
   cs[0].logout(); sim.run(5); cs[0].login();
   sim.run(600);
   const olds = cs.filter((c) => oldNames.has(c.name)), news = cs.filter((c) => !oldNames.has(c.name));
-  const bad = olds.map((c) => Number(c.val('NS.Sync.stats.bad')[0]));
-  check('old clients received and dropped the unknown kinds (presence / repudiate)', bad.every((b) => b > 0), bad.join(','));
-  const oldNotes = news.map((c) => olds.map((o) => c.val(`(function() local p = NS.state.profiles[${luaStr(o.full)}]; return p and p.d.note or "nil" end)()`)[0]).join('+'));
-  check('every v1.1 client holds the old clients\' own profiles', oldNotes.every((x) => x === 'soy Mb2+soy Mb5'), oldNotes.join(','));
-  const newOnOld = olds.map((o) => news.map((c) => o.val(`(function() local p = NS.state.profiles[${luaStr(c.full)}]; return p and p.d.note or "nil" end)()`)[0]).filter((x) => x.startsWith('soy ')).length);
-  check('the old clients hold the v1.1 authors\' own profiles (live)', newOnOld.every((n) => n === news.length), newOnOld.join(','));
-  const fake = olds.map((o) => o.val(`(function() local p = NS.state.profiles[${luaStr(M1)}]; return p and p.d.note or "nil" end)()`)[0]);
-  check('the forged relay was refused by the old clients too', fake.every((x) => x === 'soy Mb1'), fake.join(','));
+  const own = (c, o) => c.val(`(function() local p = NS.state.profiles[${luaStr(o.full)}]; return p and p.d.note or "nil" end)()`)[0];
+  const leakOld = [];
+  for (const o of olds) for (const n of news) if (own(o, n) !== 'nil') leakOld.push(`${o.name}<-${n.name}:${own(o, n)}`);
+  check('no old client holds anything from a 1.2 client (nor the forgery)', leakOld.length === 0, leakOld.join(','));
+  const leakNew = [];
+  for (const n of news) for (const o of olds) if (own(n, o) !== 'nil') leakNew.push(`${n.name}<-${o.name}:${own(n, o)}`);
+  check('no 1.2 client holds anything from an old client', leakNew.length === 0, leakNew.join(','));
+  const missNew = [];
+  for (const n of news) for (const o of news) if (n !== o && own(n, o) !== 'soy ' + o.name) missNew.push(`${n.name}<-${o.name}:${own(n, o)}`);
+  check('the 1.2 clients sync among themselves and refuse the forgery', missNew.length === 0, missNew.join(','));
+  const oldOld = [];
+  for (const o of olds) for (const p of olds) if (o !== p && own(o, p) !== 'soy ' + p.name) oldOld.push(`${o.name}<-${p.name}:${own(o, p)}`);
+  check('the old clients still sync between them', oldOld.length === 0, oldOld.join(','));
+  const cnt = news.map((c) => `${c.name}:${c.val('NS.Comm.OldPeerCount()')[0]}`);
+  check('every 1.2 client online through the logins counts the 2 old members', news.filter((c) => c.name !== 'Mb1').every((c) => Number(c.val('NS.Comm.OldPeerCount()')[0]) === 2), cnt.join(','));
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { oldBad: bad, ref: REF, ...sim.stats } };
+  return { pass: pass(), checks, metrics: { ref: REF, oldPeers: cnt, ...sim.stats } };
 }
 
 // S17 (v1.2, AC de corte que sustituye a AC6; BRO 7-nov 21:20): Comm.PROTO = 2 cuts 1.0.x / 1.1 off. 12 clients:
