@@ -56,3 +56,13 @@ simulador S1 S2 S3 S4 S5(5 semillas) S6 S7 = 7/7 PASS.
    200 perfiles + 20 squads = 63 KB; + 200 presence = 89 KB; + 2000 pendientes (el máximo) = 663 KB. Los pendientes pesan
    ~290 bytes cada uno; en una guild normal hay pocos (caducan a los 7 días), pero el peor caso son ~0,6 MB.
 3. Revisión QA a ciegas y prueba de BRO en el juego (AC7 con BugSack).
+
+## 7-nov 09:xx — bucle de la cola de S8: 3 arreglos fallidos → ESCALADO a BRO (regla: máx. 3)
+| # | Commit | Cambio | S8 (cola ≤500) | S2 (convergencia) |
+|---|---|---|---|---|
+| 1 | e54fbc1 | (estado de partida) | FAIL 547-553 | PASS |
+| 2 | a321d40 | los oficiales no reenvían presence ajenas; tope de 6 para los miembros | PASS 397 | **FAIL** (baseline no converge) |
+| 3 | c2c7aa3 | tope de 6 presence ajenas por respuesta para TODOS (también los oficiales) | **FAIL 549** | PASS |
+- Causa de que el 2 rompiera S2: la condición `onlyAuthor == nil or nPres >= MAX` hacía que nadie reenviara presence ajenas (en P2P `onlyAuthor` también es nil).
+- Suposición que sospecho falsa: «el tope por respuesta basta». S8 indica que lo que llena la cola es que los OFICIALES reenvíen presence ajenas en cada hello, aunque sean pocas por respuesta.
+- Propuesta (4.º intento, solo con el OK de BRO): los oficiales no reenvían presence ajenas (`isOfficerMe()`), los miembros en P2P sí, con el tope de 6. Alternativas: aceptar ~550 en el umbral de S8, o que presence no se reenvíe nunca (el contador va más lento).
