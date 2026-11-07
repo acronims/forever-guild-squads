@@ -28,6 +28,11 @@ for _, k in ipairs(M.EXT_ORDER or {}) do KINDS[#KINDS + 1] = k end
 local MAX_REPLY = 60          -- records per hello reply (1.0 / 1.1 requesters)
 Sync.MAX_SAMPLE = 30          -- v1.2: records per reply to a 1.2 requester (random sample of 2 of 8 cubes)
 Sync.CUBES, Sync.CUBES_PICK = 8, 2
+-- v1.2 AC3 arreglo 2: a requester catching up (cu = 1 in its hello) gets up to MAX_SAMPLE_CATCHUP records of its
+-- 2 cubes, at most once per CATCHUP_COOLDOWN s per requester (a modified client flooding cu hellos gets MAX_SAMPLE)
+Sync.MAX_SAMPLE_CATCHUP = 120
+Sync.CATCHUP_COOLDOWN = 25
+local bigReply = {}           -- requester -> GetTime() of the last catch-up sized reply
 Sync.SAMPLE_MIN_ONLINE = 8    -- v1.2 (AC1): the sample only with more online than this (p < 1); else MAX_REPLY + cursor
 -- v1.2: fine bucket hashes (h2) of the big kinds in a 1.2 hello; a 1.2 replier diffs on them, so it does not resend
 -- a whole coarse bucket (~1/16 of the guild) the requester already holds (S8: members relay P2P now)
@@ -285,6 +290,7 @@ function Sync.Hello(again)
       if next(M.kindTable(ns.state, k)) then h2 = h2 or {}; h2[k] = M.bucketHashes(ns.state, k, Sync.FINE_NB) end
     end
     msg.h2 = h2
+    if catchup and again then msg.cu = 1 end      -- AC3 arreglo 2: bigger samples while catching up
   end
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
@@ -407,9 +413,17 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
       for i = 1, #t - 1 do local j = math.random(i, #t); t[i], t[j] = t[j], t[i] end
     end
     shuffle(prio); shuffle(rest)
+    local cap = Sync.MAX_SAMPLE
+    if payload.cu == 1 then
+      local t = GetTime and GetTime() or 0
+      local last = bigReply[sender]
+      if not last or t - last >= Sync.CATCHUP_COOLDOWN or t < last then
+        bigReply[sender] = t; cap = Sync.MAX_SAMPLE_CATCHUP
+      end
+    end
     local out = {}
     for _, t in ipairs({ prio, rest }) do
-      for _, r in ipairs(t) do if #out < Sync.MAX_SAMPLE then out[#out + 1] = r end end
+      for _, r in ipairs(t) do if #out < cap then out[#out + 1] = r end end
     end
     return out
   end

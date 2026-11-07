@@ -275,7 +275,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a client catching up keeps flat hello
   for i = 1, 80 do local n = ("Pc%02d-Realm"):format(i); cache[n] = { rank = 5, online = true, level = 20 }; extra[#extra + 1] = n end
   local origSend = Comm.Send
   local hellos = 0
-  Comm.Send = function(tag, ...) if tag == "H" then hellos = hellos + 1 end end
+  local lastH
+  Comm.Send = function(tag, msg) if tag == "H" then hellos = hellos + 1; lastH = msg end end
   local okAll, err = pcall(function()
     ok(type(S.CATCHUP_MIN) == "number" and S.CATCHUP_MIN <= 70, "Sync.CATCHUP_MIN exists")
     S.Hello()
@@ -295,12 +296,49 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a client catching up keeps flat hello
     eq(hellos, 3, "catching up: a third hello at +30 s with copies pending and nothing new")
     runTimers(c, 93)
     ok(hellos >= 4, "and it goes on (flat rounds)")
+    -- AC3 arreglo 2: the hellos of a client catching up say so (cu = 1), so repliers send it bigger samples
+    ok(lastH and lastH.cu == 1, "a catching-up hello carries cu = 1")
   end)
   Comm.Send = origSend
   for _, n in ipairs(extra) do cache[n] = nil; ns.state.profiles[n] = nil end
   if ns.state.p2p and ns.state.p2p.pend then
     for k in pairs(ns.state.p2p.pend) do if k:find("Pc%d%d%-Realm") then ns.state.p2p.pend[k] = nil end end
   end
+  if not okAll then error(err, 0) end
+end }
+
+-- v1.2 AC3 arreglo 2 (S8 c1: the newcomer at 95 % only at 340 s, ~50 records per round): a catching-up requester
+-- (cu = 1) gets up to MAX_SAMPLE_CATCHUP records of its 2 cubes; at most once per CATCHUP_COOLDOWN s per requester,
+-- so a modified client flooding cu hellos only gets the normal MAX_SAMPLE (no amplification)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) gets a bigger sample, once per cooldown", function(c)
+  local ns = c.ns
+  local S, M = ns.Sync, ns.Model
+  local h = {}
+  for _, k in ipairs({ "settings", "squad", "profile", "reject", "boss", "annul" }) do h[k] = M.bucketHashes(ns.state, k) end
+  for _, k in ipairs(M.EXT_ORDER) do h[k] = M.bucketHashes(ns.state, k) end
+  local added = {}
+  for i = 1, 400 do
+    local id = ("Pc%03d-Realm"):format(i)
+    ns.state.profiles[id] = { k = "profile", id = id, a = id, ts = 1795000000, sq = 1, d = { role = "DAMAGER" } }
+    added[#added + 1] = id
+  end
+  h.profile = {}
+  local oldOnline = ns.onlineCount
+  ns.onlineCount = function() return 40 end
+  local okAll, err = pcall(function()
+    ok(type(S.MAX_SAMPLE_CATCHUP) == "number" and S.MAX_SAMPLE_CATCHUP > S.MAX_SAMPLE, "Sync.MAX_SAMPLE_CATCHUP > MAX_SAMPLE")
+    local big = S.ReplyFor({ h = h, p2 = 2, nonce = 99, cu = 1 }, "New-Realm", nil, nil)
+    ok(#big > S.MAX_SAMPLE and #big <= S.MAX_SAMPLE_CATCHUP, #big .. " records to a catching-up requester")
+    local cubes, nc = {}, 0
+    for _, r in ipairs(big) do local cb = S.CubeOf(r.id, 99); if not cubes[cb] then cubes[cb] = true; nc = nc + 1 end end
+    ok(nc <= S.CUBES_PICK, nc .. " cubes in a catching-up reply")
+    local again = S.ReplyFor({ h = h, p2 = 2, nonce = 100, cu = 1 }, "New-Realm", nil, nil)
+    ok(#again <= S.MAX_SAMPLE, "a second cu hello inside the cooldown gets the normal sample (" .. #again .. ")")
+    local other = S.ReplyFor({ h = h, p2 = 2, nonce = 101 }, "Zed-Realm", nil, nil)
+    ok(#other <= S.MAX_SAMPLE, "no cu: the normal sample")
+  end)
+  ns.onlineCount = oldOnline
+  for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
 end }
 
