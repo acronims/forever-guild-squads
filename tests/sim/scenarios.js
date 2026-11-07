@@ -374,7 +374,7 @@ function S8(seed, minutes) {
       if (h >= target) t100 = Math.round(sim.t - tn);
     }
     sim.run(120);  // room for the "synced" line (60 s of quiet after the last round)
-    const raw = nc.val('(function() local o = {} for _, e in ipairs(SIM_CHAT or {}) do o[#o + 1] = e.s end return table.concat(o, "\\n") end)()')[0];
+    const raw = nc.val('(function() local o = {} for _, e in ipairs(SIM_LOCAL or {}) do o[#o + 1] = e.s end return table.concat(o, "\\n") end)()')[0];
     chat = String(raw || '').split('\n').filter((x) => x);
   }
   check('mean msgs/s per client (busiest) <= 1.05 (client throttle 1/s; Comm drains at 1/s)', mean <= 1.05, mean.toFixed(3));
@@ -847,12 +847,12 @@ function S14(seed) {
   return { pass: pass(), checks, metrics: { oldBad: bad, ref: REF, ...sim.stats } };
 }
 
-// S17 (v1.2 AC6): S14 widened. 12 clients: 8 on v1.2 (GM, Of1, Mb1, Mb3, Mb7-Mb10); Mb4, Mb6 on v1.1 (GSQ_REF11, default
-// 636e545); Mb2, Mb5 on v1.0.1 (GSQ_REF, default 406029a). Everyone writes a profile. Then, with Mb2, Mb4 and Mb7 offline,
-// the GM changes the settings (bench 1) and the GM and the officer log out. Mb2, Mb4 and Mb7 come back while only
-// members are online: the v1.2 members relay the new settings to Mb7 (quorum), and an authority record relayed by a
-// member must never reach a client with p2 < 2 (it would count it as `relay` refused). Last, Of1 logs in: the old
-// clients get the settings from the officer. 0 Lua errors.
+// S17 (v1.2, AC de corte que sustituye a AC6; BRO 7-nov 21:20): Comm.PROTO = 2 cuts 1.0.x / 1.1 off. 12 clients:
+// 8 on v1.2 (GM, Of1, Mb1, Mb3, Mb7-Mb10); Mb4, Mb6 on v1.1 (GSQ_REF11, default 636e545); Mb2, Mb5 on v1.0.1 (REF).
+// Everyone logs in, the GM writes the settings, everyone saves a profile, the GM changes the settings, Mb2 and Mb1
+// reload. Criteria: no old client holds anything written by a 1.2 client (profiles, settings) and no 1.2 client holds
+// anything from an old one; every 1.2 client counts the 4 old members (Comm.OldPeerCount) and, once synced, writes
+// the local old-version line; 0 Lua errors. Measured only: the old clients still sync among themselves.
 const REF11 = process.env.GSQ_REF11 || '636e545';
 function S17(seed) {
   const sim = new Sim({ seed });
@@ -864,57 +864,46 @@ function S17(seed) {
   const cs = {};
   for (const n of names) cs[n] = sim.client(n, ver[n] === '1.0.1' ? { code: v101 } : ver[n] === '1.1' ? { code: v11 } : {});
   const all = names.map((n) => cs[n]);
+  const olds = ['Mb2', 'Mb5', 'Mb4', 'Mb6'];
+  const news = names.filter((n) => !ver[n]);
   for (const c of all) { c.login(); sim.run(2 + sim.rand() * 3); }
   sim.run(20);
   check('GM settings written', gmSettings(cs.Gm));
   sim.run(30);
   for (const c of all) { c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`); sim.run(2); }
   sim.run(120);
-  const olds = ['Mb2', 'Mb5', 'Mb4', 'Mb6'];
-  // relay refusals counted from here on (a re-login starts a fresh Lua state, the counter with it); the spy keeps kind<sender
-  const spy = `NS.SIM_REF = {} local ap = NS.Sync.Apply NS.Sync.Apply = function(rec, sender, ...) local ok, why = ap(rec, sender, ...)
-    if not ok and why == "relay" then NS.SIM_REF[#NS.SIM_REF + 1] = tostring(rec.k) .. "<" .. tostring(sender) end return ok, why end`;
-  const base = {};
-  const arm = (n) => { cs[n].run(spy); base[n] = Number(cs[n].val('NS.Sync.stats.relayRefused')[0]); };
-  for (const n of ['Mb2', 'Mb4', 'Mb7']) cs[n].logout();
-  arm('Mb5'); arm('Mb6');
-  sim.run(10);
   check('GM changes the settings (bench 1)', cs.Gm.run(`return A.SaveSettings({ ${SETTINGS.replace('bench = 2', 'bench = 1')} })`)[0] === true);
   sim.run(60);
+  cs.Mb2.reload(); sim.run(3); cs.Mb1.reload();
+  sim.run(300);
   const bench = (c) => c.val('(function() local s = NS.state.settings; return s and s.d and tostring(s.d.bench) or "nil" end)()')[0];
-  const benchAfter = names.filter((n) => !['Mb2', 'Mb4', 'Mb7'].includes(n)).map((n) => `${n}:${bench(cs[n])}`).join(',');
-  check('the clients online at the change hold bench 1 (live from the GM)', !/:[^1,]/.test(benchAfter), benchAfter);
-  cs.Gm.logout(); cs.Of1.logout();
-  sim.run(10);
-  for (const n of ['Mb2', 'Mb4', 'Mb7']) { cs[n].login(); if (ver[n]) arm(n); sim.run(3); }
-  sim.run(300);
-  // authorial kinds relayed by members (v1.1, M.P2P_KINDS) are refused by a 1.0.1 client as before (S14); authority kinds
-  // relayed by a member must reach no old client at all
-  const AUTHORIAL = new Set(['profile', 'rsvp', 'witness', 'presence', 'reject', 'repudiate']);
-  const refused = olds.map((n) => Number(cs[n].val('NS.Sync.stats.relayRefused')[0]) - base[n]);
-  const refusedBy = olds.map((n) => n + '=' + cs[n].val('table.concat(NS.SIM_REF, " ")')[0]);
-  const authRef = olds.map((n) => cs[n].val('table.concat(NS.SIM_REF, " ")')[0].split(' ').filter((x) => x && !AUTHORIAL.has(x.split('<')[0])));
-  check('no authority record relayed by a member reached a client with p2 < 2 (members only online)',
-    authRef.every((l) => l.length === 0), olds.map((n, i) => `${n}=${authRef[i].join(' ') || '-'}`).join(' | '));
-  check('the v1.1 clients refused no relay at all', [2, 3].every((i) => refused[i] === 0), refusedBy.join(' | '));
-  const mb7 = bench(cs.Mb7);   // measured, not a criterion: the quorum of 3 needs 3 distinct relayers of the cube
-  cs.Of1.login();
-  sim.run(30);
-  // the old clients ask again (their next session): the officer serves them the settings
-  for (const n of ['Mb2', 'Mb4']) { cs[n].reload(); sim.run(3); }
-  sim.run(300);
-  const ob = olds.map((n) => `${n}:${bench(cs[n])}`);
-  check('the old clients got the new settings from the officer', olds.every((n) => bench(cs[n]) === '1'), ob.join(','));
-  const online = all.filter((c) => c.name !== 'Gm');
   const own = (c, o) => c.val(`(function() local p = NS.state.profiles[${luaStr(o.full)}]; return p and p.d.note or "nil" end)()`)[0];
-  const miss = [];
-  for (const o of olds.map((n) => cs[n])) for (const c of online) if (own(o, c) !== 'soy ' + c.name) miss.push(`${o.name}<-${c.name}:${own(o, c)}`);
-  check('every old client holds the profile of every client online (theirs live, the rest relayed)', miss.length === 0, miss.slice(0, 8).join(','));
+  const newBench = news.map((n) => `${n}:${bench(cs[n])}`);
+  check('the 1.2 clients hold the new settings (bench 1)', news.every((n) => bench(cs[n]) === '1'), newBench.join(','));
   const missNew = [];
-  for (const n of ['Mb1', 'Mb3', 'Mb7']) for (const o of olds) if (own(cs[n], cs[o]) !== 'soy ' + o) missNew.push(`${n}<-${o}:${own(cs[n], cs[o])}`);
-  check('every v1.2 member holds the old clients\' profiles', missNew.length === 0, missNew.slice(0, 8).join(','));
+  for (const n of news) for (const o of news) if (n !== o && own(cs[n], cs[o]) !== 'soy ' + o) missNew.push(`${n}<-${o}:${own(cs[n], cs[o])}`);
+  check('the 1.2 clients sync among themselves (every 1.2 profile)', missNew.length === 0, missNew.slice(0, 8).join(','));
+  const leakOld = [];
+  for (const o of olds) {
+    if (bench(cs[o]) !== 'nil') leakOld.push(`${o}:settings=${bench(cs[o])}`);
+    for (const n of news) if (own(cs[o], cs[n]) !== 'nil') leakOld.push(`${o}<-${n}:${own(cs[o], cs[n])}`);
+  }
+  check('no old client holds anything from a 1.2 client (profiles, settings)', leakOld.length === 0, leakOld.slice(0, 8).join(','));
+  const leakNew = [];
+  for (const n of news) for (const o of olds) if (own(cs[n], cs[o]) !== 'nil') leakNew.push(`${n}<-${o}:${own(cs[n], cs[o])}`);
+  check('no 1.2 client holds anything from an old client', leakNew.length === 0, leakNew.slice(0, 8).join(','));
+  const cnt = news.map((n) => `${n}:${cs[n].val('NS.Comm.OldPeerCount()')[0]}`);
+  // a session only counts the old members it hears: Mb1 reloaded after them, so it hears only those who speak again (Mb2)
+  check('every 1.2 client online through the logins counts the 4 old members (Comm.OldPeerCount)', news.filter((n) => n !== 'Mb1').every((n) => Number(cs[n].val('NS.Comm.OldPeerCount()')[0]) === 4), cnt.join(','));
+  const chat = (c) => c.val('(function() local o = {} for _, e in ipairs(SIM_LOCAL or {}) do if type(e) == "table" and e.s then o[#o + 1] = e.s end end return table.concat(o, "\\n") end)()')[0];
+  const mb1 = chat(cs.Mb1);
+  const lines = news.map((n) => [n, (chat(cs[n]).match(/old version|versión antigua/g) || []).length]);
+  check('every 1.2 client writes the local old-version line exactly once', lines.every((x) => x[1] === 1), lines.map((x) => x.join(':')).join(','));
+  check('the reloaded 1.2 client (Mb1) also writes it, with the old members it heard', /\b[1-4]\b[^\n]*(old version|versión antigua)/.test(mb1), mb1.replace(/\n/g, ' / '));
+  const oldOld = [];
+  for (const o of olds) for (const p of olds) if (o !== p && own(cs[o], cs[p]) !== 'soy ' + p) oldOld.push(`${o}<-${p}`);
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { ref: REF, ref11: REF11, refused, refusedBy, mb7BenchMembersOnly: mb7, ...sim.stats } };
+  return { pass: pass(), checks, metrics: { ref: REF, ref11: REF11, oldAmongThemselvesMissing: oldOld, oldPeers: cnt, ...sim.stats } };
 }
 
 // S8g (v1.2 AC0/AC2/AC3/AC5): the S13 guild (200 members: GM, 2 officers, 197 members; 200 profiles + 20 squads on

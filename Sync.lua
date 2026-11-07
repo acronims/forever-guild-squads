@@ -199,18 +199,31 @@ local function fireSynced()
   local n, m = Sync.SyncedCounts()
   local fmt = (ns.L and ns.L.SYNCED) or "Guild Squads: synced (%d records, %d pending verification)"
   local lines = { fmt:format(n, m) }
-  -- v1.2 (BRO 7-nov 21:20): members still on 1.0.x / 1.1 cannot sync with us (PROTO 2); say how many, locally
+  local old = Sync.OldPeersLine()
+  if old then lines[2] = old end
+  for _, line in ipairs(lines) do Sync.ChatLine(line) end
+end
+function Sync.ChatLine(line)
+  if Sync.chatSink then Sync.chatSink(line); return end
+  local f = DEFAULT_CHAT_FRAME
+  if f and f.AddMessage then pcall(f.AddMessage, f, line) end
+end
+-- v1.2 (BRO 7-nov 21:20): members still on 1.0.x / 1.1 cannot sync with us (PROTO 2); say how many, locally,
+-- once per session: with the "synced" line, or OLD_PEERS_WAIT s after the first one is heard if that comes later
+Sync.OLD_PEERS_WAIT = 30
+function Sync.OldPeersLine()
   local old = ns.Comm and ns.Comm.OldPeerCount and ns.Comm.OldPeerCount() or 0
-  if old > 0 then
-    lines[2] = ((ns.L and ns.L.OLD_PEERS) or "Guild Squads: %d guild members use an old version and cannot sync until they update"):format(old)
-  end
-  for _, line in ipairs(lines) do
-    if Sync.chatSink then Sync.chatSink(line)
-    else
-      local f = DEFAULT_CHAT_FRAME
-      if f and f.AddMessage then pcall(f.AddMessage, f, line) end
-    end
-  end
+  if old == 0 or synced.oldTold then return nil end
+  synced.oldTold = true
+  return ((ns.L and ns.L.OLD_PEERS) or "Guild Squads: %d guild members use an old version and cannot sync until they update"):format(old)
+end
+function Sync.OnOldPeer()
+  if synced.oldTold or synced.oldWait or not ns.After then return end
+  synced.oldWait = true
+  ns.After(Sync.OLD_PEERS_WAIT, function()
+    synced.oldWait = nil
+    if synced.done then local line = Sync.OldPeersLine(); if line then Sync.ChatLine(line) end end
+  end)
 end
 function Sync.NoteRecord(now) synced.lastNew = now end
 -- end of a hello round: `n` records learned in it; `more` = another round follows

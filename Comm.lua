@@ -193,6 +193,7 @@ function Comm.OnEvent(event, ...)
       local v = tonumber(data.v)
       if v and v < Comm.PROTO and not Comm.oldPeers[sender] and Comm.OldPeerCount() < Comm.OLD_PEERS_MAX then
         Comm.oldPeers[sender] = true
+        if ns.Sync and ns.Sync.OnOldPeer then pcall(ns.Sync.OnOldPeer) end
       end
       return
     end
