@@ -38,4 +38,5 @@ Estados: no ejecutado · corriendo · reportado hecho · verificado (gate de evi
   como 1.0 (solo sus propios registros). Los oficiales 1.1 siguen sirviéndolo. Se mide en S17; si falla, la salida es
   mandar `p2 = 1` y el nivel 1.2 en un campo aparte (desvío del spec, lo decidiría Anton por delegación).
 - 7-nov 11:57: AC4 en verde (S16 + 2 tests de unidad).
-- Siguiente: batería S1–S12 + S14 sobre el código de AC4; luego AC2/AC3/AC5 (muestra por cubos con `nonce`, `MAX_SAMPLE = 30`, oficiales con `p = 8/online`). Las S8g van detached en el Mac mini.
+- 7-nov 12:02: batería sobre 7ca0290 detached en el Mac mini (contenedor `anton-gsq-bat-*`, node:22-slim; copia congelada `wt/bat-7ca0290/src`, logs `wt/bat-7ca0290/*.log`, `DONE` al acabar). S14 local (necesita git): **PASS** 12 s. La imagen `node:22` ya no está en el Mac mini; `node:22-slim` no trae git.
+- Siguiente: recoger la batería sobre el código de AC4; luego AC2/AC3/AC5 (muestra por cubos con `nonce`, `MAX_SAMPLE = 30`, oficiales con `p = 8/online`). Las S8g van detached en el Mac mini.
