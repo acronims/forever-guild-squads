@@ -112,6 +112,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello reply to a 1.2 requester = 2 of
   end
   h.profile = {}
   local nonce = 123457
+  local oldOnline = ns.onlineCount
+  ns.onlineCount = function() return 40 end        -- sampling only with more than SAMPLE_MIN_ONLINE online
   local okAll, err = pcall(function()
     local seen, union = {}, 0
     for _ = 1, 100 do
@@ -129,6 +131,42 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello reply to a 1.2 requester = 2 of
     local old = S.ReplyFor({ h = h, p2 = 1, nonce = nonce }, "Old-Realm", nil, nil)
     eq(#old, 60, "a 1.1 requester still gets MAX_REPLY = 60, paginated")
   end)
+  ns.onlineCount = oldOnline
+  for _, id in ipairs(added) do ns.state.profiles[id] = nil end
+  if not okAll then error(err, 0) end
+end }
+
+-- v1.2 AC1 (S11/S15 regression since 73862fd): with few members online every node replies (p = 1), so a random
+-- sample of 30 without a cursor does not cover the backlog in 3 sessions; a 1.2 requester then gets MAX_REPLY with
+-- the cursor, like 1.1 (traffic in big guilds, where the sample matters, does not change)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: with <= SAMPLE_MIN_ONLINE online a 1.2 requester gets MAX_REPLY paginated", function(c)
+  local ns = c.ns
+  local S, M = ns.Sync, ns.Model
+  local h = {}
+  for _, k in ipairs({ "settings", "squad", "profile", "reject", "boss", "annul" }) do h[k] = M.bucketHashes(ns.state, k) end
+  for _, k in ipairs(M.EXT_ORDER) do h[k] = M.bucketHashes(ns.state, k) end
+  local added = {}
+  for i = 1, 200 do
+    local id = ("Pd%03d-Realm"):format(i)
+    ns.state.profiles[id] = { k = "profile", id = id, a = id, ts = 1795000000, sq = 1, d = { role = "DAMAGER" } }
+    added[#added + 1] = id
+  end
+  h.profile = {}
+  local oldOnline = ns.onlineCount
+  ns.onlineCount = function() return 4 end
+  local okAll, err = pcall(function()
+    ok(S.SAMPLE_MIN_ONLINE and S.SAMPLE_MIN_ONLINE >= 8, "SAMPLE_MIN_ONLINE defined (>= 8, where p < 1)")
+    local seen, union = {}, 0
+    for n = 1, 4 do
+      local out = S.ReplyFor({ h = h, p2 = 2, nonce = 1000 + n }, "Few-Realm", nil, nil)
+      if n < 4 then eq(#out, 60, "reply " .. n .. " to a 1.2 requester with 4 online") end
+      for _, r in ipairs(out) do
+        if r.k == "profile" and r.id:find("^Pd") and not seen[r.id] then seen[r.id] = true; union = union + 1 end
+      end
+    end
+    eq(union, 200, "4 paginated replies cover every record")
+  end)
+  ns.onlineCount = oldOnline
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
 end }

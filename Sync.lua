@@ -28,6 +28,7 @@ for _, k in ipairs(M.EXT_ORDER or {}) do KINDS[#KINDS + 1] = k end
 local MAX_REPLY = 60          -- records per hello reply (1.0 / 1.1 requesters)
 Sync.MAX_SAMPLE = 30          -- v1.2: records per reply to a 1.2 requester (random sample of 2 of 8 cubes)
 Sync.CUBES, Sync.CUBES_PICK = 8, 2
+Sync.SAMPLE_MIN_ONLINE = 8    -- v1.2 (AC1): the sample only with more online than this (p < 1); else MAX_REPLY + cursor
 -- v1.2: fine bucket hashes (h2) of the big kinds in a 1.2 hello; a 1.2 replier diffs on them, so it does not resend
 -- a whole coarse bucket (~1/16 of the guild) the requester already holds (S8: members relay P2P now)
 Sync.FINE_NB = 64
@@ -301,7 +302,8 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
   if #all == 0 then return {} end
   -- v1.2 requester (nonce): a random sample of 2 of 8 cubes, at most MAX_SAMPLE records, no cursor
   local nonce = proto >= 2 and tonumber(payload.nonce) or nil
-  if nonce then
+  local online = ns.onlineCount and ns.onlineCount() or 1
+  if nonce and online > Sync.SAMPLE_MIN_ONLINE then
     local cubes, inCubes = pickCubes(), {}
     for _, e in ipairs(all) do if cubes[Sync.CubeOf(e.r.id, nonce)] then inCubes[#inCubes + 1] = e.r end end
     for i = 1, math.min(Sync.MAX_SAMPLE, #inCubes) do
