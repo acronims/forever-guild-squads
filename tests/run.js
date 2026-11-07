@@ -39,6 +39,7 @@ const ORDER = [
   'ui_layout_spec.lua',
   'squads_spec.lua',
   'sync_trust_spec.lua',
+  'p2p_spec.lua',
   'counters_spec.lua',
   'observations_spec.lua',
   'races_spec.lua',
