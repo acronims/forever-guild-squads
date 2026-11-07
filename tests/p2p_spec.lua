@@ -311,3 +311,42 @@ test("v1.2: one relayer holds at most MAX_PEND_RELAYER pending versions; others 
   eq(capped, 1000 - X.MAX_PEND_RELAYER)
   eq(X.unverified(s, "profile", "V-R").r.d.note, "legit", "the legit pending version survives")
 end)
+
+-- v1.2 AC3 (BRO 7-nov 19:04): when the client is synced (a hello round with no differences, or 60 s without new
+-- records after the last round) one local chat line, once per session: "Guild Squads: synced (N records, M pending)"
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AC3: the 'synced' chat line fires once per session with N records and M pending", function(c)
+  local ns = c.ns
+  local Sync = ns.Sync
+  ok(type(Sync.NoteRound) == "function" and type(Sync.CheckSynced) == "function", "Sync.NoteRound / CheckSynced")
+  local got = {}
+  Sync.chatSink = function(line) got[#got + 1] = line end
+  Sync.ResetSynced()
+  local t = 1000
+  Sync.NoteRecord(t)
+  Sync.NoteRound(5, t + 30, true)            -- still learning, more rounds to come: nothing
+  eq(#got, 0, "not while rounds go on")
+  Sync.NoteRound(3, t + 60, false)           -- last round taught 3 records: wait 60 s of silence
+  Sync.NoteRecord(t + 80)
+  Sync.CheckSynced(t + 125)                  -- only 45 s since the last record
+  eq(#got, 0, "not before 60 s of silence")
+  Sync.CheckSynced(t + 141)
+  eq(#got, 1, "fires after 60 s without new records")
+  local n, m = Sync.SyncedCounts()
+  eq(got[1], ns.L.SYNCED:format(n, m))
+  ok(got[1]:find("^Guild Squads: ") and got[1]:find(tostring(n), 1, true) and got[1]:find(tostring(m), 1, true), got[1])
+  Sync.NoteRound(0, t + 200, true)           -- a round with no differences later: once per session
+  Sync.CheckSynced(t + 400)
+  eq(#got, 1, "once per session")
+  -- a round with no differences fires at once (new session)
+  Sync.ResetSynced(); got = {}
+  Sync.NoteRound(0, t + 500, true)
+  eq(#got, 1, "a hello round with no differences = synced")
+  -- the default sink is the local chat frame (never the network)
+  Sync.chatSink = nil
+  local seen
+  local old = DEFAULT_CHAT_FRAME
+  DEFAULT_CHAT_FRAME = { AddMessage = function(_, s) seen = s end }
+  Sync.ResetSynced(); Sync.NoteRound(0, t + 600, true)
+  DEFAULT_CHAT_FRAME = old
+  ok(seen and seen:find("^Guild Squads: "), "DEFAULT_CHAT_FRAME:AddMessage")
+end }

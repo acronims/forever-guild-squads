@@ -179,6 +179,48 @@ function Sync.QueuedCount() local n = 0 for _ in pairs(queued) do n = n + 1 end 
 
 local round, learned = 0, 0
 local syncUntil = 0
+
+-- v1.2 AC3 (BRO 7-nov 19:04): the sync runs in the background; when the client is synced (a hello round with no
+-- differences, or SYNCED_QUIET s without new records after the last round) it writes ONE local chat line per
+-- session (DEFAULT_CHAT_FRAME, never sent to anyone): L.SYNCED with the records held and the ones pending.
+Sync.SYNCED_QUIET = 60
+local synced = { done = false, waitFrom = nil, lastNew = 0, checks = 0 }
+function Sync.ResetSynced() synced = { done = false, waitFrom = nil, lastNew = 0, checks = 0 } end
+function Sync.SyncedDone() return synced.done end
+function Sync.SyncedCounts()
+  local n = 0
+  for _, r in ipairs(M.allRecords(ns.state or {})) do if r.k ~= "presence" then n = n + 1 end end
+  local m = (X and X.stats and ns.state) and X.stats(ns.state).pend or 0
+  return n, m
+end
+local function fireSynced()
+  if synced.done then return end
+  synced.done = true
+  local n, m = Sync.SyncedCounts()
+  local fmt = (ns.L and ns.L.SYNCED) or "Guild Squads: synced (%d records, %d pending verification)"
+  local line = fmt:format(n, m)
+  if Sync.chatSink then Sync.chatSink(line); return end
+  local f = DEFAULT_CHAT_FRAME
+  if f and f.AddMessage then pcall(f.AddMessage, f, line) end
+end
+function Sync.NoteRecord(now) synced.lastNew = now end
+-- end of a hello round: `n` records learned in it; `more` = another round follows
+function Sync.NoteRound(n, now, more)
+  if synced.done then return end
+  if n == 0 then fireSynced(); return end
+  if not more then synced.waitFrom = now end
+end
+function Sync.CheckSynced(now)
+  if synced.done or not synced.waitFrom then return true end
+  if now - math.max(synced.waitFrom, synced.lastNew) >= Sync.SYNCED_QUIET then fireSynced(); return true end
+  return false
+end
+local function now() return GetTime and GetTime() or 0 end
+local function watchSynced()
+  synced.checks = synced.checks + 1
+  if Sync.CheckSynced(now()) or synced.checks > 40 or not ns.After then return end
+  ns.After(15, watchSynced)
+end
 -- "initial sync" = 2 min after a hello, extended while replies keep teaching us records
 function Sync.Syncing() return (GetTime and GetTime() or 0) < syncUntil end
 function Sync.Hello(again)
@@ -224,9 +266,13 @@ function Sync.Hello(again)
     -- second copies only come as answers to the pending hashes (ph) of the next hello
     local pend = X and X.hasPend and X.hasPend(ns.state)
     ns.After(pend and 30 or (30 + 15 * round), function()
-      if (learned >= 10 and round < MAX_ROUNDS)
-        or (X and X.hasPend and X.hasPend(ns.state) and round < MAX_PEND_ROUNDS) then
+      local more = (learned >= 10 and round < MAX_ROUNDS)
+        or (X and X.hasPend and X.hasPend(ns.state) and round < MAX_PEND_ROUNDS)
+      Sync.NoteRound(learned, now(), more)
+      if more then
         round = round + 1; Sync.Hello(true)
+      elseif not synced.done then
+        synced.checks = 0; ns.After(Sync.SYNCED_QUIET, watchSynced)
       end
     end)
   end
@@ -445,7 +491,7 @@ local function onRecords(payload, sender)
       -- presences do not keep the hello rounds going (one per member, low value; the next hello brings them).
       -- v1.2 (AC3): a new pending copy counts too: a newcomer's first replies come from members (quorum), and
       -- without more rounds it never gets the second copies that verify them
-      if (ok or why == "pending") and rec.k ~= "presence" then learned = learned + 1; syncUntil = math.max(syncUntil, t + 60) end
+      if (ok or why == "pending") and rec.k ~= "presence" then learned = learned + 1; syncUntil = math.max(syncUntil, t + 60); synced.lastNew = t end
       if ns.debug then ns.debug(("rec %s/%s from %s: %s"):format(tostring(rec.k), rec.id, tostring(sender), ok and "applied" or tostring(why))) end
       if why == "stale" and not corrections[rec.id] then
         -- the sender has an older copy; re-broadcast ours unless someone else does it first

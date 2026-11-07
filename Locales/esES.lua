@@ -107,6 +107,7 @@ L.ERR_unknown = "error inesperado (%s)"
 L.EXPORT_HELP = "Ctrl+A, Ctrl+C para copiar. Pega aquí una copia y pulsa Importar."
 L.IMPORT = "Importar"
 L.IMPORTED = "Importados %d registros (%d rechazados)."
+L.SYNCED = "Guild Squads: sincronizado (%d registros, %d pendientes de verificar)"
 L.SYNC_SENT = "Petición de sincronización enviada a la guild."
 L.SYNC_COOLDOWN = "Ya se pidió una sincronización hace menos de un minuto. Prueba otra vez en un momento."
 
