@@ -231,3 +231,23 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.1: /gsq diag p2p line, own presence publ
   ok(text:find("%d+/%d+") and text:find("30"), text)
   ok(ns.Actions.PublishPresence() == false, "at most once a day")
 end }
+
+-- full client: an unverified profile shows in the finder, grey with "unverified", and never as a verified member
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.1: an unverified profile is listed grey in the finder with its relayer", function(c)
+  local ns = c.ns
+  local cache = ns.rosterList()
+  cache["Uv-Realm"] = { rank = 5, online = false, level = 30, class = "MAGE" }
+  cache["Rl-Realm"] = { rank = 5, online = true, level = 30, class = "MAGE" }
+  local okA, why = ns.Sync.Apply({ k = "profile", id = "Uv-Realm", a = "Uv-Realm", ts = GetServerTime() - 10, sq = 1,
+    d = { role = "HEALER", level = 30, note = "uv" } }, "Rl-Realm")
+  eq(okA, false); eq(why, "pending")
+  eq(ns.state.profiles["Uv-Realm"], nil)
+  ns.UI.Select("finder")
+  local found
+  for _, o in ipairs(c.allObjs) do
+    local t = rawget(o, "_text")
+    if type(t) == "string" and t:find("Uv", 1, true) and t:find(ns.L.UNVERIFIED, 1, true) then found = o end
+  end
+  ok(found, "grey unverified card in the finder")
+  cache["Uv-Realm"], cache["Rl-Realm"] = nil, nil
+end }

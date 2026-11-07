@@ -526,6 +526,10 @@ function H.AdoptionTooltip(gt)
     if i > 40 then gt:AddLine("...", 0.6, 0.6, 0.6); break end
     gt:AddLine(ns.shortName(e.name) .. "  |cff999999" .. tostring(e.ver) .. "|r", 1, 1, 1)
   end
+  -- members heard by hello without a presence run 1.0.x: they only sync with officers
+  for _, e in ipairs(a.list) do
+    if e.ver == "?" and e.name ~= ns.me() then gt:AddLine(L.UPDATE_P2P, 1, 0.53, 0, true); break end
+  end
 end
 
 -------------------------------------------------------------------------------

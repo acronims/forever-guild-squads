@@ -697,11 +697,20 @@ local function fillResult(c, item)
     c.logo:Hide(); c.class:Show(); c.dot:Show()
     W.SetClass(c.class, i.class)
     c.dot:SetTexture(i.online and "Interface\\FriendsFrame\\StatusIcon-Online" or "Interface\\FriendsFrame\\StatusIcon-Offline")
-    c.name:SetText(nameColored(i.name, i.class) .. "  |cffaaaaaa" .. L.LV_SHORT:format(tostring(i.level or "?")) .. "|r")
+    if i.unverified then
+      -- arrived by a single relay: grey, never counted; confirmed by a second relayer, the captain or the author
+      c.name:SetText("|cff888888" .. ns.shortName(i.name) .. "  " .. L.LV_SHORT:format(tostring(i.level or "?")) .. "  (" .. L.UNVERIFIED .. ")|r")
+    else
+      c.name:SetText(nameColored(i.name, i.class) .. "  |cffaaaaaa" .. L.LV_SHORT:format(tostring(i.level or "?")) .. "|r")
+    end
     if i.role then W.SetRole(c.role, i.role); c.role:Show() else c.role:Hide() end
     if i.role2 then W.SetRole(c.role2, i.role2); c.role2:Show() else c.role2:Hide() end
     twoChips(c, i.goals)
-    W.Tooltip(c, memberTooltip(i.name))
+    if i.unverified then
+      W.Tooltip(c, L.UNVERIFIED, L.UNVERIFIED_TIP:format(ns.shortName(i.unverified.from or "?"), ns.shortName(i.name)))
+    else
+      W.Tooltip(c, memberTooltip(i.name))
+    end
     c:SetScript("OnClick", function(_, b)
       fd.selected = i.name
       if b == "RightButton" then
@@ -830,7 +839,26 @@ end, function(f, bar)
         end
       end
     end
+    -- v1.1: profiles that only arrived by one relay (unverified): shown grey, after the verified ones
+    local P2 = ns.P2P
+    local seenU = {}
+    for _, e in ipairs(P2 and P2.pendingList(ns.state, "profile") or {}) do
+      local name = e.r.id
+      if not seenU[name] and not ns.state.profiles[name] and name ~= ns.me() and ns.roster(name) then
+        seenU[name] = true
+        local u = P2.unverified(ns.state, "profile", name)
+        local d, r = u.r.d or {}, ns.roster(name) or {}
+        local i = { name = name, class = r.class or d.class, level = r.level or d.level, online = r.online, zone = r.zone,
+                    role = d.role, role2 = d.role2, avail = d.avail, goals = d.goals or {}, seen = r.seen, unverified = u }
+        total = total + 1
+        if X.passes(i, filters) then
+          local score, reasons = X.score(i, target)
+          items[#items + 1] = { player = i, score = score, reasons = reasons }
+        end
+      end
+    end
     table.sort(items, function(a, b)
+      if (a.player.unverified and 1 or 0) ~= (b.player.unverified and 1 or 0) then return not a.player.unverified end
       if a.score ~= b.score then return a.score > b.score end
       if (a.player.online and 1 or 0) ~= (b.player.online and 1 or 0) then return a.player.online and true or false end
       return a.player.name < b.player.name
