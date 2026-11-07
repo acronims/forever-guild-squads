@@ -362,6 +362,54 @@ function S8(seed, minutes) {
   return { pass: pass(), checks, metrics: { clients: cs.length, seconds: Math.round(dur), meanAll: +avgAll.toFixed(3), meanBusiest: +mean.toFixed(3), peak1s: peak1, peak10s: +peak10.toFixed(2), maxQueue: maxQ, throttled: thr, records: n } };
 }
 
+// S8g: S8 with a guild of 200 (GM, 2 officers, 197 members; 40 squads, every member in one as in S8) and 40 addon clients (GM, 2 officers, 37 members); same checks, queue X = 500
+function S8g(seed, minutes) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 2, 197);
+  const names = sim.roster.filter((r) => /^Mb/.test(r.name)).map((r) => full(sim, r.name));
+  names.unshift(full(sim, 'Of2'), full(sim, 'Of1'), full(sim, 'Gm'));
+  const gen = sim.client('Gm');
+  gen.login(); sim.run(3);
+  gmSettings(gen); sim.run(1);
+  const n = gen.run(`return SIM_genRecords({ ${names.map(luaStr).join(',')} }, 40, ${sim.epoch - 86400 * 5})`)[0];
+  check('200 profiles + 40 squads generated', n >= 240, n);
+  gen.logout();
+  const saved = gen.saved;
+  const online = ['Gm', 'Of1', 'Of2', ...Array.from({ length: 37 }, (_, i) => 'Mb' + (i * 5 + 3))];
+  const cs = online.map((nm) => sim.client(nm, { saved }));
+  for (const c of cs) { c.login(); sim.run(1 + sim.rand() * 4); }
+  const t0 = sim.t;
+  for (const c of cs) { c.sent = 0; c.sentAt = []; c.maxQueue = 0; c.throttled = 0; }
+  const end = t0 + (minutes || 3) * 60;
+  while (sim.t < end) {
+    const c = cs[Math.floor(sim.rand() * cs.length)];
+    c.run(`return A.SaveProfile({ note = "n${Math.floor(sim.rand() * 1000)}" })`);
+    sim.run(5 + sim.rand() * 20);
+  }
+  const dur = sim.t - t0;
+  let mean = 0, peak1 = 0, peak10 = 0, maxQ = 0, thr = 0;
+  for (const c of cs) {
+    mean = Math.max(mean, c.sent / dur);
+    const at = c.sentAt.filter((x) => x >= t0).sort((a, b) => a - b);
+    let j = 0, k = 0;
+    for (let i = 0; i < at.length; i++) {
+      while (at[i] - at[j] >= 1) j++;
+      while (at[i] - at[k] >= 10) k++;
+      peak1 = Math.max(peak1, i - j + 1); peak10 = Math.max(peak10, (i - k + 1) / 10);
+    }
+    maxQ = Math.max(maxQ, c.maxQueue); thr += c.throttled;
+  }
+  const avgAll = cs.reduce((s, c) => s + c.sent, 0) / cs.length / dur;
+  check('mean msgs/s per client (busiest) <= 1.05 (client throttle 1/s; Comm drains at 1/s)', mean <= 1.05, mean.toFixed(3));
+  check('peak in any 1 s window <= 10 (throttle burst)', peak1 <= 10, peak1);
+  check('sends refused by the throttle = 0', thr === 0, thr);
+  check('send queue never above X = 500', maxQ <= 500, maxQ);
+  check('model converged', sim.settle(900, 15));
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { clients: cs.length, seconds: Math.round(dur), meanAll: +avgAll.toFixed(3), meanBusiest: +mean.toFixed(3), peak1s: peak1, peak10s: +peak10.toFixed(2), maxQueue: maxQ, throttled: thr, records: n } };
+}
+
 // S9: chaos: 1 simulated hour of random actions with 5 % loss and random /reloads -> convergence, no Lua errors
 function S9(seed, minutes) {
   const sim = new Sim({ seed, loss: 0.05 });
@@ -678,4 +726,4 @@ function S14(seed) {
   return { pass: pass(), checks, metrics: { oldBad: bad, ref: REF, ...sim.stats } };
 }
 
-module.exports = { S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+module.exports = { S1, S2, S3, S4, S5, S5one, S6, S7, S8, S8g, S9, S10, S11, S12, S13, S14 };

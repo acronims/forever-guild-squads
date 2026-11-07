@@ -74,3 +74,17 @@ simulador S1 S2 S3 S4 S5(5 semillas) S6 S7 = 7/7 PASS.
 |---|---|---|---|---|
 | 4 | oficiales 0 presence ajenas; miembros ≤6 al azar también con oficial conectado | **PASS 409** (meanAll 0,212, meanBusiest 0,924, pico 4) | **PASS** (ajustes en 2,0 s, 0 errores) | **PASS** |
 Unidad `RESULT: 266 passed, 0 failed`; `GATES: OK`. Simulador `--seed 7303`. Regresión S1–S9 lanzada a continuación (`/tmp/gsq4/all.log`).
+
+## 7-nov 11:4x — S8g: guild de 200, 40 clientes (GO de BRO 10:36)
+Escenario nuevo `S8g` (`tests/sim/scenarios.js`, `run.js --s8gmin N`, 3 por defecto): S8 con `makeGuild(sim, 2, 197)` = 200 miembros
+y 40 clientes (Gm, Of1, Of2, Mb3, Mb8 … Mb183), mismos checks que S8, cola ≤500. **40 squads** (200 nombres / 5), no 100 como S8
+(500/5): con 100, `SIM_genRecords` rompe en `client.lua:109` por nombres nil. `--seed 7303`, en el mismo entorno y a la vez las 4 corridas.
+| Versión | min. simulados | maxQueue | meanAll | meanBusiest | pico 1 s | checks | s real |
+|---|---|---|---|---|---|---|---|
+| 1.1 (636e545 + S8g) | 3 (191 s sim.) | **299** | 0,407 | 1,001 | 4 | **PASS 7/7** | 840,8 |
+| 1.0.1 (ref-101) | 3 (182 s sim.) | 236 | 0,208 | 1,004 | 4 | PASS 7/7 | 510,6 |
+| 1.1 | 1 (71 s sim.) | 299 | 0,839 | 0,996 | 4 | PASS 7/7 | 794,1 |
+| 1.0.1 | 1 (60 s sim.) | 236 | 0,355 | 1,015 | 4 | PASS 7/7 | 656,7 |
+- Checks (todos ok en las 4): 438 registros generados; meanBusiest ≤1,05; pico 1 s ≤10; 0 rechazos del throttle; cola ≤500; convergencia; 0 errores Lua.
+- La 1.1 encola un 27 % más que la 1.0.1 (299 frente a 236), lejos del umbral (500). meanAll es ~2× (la presence), igual que en S8.
+- Las primeras corridas (lanzadas a las 11:06 a /tmp/s8g) se perdieron al reciclarse el contenedor a las 11:28; se relanzaron a las 11:28 con logs en `wt/s8g/`.

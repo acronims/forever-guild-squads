@@ -1,5 +1,5 @@
 // Simulator runner. Usage: NODE_PATH=... node tests/sim/run.js [S1 S2 ...] [--seed N] [--s5seeds N] [--s9seeds N]
-//   [--s8min N] [--s9min N] [--json file]. Exit code 1 when any scenario fails.
+//   [--s8min N] [--s8gmin N] [--s9min N] [--json file]. Exit code 1 when any scenario fails.
 'use strict';
 const fs = require('fs');
 const SC = require('./scenarios.js');
@@ -20,6 +20,7 @@ for (const name of list) {
     try {
       if (name === 'S5') r = SC.S5(s, Number(opt('s5seeds', 100)));
       else if (name === 'S8') r = SC.S8(s, Number(opt('s8min', 15)));
+      else if (name === 'S8g') r = SC.S8g(s, Number(opt('s8gmin', 3)));
       else if (name === 'S9') r = SC.S9(s, Number(opt('s9min', 60)));
       else if (name === 'S13') r = SC.S13(s, Number(opt('s13min', 15)));
       else r = SC[name](s);
