@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.0 — sin publicar — Sincronización P2P sin oficiales / P2P sync without officers
+
+### ES
+
+Guild Squads converge entre todos los que lo tienen instalado aunque no haya GM ni oficiales conectados con el addon, y el contador de instalados cuenta a quien lo tiene aunque no esté conectado.
+
+- **Reenvío P2P de los registros autorales** (perfil, RSVP, testigo, `presence`, el rechazo de una invitación por el propio invitado): cualquier miembro con la 1.1 los reenvía al responder a un hello. Los registros de autoridad (ajustes, squads, anulaciones, jefes, catálogo, rosters, asistencia, confirmaciones, rechazos de solicitudes del capitán y perfiles con traspaso `xferTo`) siguen como antes: solo en directo o reenviados por el GM o un oficial.
+- **Quórum de 2**: una versión reenviada por un miembro queda **sin verificar** (gris en el buscador, con «Llegado por X; se confirmará cuando Y se conecte») y no cuenta para nada hasta que llega la misma versión de un segundo reenviador distinto, del capitán de su squad o del propio autor. Dos versiones distintas con la misma firma: no se aplica ninguna hasta que llega el autor.
+- **Capitanes como nodo de su squad**: un reenvío del capitán vigente vale como verificado para los perfiles que apuntan a su squad, los RSVP y testigos de los eventos de su squad y los rechazos de invitación a su squad. Un excapitán (tras `xferTo`) deja de serlo.
+- **El autor manda y puede desmentir**: su versión en directo gana a cualquier reenvío. Si alguien hace circular una versión con tu nombre que no escribiste, tu cliente la desmiente solo (`repudiate`), desaparece de todos los clientes y se apunta a quien la trajo; con 3 desmentidos un reenviador deja de contar para el quórum durante 7 días.
+- **Contador real**: «Guild Squads: X/Y miembros (30 días)» cuenta a quien publicó su `presence` (una vez al día, se guarda y se reenvía) en los últimos 30 días (`adoptDays`). El tooltip dice quién lo tiene y con qué versión; los oficiales ven «El GM no lo tiene instalado» si el rango 0 no lo tiene.
+- `/gsq diag`: línea `p2p pend= verified= repudiated= blocked=` con los reenviadores desmentidos.
+- **Compatibilidad**: los clientes 1.0.x siguen sincronizando lo suyo sin errores; rechazan los reenvíos de quien no es oficial e ignoran `presence` y `repudiate` como tipo desconocido. **Actualiza a la 1.1 para sincronizar sin oficiales.**
+
+### EN
+
+Guild Squads converges among everyone who has it installed even when no GM or officer with the addon is online, and the installed counter counts players who have it while they are offline.
+
+- **P2P relay of authorial records** (profile, RSVP, witness, `presence`, an invitation declined by the invited player): any 1.1 member relays them in its hello replies. Authority records (settings, squads, annulments, bosses, catalog, rosters, attendance, confirmations, captain rejections of a request and profiles carrying an `xferTo` transfer) are unchanged: live, or relayed by the GM or an officer.
+- **Quorum of 2**: a version relayed by a member stays **unverified** (grey in the finder, "Arrived via X; it will be confirmed when Y logs in") and counts for nothing until the same version arrives from a second distinct relayer, the captain of its squad or the author. Two different versions with the same signature: none applies until the author.
+- **Captains as nodes of their squad**: a relay from the current captain counts as verified for the profiles pointing at the squad, the RSVPs and witnesses of the squad's events and the declined invitations to the squad. A former captain (after `xferTo`) no longer is one.
+- **The author rules and can deny**: the author's live version beats any relay. If someone circulates a version with your name that you did not write, your client denies it on its own (`repudiate`); it disappears from every client and the relayers are counted; with 3 denials a relayer stops counting for the quorum for 7 days.
+- **Real counter**: "Guild Squads: X/Y members (30 days)" counts those who published their `presence` (once a day, saved and relayed) in the last 30 days (`adoptDays`). The tooltip lists who has it and which version; officers see "The GM does not have it installed" when rank 0 lacks it.
+- `/gsq diag`: line `p2p pend= verified= repudiated= blocked=` with the denied relayers.
+- **Compatibility**: 1.0.x clients keep syncing their own records without errors; they refuse relays from non-officers and ignore `presence` and `repudiate` as unknown kinds. **Update to 1.1 to sync without officers.**
+
 ## 1.0.1 — 2026-10-26 — Preparing the repository release
 
 ### ES
