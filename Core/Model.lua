@@ -537,6 +537,8 @@ end
 -- captain nodes, repudiation). Exceptions that stay AUTHORITY because another record leans on them or they depend on
 -- someone else's authority: a profile carrying xferTo (it signs a squad transfer, see validateSquad) and a
 -- reject of kind "req" (the captain rejects a request).
+-- v1.2 (docs/SPEC-v1.2-p2p.md): every other kind may be relayed by any member too, with a higher quorum
+M.P2P_AUTH = true
 M.P2P_KINDS = { profile = true, rsvp = true, witness = true, presence = true, reject = true, repudiate = true }
 function M.isP2P(rec)
   if type(rec) ~= "table" or not M.P2P_KINDS[rec.k] then return false end
@@ -561,6 +563,9 @@ function M.provenance(rec, ctx, settings, u)
     if ctx.sender == rec.a then return true end
     if not u and P.isOfficer(roster, ctx.sender, settings) then return true end
     if M.isP2P(rec) then return false, "p2p" end
+    -- v1.2: authority records relayed by a member are not refused either: they wait for QUORUM_AUTH relayers
+    -- (Core/P2P.lua). Their validation (validateSquad, canEdit...) runs unchanged when the quorum commits them.
+    if M.P2P_AUTH then return false, "p2p" end
     return false, "relay"
   end
   return true

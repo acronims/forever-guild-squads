@@ -122,9 +122,10 @@ test("authority: author (RL), GM, officers only when enabled; relay rule unchang
   ok(M.apply(s, { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 700, sq = 901,
                   d = { squadsEnabled = true, officerRanks = { 1 }, rlList = {}, offEdit = true } }, { roster = roster }))
   e.name = "Raid E"; okP, why = put(s, "roster", "Rl-R:1", "Rl-R", R.copy(e), T0 + 800); ok(not okP and why == "denied", tostring(why))
-  -- relays: a member relaying the GM's roster is refused, the author live is fine
+  -- relays: a member relaying the GM's roster waits pending (v1.2, quorum 3), the author live is fine
   local s2 = freshState()
-  okP, why = put(s2, "roster", "Gm-R:9", "Gm-R", base(10), nil, "Mem-R"); ok(not okP and why == "relay", tostring(why))
+  okP, why = put(s2, "roster", "Gm-R:9", "Gm-R", base(10), nil, "Mem-R"); ok(not okP and why == "pending", tostring(why))
+  ok(not (s2.rosters and s2.rosters["Gm-R:9"]), "not stored by one relayer")
   ok(put(s2, "roster", "Gm-R:9", "Gm-R", base(10), nil, "Gm-R"), "live from the author")
   -- catalog raid must match its size
   local wrong = base(20, "barrow"); okP, why = put(s2, "roster", "Gm-R:10", "Gm-R", wrong); ok(not okP and why == "raid", tostring(why))

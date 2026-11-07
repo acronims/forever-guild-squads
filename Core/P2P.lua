@@ -18,8 +18,18 @@ local X = {}
 ns.P2P = X
 local M, S, P = ns.Model, ns.Serialize, ns.Permissions
 
-X.PROTO = 1                    -- hellos of 1.1 clients carry p2 = PROTO (they take authorial relays from anyone)
+X.PROTO = 2                    -- v1.2 hellos carry p2 = 2: they take every kind relayed by anyone (quorum)
+X.PROTO_AUTHORIAL = 1          -- 1.1 hellos carry p2 = 1: authorial relays from anyone, authority only from officers
 X.QUORUM = 2
+X.QUORUM_AUTH = 3              -- v1.2 D1: distinct relayers for an authority record (squad, settings, annul...)
+-- relayers needed for this record: authorial kinds 2, authority kinds 3
+function X.quorumFor(rec) return M.isP2P(rec) and X.QUORUM or X.QUORUM_AUTH end
+-- what a hello payload can take: 0 = 1.0 (authors / officers only), 1 = 1.1 (+ authorial), 2 = 1.2 (+ authority)
+function X.protoOf(payload)
+  local p = type(payload) == "table" and tonumber(payload.p2) or nil
+  if not p or p < 1 then return 0 end
+  return p >= 2 and 2 or 1
+end
 X.PEND_TTL = 7 * 86400
 X.MAX_PEND = 2000
 X.BLOCK_AT = 3
@@ -147,7 +157,7 @@ function X.offer(state, rec, ctx, settings, u)
   if ctx.me and rec.a == ctx.me and type(ctx.ledger) == "table" and X.ledgerSays(ctx.ledger, rec, vk) == false then
     return false, "mine"
   end
-  if not u and X.captainNode(state, rec, sender) then return commit(state, rec, ctx, vk, kid, { sender }) end
+  if not u and M.isP2P(rec) and X.captainNode(state, rec, sender) then return commit(state, rec, ctx, vk, kid, { sender }) end
   local byId = st.pend[kid]
   if not byId then byId = {}; st.pend[kid] = byId end
   local e = byId[vk]
@@ -164,14 +174,14 @@ function X.offer(state, rec, ctx, settings, u)
   if e.cf then return false, "conflict" end
   local voters = {}
   for n in pairs(e.by) do if not X.blocked(state, n, now) then voters[#voters + 1] = n end end
-  if #voters >= X.QUORUM then return commit(state, rec, ctx, vk, kid, voters) end
+  if #voters >= X.quorumFor(rec) then return commit(state, rec, ctx, vk, kid, voters) end
   return false, "pending"
 end
 
 -- before any authorial record is applied: repudiated versions never come back, and a live record of the author
 -- replaces a version that came by relay. -> ok, why, restore (fn to undo the replacement if the apply fails)
 function X.before(state, rec, ctx)
-  if not M.P2P_KINDS[rec.k] or rec.k == "repudiate" then return true end
+  if rec.k == "repudiate" or not (M.P2P_KINDS[rec.k] or M.P2P_AUTH) then return true end
   if state.repudiates and next(state.repudiates) and state.repudiates[X.vkey(rec)] then return false, "repudiated" end
   local st = state.p2p
   if not (st and st.via and ctx.sender and ctx.sender == rec.a) then return true end

@@ -18,7 +18,7 @@ Estados: no ejecutado · corriendo · reportado hecho · verificado (gate de evi
 | AC | Estado | Test | Evidencia / notas |
 |---|---|---|---|
 | AC0 referencia S8g (1.1 y 1.0.1) | verificado | sim `S8g` seed 7303 | 1.1 (636e545): partes **5762** (top Of2 718 = 12,5 %; Of1+Of2+Gm = 37 %), cola máx. 285, meanAll 0,159 msg/s, recién llegado t95 240 s / t100 250 s (220 registros), converge 15 s, 0 errores, PASS (1028 s). 1.0.1: partes 3299 (top Of1 588 = 17,8 %), cola máx. 235, meanAll 0,091, t95 260 s / t100 270 s, converge 15 s, PASS (687 s). Tope D3 para AC5: 5762 × 1,2 = **6914** partes. Ojo AC2: en la 1.1 ningún cliente pasa ya del 15 % (12,5 %); el reparto se mide por el peso conjunto de oficiales. Logs `wt/ac0/s8g-110.log`, `s8g-101.log` (+ `.json`). Contenedor borrado. |
-| AC1 convergencia S11 + S15 (squads incluidos, ≤3 sesiones) | rojo (test escrito) | sim `S11`, `S15` | Sobre 1.1 (código sin tocar): **S11 FAIL** squads 5/10 (Mb3–Mb5 nunca reciben el de Mb1, Mb1–Mb2 nunca el de Mb4: un miembro no puede reenviar autoridad), autorales 50/50. **S15 FAIL** autorales 45/50: con el GM conectado faltan presence (Mb1 sin la de Mb4/Mb5, Mb5 sin la de Mb1/Mb2…); squads 10/10. Rojo esperado en ambos. |
+| AC1 convergencia S11 + S15 (squads incluidos, ≤3 sesiones) | verificado (S11/S15); batería pendiente | sim `S11`, `S15`; unidad `p2p_spec` | Rojo sobre 1.1: S11 squads 5/10; S15 autorales 45/50 (presence ajenas). Verde tras el cambio (7-nov 11:47): **S11 PASS** (autorales 50/50, squads 10/10, 17,9 s) y **S15 PASS** (25,6 s), seed 7303, logs `/tmp/gsq/s11.log`, `s15.log`. Código: `M.P2P_AUTH` (autoridad relevada por un miembro → `p2p`, no `relay`), `X.QUORUM_AUTH = 3`, `X.quorumFor`, `X.protoOf`, hello `p2 = 2`, `ReplyFor`/`ForwardsFor`/`suppressed` aceptan autoridad para solicitantes `p2 ≥ 2`, `p2pOff` solo para solicitantes < 2. Unidad 266/266 (4 tests de la regla 1.1 «relay» pasados a «pending» + quórum 3). |
 | AC2 reparto (≤15 % por cliente, oficial ≤30 % de hellos) | no ejecutado | sim `S8g` + `tools/tally.js` | — |
 | AC3 latencia quórum (95 % ≤3 min, 100 % ≤10 min, 5 semillas) | no ejecutado | sim `S8g` | — |
 | AC4 envenenamiento (S16, tope 200 por reenviador) | no ejecutado | sim `S16` + unidad | — |
@@ -33,4 +33,8 @@ Estados: no ejecutado · corriendo · reportado hecho · verificado (gate de evi
   hasta converger. AC0 lanzado detached (no en Gilfoyle: no tiene node y es producción; el Mac mini sí). Copias congeladas:
   `wt/ac0/ref-110` (git archive 636e545) y `wt/ref-101`.
 - 7-nov 11:4x: AC0 acabado (cifras arriba). S11 ampliado con 2 squads (Mb1, Mb4) y S15 nuevo (= S11 con el GM conectado todo el rato); los dos en rojo sobre la 1.1.
-- Siguiente: AC1 en verde — quórum de autoridad (`QUORUM_AUTH = 3`) en `Core/P2P.lua` + que los miembros reenvíen presence aunque haya GM.
+- 7-nov 11:47: AC1 en verde (S11, S15, unidad 266/266, gates OK). Batería S1–S12 + S14 corriendo para ver regresiones.
+- Riesgo anotado para AC6: un 1.1 compara `payload.p2 == 1`; con el hello `p2 = 2` de la 1.2 un **miembro** 1.1 lo trata
+  como 1.0 (solo sus propios registros). Los oficiales 1.1 siguen sirviéndolo. Se mide en S17; si falla, la salida es
+  mandar `p2 = 1` y el nivel 1.2 en un campo aparte (desvío del spec, lo decidiría Anton por delegación).
+- Siguiente: revisar la batería; después AC4 (S16, envenenamiento + tope 200 por reenviador) o AC2/AC3 (muestra por cubos).

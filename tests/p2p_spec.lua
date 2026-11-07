@@ -122,8 +122,8 @@ test("AC4: a relayer with 3 repudiations is blocked for the quorum for 7 days", 
   ok(X.diagLine(s, NOW):find("^p2p pend=%d+ verified=%d+ repudiated=%d+ blocked=%d+"), X.diagLine(s, NOW))
 end)
 
--- AC5: authority records relayed by a non-officer are still refused (R06-1 regression)
-test("AC5: authority kinds relayed by a non-officer stay refused as relay", function()
+-- AC5 (1.1) -> v1.2 AC1: authority records relayed by a non-officer wait pending until QUORUM_AUTH = 3 relayers
+test("v1.2: authority kinds relayed by a non-officer stay pending, never stored, until 3 distinct relayers", function()
   local s = newState()
   local recs = {
     { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 5, sq = 2, d = { squadsEnabled = false } },
@@ -136,11 +136,16 @@ test("AC5: authority kinds relayed by a non-officer stay refused as relay", func
   }
   for _, r in ipairs(recs) do
     local okA, why = ap(s, r, "Y-R")
-    eq(okA, false, r.k); eq(why, "relay", r.k)
-    okA, why = ap(s, r, "Y-R"); eq(why, "relay", r.k .. " twice")
+    eq(okA, false, r.k); eq(why, "pending", r.k)
+    okA, why = ap(s, r, "Y-R"); eq(why, "pending", r.k .. " twice (same relayer)")
   end
-  -- two relayers do not make a quorum for authority kinds
-  eq(select(2, ap(s, recs[1], "Z-R")), "relay")
+  -- two relayers do not make a quorum for authority kinds; the third distinct one does
+  eq(X.QUORUM_AUTH, 3)
+  eq(select(2, ap(s, recs[1], "Z-R")), "pending")
+  eq(s.settings.d.squadsEnabled, true, "settings not replaced with 2 relayers")
+  eq(s.squads["A"], nil, "squad not stored")
+  eq(select(2, ap(s, recs[1], "W-R")), "verified", "third relayer")
+  eq(s.settings.d.squadsEnabled, false)
   -- an officer relay of an unverified forward (u = 1) is not trusted
   local u = prof("V-R", T0 + 5); u.u = 1
   eq(select(2, ap(s, u, "Of-R")), "pending")
@@ -167,7 +172,7 @@ test("AC5b: the captain of A verifies A's records at once, not B's; an ex-captai
   eq(select(2, ap(s, rsvp("Au-R", "Cap-R:1"), "Cap-R")), "verified", "RSVP to A's event")
   eq(select(2, ap(s, rsvp("W-R", "CapB-R:1"), "Cap-R")), "pending", "RSVP to B's event")
   -- the captain of A gains nothing over guild authority records
-  eq(select(2, ap(s, { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 7, sq = 3, d = { squadsEnabled = false } }, "Cap-R")), "relay")
+  eq(select(2, ap(s, { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 7, sq = 3, d = { squadsEnabled = false } }, "Cap-R")), "pending")
   -- transfer: Cap signs xferTo A>Au-R in his own profile (live) -> he is no longer A's node
   ok(ap(s, prof("Cap-R", T0 + 8, { squad = "A", xferTo = "A>Au-R" }), "Cap-R"))
   eq(select(2, ap(s, prof("Z-R", T0 + 9, { squad = "A" }), "Cap-R")), "pending", "ex-captain = one relayer")

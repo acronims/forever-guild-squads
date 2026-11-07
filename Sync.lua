@@ -191,7 +191,7 @@ function Sync.Hello(again)
     msg.p2 = X.PROTO
     local ph
     for _, k in ipairs(KINDS) do
-      if M.P2P_KINDS[k] then
+      if M.P2P_KINDS[k] or M.P2P_AUTH then           -- v1.2: authority kinds wait as pending too
         local hs, any = X.pendHashes(ns.state, k)
         if any then ph = ph or {}; ph[k] = hs end
       end
@@ -209,14 +209,15 @@ end
 
 -- already on the wire since the hello: any copy for authority records (and for 1.0 requesters); for authorial
 -- records sent to a 1.1 requester, a copy from the author / an officer, or copies from 2 distinct relayers
-local function suppressed(r, startedAt, p2p)
+-- (v1.2: and for authority records sent to a 1.2 requester, copies from QUORUM_AUTH distinct relayers)
+local function suppressed(r, startedAt, p2p, auth)
   local seen = seenAfter[r.id]
   if not (seen and startedAt and seen.v == vkey(r)) then return false end
-  if not (p2p and M.isP2P(r)) then return seen.t >= startedAt end
+  if not (p2p and (M.isP2P(r) or auth)) then return seen.t >= startedAt end
   if (seen.tt or -1) >= startedAt then return true end
   local n = 0
   for _, t in pairs(seen.by or {}) do if t >= startedAt then n = n + 1 end end
-  return n >= X.QUORUM
+  return n >= X.quorumFor(r)
 end
 
 -- records that differ from the requester, starting after the last one we sent it (cursor), at most MAX_REPLY.
@@ -226,8 +227,10 @@ end
 -- (p2pOff), at most MAX_PRESENCE_REPLY per reply, picked at random among the candidates.
 function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
   local all = {}
-  local p2pReq = X and payload.p2 == X.PROTO or false
+  local proto = X and X.protoOf(payload) or 0
+  local p2pReq = proto >= 1
   local p2p = p2pReq and not p2pOff
+  local auth = p2p and proto >= 2          -- v1.2 requester: authority records of others too (quorum 3)
   local me = ns.me and ns.me() or nil
   local pres = {}               -- indexes in all of others' presences (candidates)
   for ki, k in ipairs(KINDS) do
@@ -238,11 +241,11 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
         -- skip: officers never relay others' presences
       elseif otherPres and onlyAuthor and r.a ~= onlyAuthor and not p2pReq then
         -- skip: a 1.0 requester only takes a member's own records
-      elseif not otherPres and onlyAuthor and r.a ~= onlyAuthor and not (p2p and M.isP2P(r)) then
+      elseif not otherPres and onlyAuthor and r.a ~= onlyAuthor and not (p2p and (auth or M.isP2P(r))) then
         -- skip: not ours to relay
       elseif queued[r.id] == vkey(r) then
         -- this version is already waiting in our send queue
-      elseif not suppressed(r, startedAt, otherPres and p2pReq or p2p) then
+      elseif not suppressed(r, startedAt, otherPres and p2pReq or p2p, auth) then
         all[#all + 1] = { key = ("%03d|%s"):format(ki, r.id), r = r }   -- numeric kind order
         if otherPres then pres[#pres + 1] = #all end
       end
@@ -280,11 +283,13 @@ end
 
 -- versions we hold unverified that a 1.1 requester lacks (copies flagged u = 1), at most MAX_FORWARD
 function Sync.ForwardsFor(payload)
-  if not (X and payload.p2 == X.PROTO) then return {} end
+  local proto = X and X.protoOf(payload) or 0
+  if proto < 1 then return {} end
   local ph = type(payload.ph) == "table" and payload.ph or {}
   local all = {}
   for _, k in ipairs(KINDS) do
-    if M.P2P_KINDS[k] then
+    -- authority versions held pending only go to a 1.2 requester (a 1.1 one refuses a member's relay of them)
+    if M.P2P_KINDS[k] or (proto >= 2 and M.P2P_AUTH) then
       for _, r in ipairs(X.pendDiff(ns.state, k, type(ph[k]) == "table" and ph[k] or nil)) do all[#all + 1] = r end
     end
   end
@@ -317,7 +322,8 @@ local function onHello(payload, sender)
   local onlyMe = (not officer) and ns.me and ns.me() or nil
   -- v1.1: while a GM/officer with the addon is online, their trusted relays already serve the requester: a member
   -- answers like 1.0 (own records only, no unverified forwards). P2P relaying is for the hours without them.
-  local p2pOff = (not officer) and Sync.TrustedOnline()
+  -- v1.2: only for 1.0 / 1.1 requesters; a 1.2 requester is served P2P whoever is online (officers are one more node)
+  local p2pOff = (not officer) and (not X or X.protoOf(payload) < 2) and Sync.TrustedOnline()
   ns.After(2 + math.random() * 6, function()
     local out = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff, officer)
     if ns.debug then ns.debug(("hello from %s: replying %d records"):format(tostring(sender), #out)) end
