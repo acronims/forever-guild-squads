@@ -35,7 +35,6 @@ Sync.FINE_NB = 64
 Sync.FINE_KINDS = { profile = true, squad = true }
 local MAX_PENDING = 5000      -- records waiting for the guild roster (own disk + early network)
 local MAX_ROUNDS = 6          -- extra hellos while a fresh client keeps learning
-local MAX_PEND_ROUNDS = 12    -- v1.2 (AC3): extra hellos, every 30 s, while copies wait for quorum (6 min at most)
 local MAX_FORWARD = 20        -- unverified versions (u = 1) whispered per hello reply
 local pending = {}            -- { rec, sender } waiting for the guild roster
 local seenAfter = {}          -- id -> version string seen on the wire (reply suppression)
@@ -262,12 +261,11 @@ function Sync.Hello(again)
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
   if ns.After then
-    -- v1.2 (AC3): while copies wait for quorum, a flat +30 s and no need to have learned anything new: the
-    -- second copies only come as answers to the pending hashes (ph) of the next hello
-    local pend = X and X.hasPend and X.hasPend(ns.state)
-    ns.After(pend and 30 or (30 + 15 * round), function()
-      local more = (learned >= 10 and round < MAX_ROUNDS)
-        or (X and X.hasPend and X.hasPend(ns.state) and round < MAX_PEND_ROUNDS)
+    -- v1.2 (AC5, arreglo 1): the 1.1 rounds again (only while a round taught >= 10 records, growing delay); the
+    -- flat +30 s rounds while copies were pending tripled the members' hellos. The tail of pending copies is
+    -- covered by the hellos of later logins and by the local "synced" line (AC3)
+    ns.After(30 + 15 * round, function()
+      local more = learned >= 10 and round < MAX_ROUNDS
       Sync.NoteRound(learned, now(), more)
       if more then
         round = round + 1; Sync.Hello(true)
