@@ -464,15 +464,27 @@ function S10(seed) {
   check('forged achdef / achgrant accepted by 0 clients (catalog unchanged on the other 24)', took.length === 0, took.map((c) => c.name).join(','));
   // 1.1: refused as a relay. 1.2 (AC4): a member relaying authority leaves it pending, never verified without quorum.
   // Per honest client: "A" = the fake is applied (fail), "P" = held pending unverified, "R" = refused as relay, "-" = neither
-  const fake = news.filter((c) => c !== forger).map((c) => c.val(`(function()
+  const fake = news.filter((c) => c !== forger && c !== gm).map((c) => c.val(`(function()
     local X, s = NS.P2P, NS.state
     local r = X and X.getStored and X.getStored(s, "achdef", "lvl.all.10") or (NS.Model.kindTable and NS.Model.kindTable(s, "achdef")["lvl.all.10"])
     if r and r.d and r.d.name == "hack2" then return "A" end
     local u = X and X.unverified and X.unverified(s, "achdef", "lvl.all.10")
     if u and u.r and u.r.d and u.r.d.name == "hack2" then return "P" end
     if (NS.Sync.stats.relayRefused or 0) >= 1 then return "R" end
+    local st = s.p2p
+    if (NS.Sync.stats.pending or 0) >= 1 and st and (st.repudiated or 0) >= 1 then return "D" end
     return "-" end)()`)[0]).join('');
-  check('the GM-impersonating copy was refused as a relay or held pending, never applied', /^[RP]+$/.test(fake), fake);
+  // raw counters of the first honest client: relayRefused / pending / repudiated / bad
+  const raw = news.find((c) => c !== forger && c !== gm).val('NS.Sync.stats.relayRefused, NS.Sync.stats.pending, NS.state.p2p and NS.state.p2p.repudiated or -1, NS.Sync.stats.bad').join('/');
+  check('the GM-impersonating copy was refused as a relay, held pending or denied by the GM, never applied', /^[RPD]+$/.test(fake), fake + ' (refused/pending/repudiated/bad ' + raw + ')');
+  // the GM is the impersonated author: it never holds the fake and denies it (1.2: repudiated; 1.1: refused as relay)
+  const gmSays = gm.val(`(function() local r = NS.Model.kindTable(NS.state, "achdef")["lvl.all.10"]
+    if r and r.d and r.d.name == "hack2" then return "A" end
+    local st = NS.state.p2p
+    if (st and (st.repudiated or 0) >= 1) or (NS.Sync.stats.mine or 0) >= 1 then return "D" end
+    if (NS.Sync.stats.relayRefused or 0) >= 1 then return "R" end
+    return "-" end)()`)[0];
+  check('the impersonated GM never holds the fake and denies or refuses it', gmSays === 'D' || gmSays === 'R', gmSays);
   // the older clients: unknown kinds refused (counted as bad), no Lua error, everything else still syncs
   const bad = olds.map((c) => Number(c.val('NS.Sync.stats.bad')[0]));
   check('older clients received and refused the new kinds (Sync.stats.bad > 0 on each)', bad.every((b) => b > 0), bad.join(','));
