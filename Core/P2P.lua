@@ -21,7 +21,7 @@ local M, S, P = ns.Model, ns.Serialize, ns.Permissions
 X.PROTO = 2                    -- v1.2 hellos carry p2 = 2: they take every kind relayed by anyone (quorum)
 X.PROTO_AUTHORIAL = 1          -- 1.1 hellos carry p2 = 1: authorial relays from anyone, authority only from officers
 X.QUORUM = 2
-X.QUORUM_AUTH = 3              -- v1.2 D1: distinct relayers for an authority record (squad, settings, annul...)
+X.QUORUM_AUTH = 2              -- v1.2 D1 (BRO 7-nov 19:04, opción B): distinct relayers for an authority record (squad, settings, annul...)
 -- relayers needed for this record: authorial kinds 2, authority kinds 3
 function X.quorumFor(rec) return M.isP2P(rec) and X.QUORUM or X.QUORUM_AUTH end
 -- what a hello payload can take: 0 = 1.0 (authors / officers only), 1 = 1.1 (+ authorial), 2 = 1.2 (+ authority)

@@ -645,8 +645,8 @@ function S12(seed) {
 }
 
 // S16 (v1.2 AC4): poisoning of authority records. Mb2, then Mb3 too, forge a GM `settings` (bench 0, squads off) and
-// Mb1's squad (renamed) while the GM and Mb1 are offline. 1 relayer and QUORUM_AUTH - 1 = 2 relayers: never verified
-// on any honest client. A flood of 5,000 fake pending records from one relayer stays capped at 200 and does not evict
+// Mb1's squad (renamed) while the GM and Mb1 are offline. 1 relayer: never verified on any honest client. With
+// QUORUM_AUTH = 2 (D1, BRO 7-nov 19:04) 2 colluders do verify the fakes until the author / an officer denies them. A flood of 5,000 fake pending records from one relayer stays capped at 200 and does not evict
 // a legitimate pending version. The GM logs in -> repudiates the settings, Mb1 logs in -> repudiates the squad: both
 // fakes gone from every client and both relayers listed in /gsq diag.
 function S16(seed) {
@@ -681,10 +681,15 @@ function S16(seed) {
   sim.run(1200);
   const v1b = honest.map(view);
   check('20 min later, still never verified (1 relayer)', v1b.every((x) => x.startsWith('2/Lobos|')), v1b.join(','));
+  check('QUORUM_AUTH is 2', String(honest[0].val('NS.P2P.QUORUM_AUTH')[0]) === '2', String(honest[0].val('NS.P2P.QUORUM_AUTH')[0]));
   z.run(forge);
   sim.run(600);
   const v2 = honest.map(view);
-  check('QUORUM_AUTH - 1 = 2 colluders: still never verified', v2.every((x) => x.startsWith('2/Lobos|')), v2.join(','));
+  // D1 = 2: two colluders make a quorum -> the fake settings is verified (stored) until the GM denies it below. The
+  // fake squad gets the quorum too, but the verified fake settings turns squads off, so Model.apply refuses it
+  // ("disabled": validation does not change with the quorum) and it stays pending.
+  check('2 colluders (= QUORUM_AUTH): the fake settings is verified on every honest client, the fake squad stays pending (squads off)',
+    v2.every((x) => x === '0/Lobos|nil/Hackeado'), v2.join(','));
   // a legitimate pending version (Mb7's profile relayed by one honest member), then 5,000 fakes from Mb2 alone
   pub.login(); sim.run(10); pub.run('return A.SaveProfile({ note = "legit" })'); sim.run(30); pub.logout();
   const PUB = full(sim, 'Mb7'), Y = full(sim, 'Mb2');

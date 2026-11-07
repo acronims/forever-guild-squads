@@ -73,7 +73,7 @@ test("achdef / achgrant written by an officer or a member are refused (live and 
   local _, w3 = apply(st, rec("achdef", "lvl.all.10", MEM, T, { on = false }), OFF)
   eq(w3, "denied", "member's record relayed by an officer")
   local _, w4 = apply(st, rec("achdef", "lvl.all.10", GM, T, { on = false }), MEM)
-  eq(w4, "pending", "GM's record relayed by a member (or forged with a = GM): pending, quorum 3 (v1.2)")
+  eq(w4, "pending", "GM's record relayed by a member (or forged with a = GM): pending, quorum 2 (v1.2)")
   local _, w5 = apply(st, rec("achgrant", "first60|" .. MEM, OFF, T, { ach = "first60", who = MEM, reason = "x", on = true }), OFF)
   eq(w5, "denied", "achgrant by an officer")
   eq(next(st.achdefs or {}), nil, "nothing stored"); eq(next(st.achgrants or {}), nil)

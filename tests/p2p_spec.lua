@@ -122,8 +122,9 @@ test("AC4: a relayer with 3 repudiations is blocked for the quorum for 7 days", 
   ok(X.diagLine(s, NOW):find("^p2p pend=%d+ verified=%d+ repudiated=%d+ blocked=%d+"), X.diagLine(s, NOW))
 end)
 
--- AC5 (1.1) -> v1.2 AC1: authority records relayed by a non-officer wait pending until QUORUM_AUTH = 3 relayers
-test("v1.2: authority kinds relayed by a non-officer stay pending, never stored, until 3 distinct relayers", function()
+-- AC5 (1.1) -> v1.2 AC1/AC4 (D1 = 2, BRO 7-nov 19:04): authority records relayed by a non-officer wait pending until
+-- QUORUM_AUTH = 2 distinct relayers
+test("v1.2: authority kinds relayed by a non-officer stay pending, never stored, until 2 distinct relayers", function()
   local s = newState()
   local recs = {
     { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 5, sq = 2, d = { squadsEnabled = false } },
@@ -139,12 +140,11 @@ test("v1.2: authority kinds relayed by a non-officer stay pending, never stored,
     eq(okA, false, r.k); eq(why, "pending", r.k)
     okA, why = ap(s, r, "Y-R"); eq(why, "pending", r.k .. " twice (same relayer)")
   end
-  -- two relayers do not make a quorum for authority kinds; the third distinct one does
-  eq(X.QUORUM_AUTH, 3)
-  eq(select(2, ap(s, recs[1], "Z-R")), "pending")
-  eq(s.settings.d.squadsEnabled, true, "settings not replaced with 2 relayers")
+  -- one relayer (even twice) never verifies; the second distinct one does
+  eq(X.QUORUM_AUTH, 2)
+  eq(s.settings.d.squadsEnabled, true, "settings not replaced with 1 relayer")
   eq(s.squads["A"], nil, "squad not stored")
-  eq(select(2, ap(s, recs[1], "W-R")), "verified", "third relayer")
+  eq(select(2, ap(s, recs[1], "Z-R")), "verified", "second distinct relayer")
   eq(s.settings.d.squadsEnabled, false)
   -- an officer relay of an unverified forward (u = 1) is not trusted
   local u = prof("V-R", T0 + 5); u.u = 1
@@ -258,14 +258,14 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.1: an unverified profile is listed grey 
 end }
 
 -- v1.2 AC4: the GM repudiates a forged settings verified by quorum; a flooding relayer is capped at 200 pending
-test("v1.2: repudiate works on authority kinds (settings verified by 3 relayers is removed, relayers counted)", function()
+test("v1.2: repudiate works on authority kinds (settings verified by 2 relayers is removed, relayers counted)", function()
   local s = newState()
   local fake = { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 50, sq = 7, d = { squadsEnabled = false } }
-  for _, n in ipairs({ "Y-R", "Z-R", "W-R" }) do ap(s, fake, n) end
-  eq(s.settings.d.squadsEnabled, false, "verified by quorum 3")
+  for _, n in ipairs({ "Y-R", "Z-R" }) do ap(s, fake, n) end
+  eq(s.settings.d.squadsEnabled, false, "verified by quorum 2")
   ok(ap(s, X.repudiation(fake, "Gm-R", T0 + 60, 8), "Gm-R"))
   eq(s.settings, nil, "the forged settings is gone")
-  eq(X.relayerScore(s, "Y-R"), 1); eq(X.relayerScore(s, "W-R"), 1)
+  eq(X.relayerScore(s, "Y-R"), 1); eq(X.relayerScore(s, "Z-R"), 1)
   -- someone else cannot repudiate the GM's version
   local s2 = newState()
   ap(s2, fake, "Y-R")

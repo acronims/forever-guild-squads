@@ -271,7 +271,7 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
   local proto = X and X.protoOf(payload) or 0
   local p2pReq = proto >= 1
   local p2p = p2pReq and not p2pOff
-  local auth = p2p and proto >= 2          -- v1.2 requester: authority records of others too (quorum 3)
+  local auth = p2p and proto >= 2          -- v1.2 requester: authority records of others too (quorum 2)
   local me = ns.me and ns.me() or nil
   local pres = {}               -- indexes in all of others' presences (candidates)
   for ki, k in ipairs(KINDS) do
