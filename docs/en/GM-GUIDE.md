@@ -19,7 +19,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 
 1. Install the addon and open `/gsq` > **Settings**.
 2. Go through the 9 sections (below; **Achievements** is shown to you only). Change what you want and press **Save and share**. Leaving the tab with unsaved changes asks first.
-3. Ask your officers to install it: with no GM or officer online, players who just logged in only receive what the authors publish live (see *Troubleshooting*).
+3. Ask the whole guild to install **1.2**: it does not talk to 1.0.x or 1.1, and each player sees in chat how many guildmates are still on an old version (see *Troubleshooting*).
 4. Announce the addon in the guild. The in-addon welcome guides them (profile → squad → ranking).
 
 ## Settings, section by section
@@ -53,7 +53,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 ## Moderating the Hall of Fame
 
 - Right-click an entry: **Annul** with a reason (GM only). The next one moves up and the history is kept. *Revert* puts it back.
-- Data arriving late or with odd jumps is kept *unverified*: only an online GM or officer confirms it when relaying it.
+- Relayed data is kept *unverified* until two different players relay the same version, a GM or officer relays it, or its author sends it live.
 - A full Top is frozen; a closed race does not reopen.
 
 ## Raids: the RL workflow
@@ -82,7 +82,7 @@ A player's attendance % counts the last 8 raids with recorded attendance where t
 
 ## Troubleshooting
 
-**Nothing syncs without a GM or officer online.** By design: a record is accepted live from its author and relayed only by the GM or officers. If you want new players to catch up quickly, have an officer with the addon online at peak hours.
+**Something stays grey (unverified).** Since 1.2 every player with the addon relays data, and a relayed copy needs two different relayers (or a GM/officer, or its author live) before it counts. With very few players online it can stay grey until someone else logs in. Two characters of the same player count as two relayers: if a forged squad or setting shows up, its author (or you, for settings) denies it automatically on login. **Players on 1.0.x or 1.1 receive nothing**: ask them to update.
 
 **Data seems lost after a restart.** The Forever client has been seen not reading SavedVariables back. Run `/gsq export` after changing settings or closing raids and keep the text; the others get it back from any online GM/officer.
 

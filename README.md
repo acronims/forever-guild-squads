@@ -71,11 +71,11 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
 ## Troubleshooting
 - `/gsq diag` → Ctrl+A, Ctrl+C and paste it in the issue.
 - Data file: `WTF\Account\<ACCOUNT>\SavedVariables\GuildSquads.lua` (in the Forever client folder).
-- With no GM or officer online, a freshly logged-in client only receives what authors publish live. See [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md).
+- Grey entries are unverified until a second player, a GM/officer or the author confirms them. 1.2 does not talk to 1.0.x or 1.1. See [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md).
 
 ## Known limitations
-- No cryptographic signatures: a GM/officer running a modified client can still forge relays.
-- With no GM or officer online, each player only receives what authors publish live.
+- No cryptographic signatures: a GM/officer running a modified client can still forge relays, and a player with two characters can make a forged record look verified until its author denies it.
+- 1.2 does not talk to 1.0.x or 1.1: the whole guild has to update.
 - A full resync of a large guild takes minutes by design (throttle).
 - Forever encounter/instance IDs are unknown: instances match by name and learn the ID when seen.
 - The 1.60.1 client has no `UnitPVPRank`: PvP rank achievements and races are not shown there.

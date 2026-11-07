@@ -19,7 +19,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 
 1. Instala el addon y abre `/gsq` > **Ajustes**.
 2. Repasa las 9 secciones (abajo; **Logros** solo la ves tú). Cambia lo que quieras y pulsa **Guardar y compartir**. Si sales de la pestaña sin guardar, avisa.
-3. Pide a tus oficiales que lo instalen: sin GM ni oficial conectado, los jugadores que acaban de entrar solo reciben lo que publican en vivo los autores (ver *Problemas*).
+3. Pide a toda la guild que instale la **1.2**: no se habla con la 1.0.x ni con la 1.1, y cada jugador ve en el chat cuántos compañeros siguen con una versión vieja (ver *Problemas*).
 4. Anuncia el addon en la guild. La bienvenida del addon ya les guía (perfil → squad → ranking).
 
 ## Ajustes, sección a sección
@@ -53,7 +53,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 ## Moderar el Salón de la fama
 
 - Clic derecho en un puesto: **Anular** con motivo (solo GM). El siguiente sube y queda historial. *Revertir* lo devuelve a su sitio.
-- Los datos que llegan tarde o con saltos raros quedan *no verificados*: solo los confirma un GM u oficial conectado al reenviarlos.
+- Los datos reenviados quedan *no verificados* hasta que dos jugadores distintos reenvían la misma versión, un GM u oficial la reenvía o su autor la manda en directo.
 - Un Top lleno se congela; una carrera cerrada no se reabre.
 
 ## Bandas: flujo del RL
@@ -82,7 +82,7 @@ El % de asistencia de cada jugador cuenta las 8 últimas bandas con asistencia r
 
 ## Problemas
 
-**No sincroniza nada sin GM u oficial conectado.** Es así por diseño: un dato se acepta en vivo de su autor y solo lo reenvían GM u oficiales. Si queréis que los nuevos se pongan al día rápido, que haya un oficial con el addon conectado en las horas punta.
+**Algo se queda en gris (sin verificar).** Desde la 1.2 todos los que tienen el addon reenvían datos, y una copia reenviada necesita dos reenviadores distintos (o un GM/oficial, o su autor en directo) para contar. Con muy pocos conectados puede quedarse en gris hasta que entre alguien más. Dos personajes del mismo jugador cuentan como dos reenviadores: si aparece un squad o un ajuste falso, su autor (o tú, si son ajustes) lo desmiente solo al conectarse. **Los que van con la 1.0.x o la 1.1 no reciben nada**: pídeles que actualicen.
 
 **Los datos parecen perderse al reiniciar.** Se ha visto que el cliente de Forever a veces no relee las SavedVariables. Haz `/gsq export` después de cambiar ajustes o cerrar bandas y guarda el texto; los demás los recuperan de cualquier GM/oficial conectado.
 

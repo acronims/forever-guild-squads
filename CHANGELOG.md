@@ -1,6 +1,36 @@
 # Changelog
 
-## 1.1.0 — sin publicar — Sincronización P2P sin oficiales / P2P sync without officers
+## 1.2.0 — 2026-11-08 — Todo en P2P, sin repetidor central / Everything P2P, no central relay
+
+La 1.1.0 no llegó a publicarse: su contenido (más abajo) sale con esta versión. / 1.1.0 was never published: its contents (below) ship with this version.
+
+### ES
+
+Cada jugador con el addon es un nodo: perfiles, squads, ajustes, anulaciones, rosters y el resto de registros pasan de cliente a cliente, con la carga repartida entre todos. Ningún jugador, tampoco los oficiales, hace de repetidor central.
+
+- **⚠️ Tiene que actualizar toda la guild.** La 1.2 habla el protocolo 2: no recibe nada de la 1.0.x ni de la 1.1 y ellas no reciben nada de la 1.2 (sin errores, cada uno ignora al otro). Al conectarte, el chat te dice en local cuántos miembros llevan una versión vieja: «Guild Squads: N miembros de la hermandad usan una versión antigua y no se sincronizan hasta que actualicen».
+- **Aviso de sincronizado**: ponerse al día va en segundo plano, sin bloquear nada, y al acabar el chat dice una vez «Guild Squads: sincronizado (N registros, M pendientes de verificar)». En una guild de 200 con 40 conectados, el recién llegado tiene el 95 % en unos 4 minutos.
+- **Respuestas repartidas**: cada hello lo contestan unos 8 jugadores (también los oficiales, que ya no contestan siempre), cada uno con una muestra al azar de lo que te falta; lo que ya ha circulado con quórum no se repite.
+- **Quórum 2 también para lo de autoridad**: cualquier miembro puede reenviar squads, ajustes, anulaciones, catálogo y rosters. Una copia reenviada queda **sin verificar** (gris) hasta que dos reenviadores distintos traen la misma versión, la reenvía un GM u oficial o llega de su autor en directo.
+- **Desmentido para todo**: el autor (también el GM, para los ajustes) desmiente al conectarse cualquier copia falsa con su nombre y desaparece de todos los clientes. Un reenviador con 3 desmentidos deja de votar 7 días, y nadie puede tener más de 200 registros pendientes a la vez.
+- Seguridad: arreglos menores en el rastro de reenvío y en la comprobación del registro de reenviadores.
+- `/gsq diag`: la línea `comm` cuenta los mensajes de versión vieja descartados (`badProto=`).
+- Límite conocido: dos personajes del mismo jugador cuentan como dos reenviadores y pueden hacer pasar por verificado un registro falso hasta que su autor se conecta y lo desmiente.
+
+### EN
+
+Every player with the addon is a node: profiles, squads, settings, annulments, rosters and every other record travel from client to client, with the load shared by everyone. No player, officers included, acts as a central relay.
+
+- **⚠️ The whole guild has to update.** 1.2 speaks protocol 2: it receives nothing from 1.0.x or 1.1 and they receive nothing from 1.2 (no errors, each ignores the other). When you log in, chat tells you locally how many guildmates are on an old version: "Guild Squads: N guild members use an old version and cannot sync until they update".
+- **Synced notice**: catching up runs in the background without blocking anything, and when it is done chat says once "Guild Squads: synced (N records, M pending verification)". In a 200-member guild with 40 online, a newcomer has 95 % of it in about 4 minutes.
+- **Shared replies**: each hello is answered by about 8 players (officers too, who no longer always answer), each with a random sample of what you are missing; what has already gone round with quorum is not repeated.
+- **Quorum of 2 for authority records too**: any member can relay squads, settings, annulments, the catalog and rosters. A relayed copy stays **unverified** (grey) until two distinct relayers bring the same version, a GM or officer relays it, or its author sends it live.
+- **Denial for everything**: on login the author (the GM too, for settings) denies any forged copy carrying their name and it disappears from every client. A relayer with 3 denials stops voting for 7 days, and nobody can hold more than 200 pending records at once.
+- Security: minor fixes to the relay trail and the relayer ledger check.
+- `/gsq diag`: the `comm` line counts the dropped old-version messages (`badProto=`).
+- Known limit: two characters of the same player count as two relayers and can make a forged record look verified until its author logs in and denies it.
+
+## 1.1.0 — no publicada, incluida en la 1.2.0 / never published, included in 1.2.0 — Sincronización P2P sin oficiales / P2P sync without officers
 
 ### ES
 

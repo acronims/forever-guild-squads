@@ -71,11 +71,11 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
 ## Problemas
 - `/gsq diag` → Ctrl+A, Ctrl+C y pégalo en la incidencia.
 - Fichero de datos: `WTF\Account\<CUENTA>\SavedVariables\GuildSquads.lua` (en la carpeta del cliente Forever).
-- Sin GM ni oficial conectado, un cliente recién entrado solo recibe lo que publican en vivo sus autores. Más en [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md).
+- Lo gris está sin verificar hasta que lo confirma un segundo jugador, un GM u oficial o el autor. La 1.2 no se habla con la 1.0.x ni con la 1.1. Más en [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md).
 
 ## Limitaciones conocidas
-- Sin firmas criptográficas: un GM u oficial con un cliente modificado puede falsificar reenvíos.
-- Sin GM ni oficial conectado, cada uno solo recibe lo que publican en vivo sus autores.
+- Sin firmas criptográficas: un GM u oficial con un cliente modificado puede falsificar reenvíos, y un jugador con dos personajes puede hacer pasar por verificado un registro falso hasta que su autor lo desmiente.
+- La 1.2 no se habla con la 1.0.x ni con la 1.1: tiene que actualizar toda la guild.
 - Una resincronización completa de una guild grande tarda minutos (throttle, por diseño).
 - Los IDs de encuentros/instancias de Forever no se conocen: las instancias se reconocen por nombre y aprenden el ID al verlo.
 - El cliente 1.60.1 no ofrece `UnitPVPRank`: ahí los logros y carreras de rango PvP no se muestran.

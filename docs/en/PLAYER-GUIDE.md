@@ -71,7 +71,7 @@ Guide for guild masters, officers and raid leaders: [GM-GUIDE.md](GM-GUIDE.md).
 
 **My data is gone after logging in again.** The Forever client has been seen writing SavedVariables on exit but not reading them back. What to do: run `/gsq export` now and then and keep the text; if you lose data, `/gsq import`. Also, on login you get it back from the guild if a GM or officer is online (`/gsq sync`).
 
-**Nothing syncs / I don't see other squads.** Other people's data reaches you only live from its author, or relayed by the **GM or an officer**. With no GM or officer online you only receive what the authors themselves publish at that moment. Wait for one to log in and run `/gsq sync`. In big guilds catching up takes a few minutes (on purpose, so the channel is not flooded).
+**Nothing syncs / I don't see other squads.** Since 1.2 any guildmate with the addon sends you what you are missing; catching up runs in the background and the chat says "Guild Squads: synced (N records, M pending verification)" when it is done. In big guilds it takes a few minutes (on purpose, so the channel is not flooded). Grey entries are unverified: they count once a second player, a GM/officer or the author confirms them. If the chat says "N guild members use an old version", those players (1.0.x or 1.1) neither send you nor receive anything until they update. Run `/gsq sync` to ask again.
 
 **Nothing is announced in guild chat.** Guild chat celebrations are **off by default**; the GM turns them on in Settings > Celebrate (*Announce in guild chat*, *What is announced*: 1st place / Top 3 / Any entry, and *Also announce squad achievements*). The in-addon notice always shows. The chat message uses the language of the client that announces it, which may not be yours.
 
