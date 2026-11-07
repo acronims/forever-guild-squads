@@ -133,6 +133,44 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello reply to a 1.2 requester = 2 of
   if not okAll then error(err, 0) end
 end }
 
+-- v1.2 AC5 (S8 load): a 1.2 hello carries fine buckets h2 (Sync.FINE_NB) for the big kinds; a 1.2 replier diffs
+-- on them, so it does not resend a whole coarse bucket the requester already holds
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a 1.2 replier diffs profiles on the fine buckets h2 of the hello", function(c)
+  local ns = c.ns
+  local S, M = ns.Sync, ns.Model
+  local added = {}
+  for i = 1, 200 do
+    local id = ("Pf%03d-Realm"):format(i)
+    ns.state.profiles[id] = { k = "profile", id = id, a = id, ts = 1795000000, sq = 1, d = { role = "DAMAGER" } }
+    added[#added + 1] = id
+  end
+  local okAll, err = pcall(function()
+    ok(type(S.FINE_NB) == "number" and S.FINE_NB >= 64, "Sync.FINE_NB >= 64")
+    local h, h2 = {}, {}
+    for _, k in ipairs({ "settings", "squad", "profile", "reject", "boss", "annul" }) do h[k] = M.bucketHashes(ns.state, k) end
+    for _, k in ipairs(M.EXT_ORDER) do h[k] = M.bucketHashes(ns.state, k) end
+    -- the requester lacks one profile: its hashes are ours without it
+    local gone = ns.state.profiles["Pf007-Realm"]
+    ns.state.profiles["Pf007-Realm"] = nil
+    h.profile = M.bucketHashes(ns.state, "profile")
+    h2.profile = M.bucketHashes(ns.state, "profile", S.FINE_NB)
+    ns.state.profiles["Pf007-Realm"] = gone
+    local coarse = M.diffRecords(ns.state, "profile", h.profile)
+    local fineB = M.bucketOf("Pf007-Realm", S.FINE_NB)
+    for _ = 1, 50 do
+      local out = S.ReplyFor({ h = h, h2 = h2, p2 = 2, nonce = math.random(1, 1e9) }, "Zed-Realm", nil, nil)
+      for _, r in ipairs(out) do
+        if r.k == "profile" then ok(M.bucketOf(r.id, S.FINE_NB) == fineB, r.id .. " is outside the differing fine bucket") end
+      end
+    end
+    ok(#coarse > 5, #coarse .. " records in the differing coarse bucket (the waste h2 avoids)")
+    local old = S.ReplyFor({ h = h, h2 = h2, p2 = 1, nonce = 1 }, "Old-Realm", nil, nil)
+    eq(#old, #coarse, "a 1.1 requester is diffed on the coarse buckets (h2 ignored)")
+  end)
+  for _, id in ipairs(added) do ns.state.profiles[id] = nil end
+  if not okAll then error(err, 0) end
+end }
+
 -- leaving the guild and joining another in-session switches the per-guild data partition
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "leaving the guild and joining another in-session switches the per-guild data", function(c)
   local ns = c.ns

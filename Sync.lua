@@ -28,6 +28,10 @@ for _, k in ipairs(M.EXT_ORDER or {}) do KINDS[#KINDS + 1] = k end
 local MAX_REPLY = 60          -- records per hello reply (1.0 / 1.1 requesters)
 Sync.MAX_SAMPLE = 30          -- v1.2: records per reply to a 1.2 requester (random sample of 2 of 8 cubes)
 Sync.CUBES, Sync.CUBES_PICK = 8, 2
+-- v1.2: fine bucket hashes (h2) of the big kinds in a 1.2 hello; a 1.2 replier diffs on them, so it does not resend
+-- a whole coarse bucket (~1/16 of the guild) the requester already holds (S8: members relay P2P now)
+Sync.FINE_NB = 64
+Sync.FINE_KINDS = { profile = true, squad = true }
 local MAX_PENDING = 5000      -- records waiting for the guild roster (own disk + early network)
 local MAX_ROUNDS = 6          -- extra hellos while a fresh client keeps learning
 local MAX_FORWARD = 20        -- unverified versions (u = 1) whispered per hello reply
@@ -200,6 +204,11 @@ function Sync.Hello(again)
       end
     end
     msg.ph = ph
+    local h2
+    for k in pairs(Sync.FINE_KINDS) do
+      if next(M.kindTable(ns.state, k)) then h2 = h2 or {}; h2[k] = M.bucketHashes(ns.state, k, Sync.FINE_NB) end
+    end
+    msg.h2 = h2
   end
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
@@ -252,7 +261,10 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
   local me = ns.me and ns.me() or nil
   local pres = {}               -- indexes in all of others' presences (candidates)
   for ki, k in ipairs(KINDS) do
-    local list = (CORE_KIND[k] or payload.h[k] ~= nil) and M.diffRecords(ns.state, k, payload.h[k]) or {}
+    local fine = proto >= 2 and Sync.FINE_KINDS[k] and type(payload.h2) == "table" and payload.h2[k]
+    if not (type(fine) == "table" and #fine == Sync.FINE_NB) then fine = nil end
+    local list = fine and M.diffRecords(ns.state, k, fine, Sync.FINE_NB)
+      or (CORE_KIND[k] or payload.h[k] ~= nil) and M.diffRecords(ns.state, k, payload.h[k]) or {}
     for _, r in ipairs(list) do
       local otherPres = r.k == "presence" and r.a ~= me
       if otherPres and officer then
