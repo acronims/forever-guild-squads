@@ -29,15 +29,16 @@ test("live records: sender must be the author; relays need an officer (announcem
   ok(M.apply(st, rec, { roster = roster, sender = "Ali-R" }), "live by author accepted")
   local st2 = M.newState()
   local okA, why = M.apply(st2, rec, { roster = roster, sender = "Eve-R" })
-  ok(not okA); eq(why, "relay", "non-officer relay of an unannounced record")
+  -- v1.1: a profile is authorial; a single non-officer relay leaves it pending (unverified), never applied
+  ok(not okA); eq(why, "pending", "non-officer relay of an unannounced record"); eq(st2.profiles["Ali-R"], nil)
   ok(M.apply(st2, rec, { roster = roster, sender = "Off-R" }), "officer relay accepted")
   local st3 = M.newState()
   local ann = { ["Ali-R"] = { [M.versionHash(rec)] = true } }
   local okN, whyN = M.apply(st3, rec, { roster = roster, sender = "Bob-R", announced = function(a, h) return ann[a] and ann[a][h] end })
-  ok(not okN, "relay of an announced version is refused"); eq(whyN, "relay")
+  ok(not okN, "relay of an announced version is refused"); eq(whyN, "pending"); eq(st3.profiles["Ali-R"], nil)
   local forged = prof("Ali-R", "S9", T0 + 1)  -- not the announced version
   local okF, whyF = M.apply(st3, forged, { roster = roster, sender = "Bob-R", announced = function(a, h) return ann[a] and ann[a][h] end })
-  ok(not okF); eq(whyF, "relay")
+  ok(not okF); eq(whyF, "pending"); eq(st3.profiles["Ali-R"], nil)
 end)
 
 test("records more than 300 s in the future are refused; 299 s is fine", function()

@@ -19,7 +19,7 @@ function setGlobalTable(name, entries) {
   lua.lua_setglobal(L, to_luastring(name));
 }
 
-const core = ['Core/Serialize.lua', 'Core/Permissions.lua', 'Core/Chunk.lua', 'Core/Queue.lua', 'Core/Model.lua', 'Core/Match.lua', 'Core/Call.lua', 'Core/Content.lua', 'Core/Roster.lua', 'Core/Progress.lua', 'Core/Diag.lua', 'Core/Races.lua', 'Core/Catalog.lua', 'Core/Celebrate.lua'];
+const core = ['Core/Serialize.lua', 'Core/Permissions.lua', 'Core/Chunk.lua', 'Core/Queue.lua', 'Core/Model.lua', 'Core/Match.lua', 'Core/Call.lua', 'Core/Content.lua', 'Core/Roster.lua', 'Core/Progress.lua', 'Core/Diag.lua', 'Core/Races.lua', 'Core/Catalog.lua', 'Core/Celebrate.lua', 'Core/P2P.lua'];
 const wow = ['Locales/enUS.lua', 'Locales/esES.lua', 'Core/Logo.lua', 'Comm.lua', 'Sync.lua', 'UI/Widgets.lua', 'UI/Main.lua', 'GuildSquads.lua', 'Progress.lua', 'Hall.lua', 'Raids.lua', 'Diag.lua', 'UI/Panels.lua', 'UI/Ranking.lua', 'UI/Raids.lua', 'UI/Hall.lua', 'UI/Catalog.lua', 'UI/Minimap.lua'];
 // Specs run in this order: several register SMOKE_CHECKS that run later inside zload_spec.lua (in registration
 // order, sharing one fake client), so the order is part of the suite. A spec missing from the list fails the run.

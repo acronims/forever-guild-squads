@@ -99,7 +99,7 @@ function M.defaultSettings()
            compEnabled = true, seasonKind = "weekly", wLevel = 1, wDungeon = 1, wRaid = 1, weekCap = 100, guildGoal = 30,
            wPvp = 1, wWpvp = 1, overlordOn = true, seasonName = "", seasonStart = 1793779200, seasonEnd = 0, seasonsPast = {},
            inactiveDays = 14, maxSquads = 0, ovHint = true, celOn = false, celScope = "first", celSquad = true,
-           rlList = {}, offEdit = false }
+           rlList = {}, offEdit = false, adoptDays = 30 }
 end
 
 function M.newState()
@@ -135,6 +135,7 @@ function M.normalizeSettings(d)
   set("inactiveDays", oneOf(d.inactiveDays, M.INACTIVE_DAYS, 14))
   set("maxSquads", oneOf(d.maxSquads, M.MAX_SQUADS, 0))
   set("celScope", oneOf(d.celScope, { "first", "top3", "any" }, "first"))
+  set("adoptDays", clampInt(d.adoptDays, 1, 90, 30))
   if type(d.officerRanks) == "table" then
     local out, seen = {}, {}
     for _, r in ipairs(d.officerRanks) do
@@ -531,24 +532,42 @@ function M.announce(state, me, max)
   return out
 end
 
+-- AUTHORIAL kinds (v1.1, annex A of docs/SPEC-v1.1-sync-p2p.md): records that only describe their author or a
+-- player decision of the author. A closed list, never deduced. Any member may relay them (Core/P2P.lua: quorum of 2,
+-- captain nodes, repudiation). Exceptions that stay AUTHORITY because another record leans on them or they depend on
+-- someone else's authority: a profile carrying xferTo (it signs a squad transfer, see validateSquad) and a
+-- reject of kind "req" (the captain rejects a request).
+M.P2P_KINDS = { profile = true, rsvp = true, witness = true, presence = true, reject = true, repudiate = true }
+function M.isP2P(rec)
+  if type(rec) ~= "table" or not M.P2P_KINDS[rec.k] then return false end
+  local d = type(rec.d) == "table" and rec.d or {}
+  if rec.k == "profile" and d.xferTo ~= nil then return false end
+  if rec.k == "reject" and d.kind ~= "inv" then return false end
+  return true
+end
+
 -- Relay trust. ctx.sender = who physically sent it (nil = unsigned API
 -- call: tests/import).
 --   live (sender == author) -> ok
---   relayed (sender ~= author) -> ok only if the relayer is GM/officer. There is no "announced hash" path:
+--   relayed (sender ~= author) by a GM/officer -> ok. There is no "announced hash" path:
 --   a 24-bit non-cryptographic hash can be forged offline in seconds (ctx.announced is ignored on purpose).
+--   relayed by anyone else: authority kinds -> "relay" (refused, R06-1); authorial kinds -> "p2p" (Core/P2P.lua).
+--   u = the sender forwards a version it holds unverified: never trusted, not even from an officer.
 --   no sender = local API call (own writes, own disk, tests); Sync always passes the sender, import passes ns.me().
-function M.provenance(rec, ctx, settings)
+function M.provenance(rec, ctx, settings, u)
   if ctx.trusted then return true end
   local roster = ctx.roster
   if ctx.sender then
     if ctx.sender == rec.a then return true end
-    if P.isOfficer(roster, ctx.sender, settings) then return true end
+    if not u and P.isOfficer(roster, ctx.sender, settings) then return true end
+    if M.isP2P(rec) then return false, "p2p" end
     return false, "relay"
   end
   return true
 end
 
--- Apply a record. ctx = { roster = fn, sender?, trusted?, now? }. Returns ok, reason.
+-- Apply a record. ctx = { roster = fn, sender?, me?, trusted?, now? }. Returns ok, reason.
+local applyKind
 function M.apply(state, rec, ctx)
   local okS, whyS = M.validShape(rec)
   if not okS then return false, whyS end
@@ -557,12 +576,33 @@ function M.apply(state, rec, ctx)
   if ctx.now and rec.ts > ctx.now + M.MAX_FUTURE then return false, "future" end
   local data = sanitize(rec.k, rec.d)
   if not data then return false, "shape" end
+  local u = rec.u == 1 or rec.u == true
   rec = { k = rec.k, id = rec.id, a = rec.a, ts = rec.ts, sq = rec.sq, d = data }
   if not P.inGuild(roster, rec.a) then return false, "notInGuild" end
   local settings = M.settingsOf(state)
-  local okP, whyP = M.provenance(rec, ctx, settings)
-  if not okP then return false, whyP end
+  local okP, whyP = M.provenance(rec, ctx, settings, u)
+  local X = ns.P2P
+  if not okP then
+    if whyP == "p2p" then
+      if X then return X.offer(state, rec, ctx, settings, u) end
+      return false, "relay"
+    end
+    return false, whyP
+  end
+  local restore
+  if X then
+    local okX, whyX, undo = X.before(state, rec, ctx)
+    if not okX then return false, whyX end
+    restore = undo
+  end
+  local ok, why = applyKind(state, rec, ctx, roster, settings, data)
+  if ok then
+    if X and not ctx.trusted then X.after(state, rec) end
+  elseif restore then restore() end
+  return ok, why
+end
 
+function applyKind(state, rec, ctx, roster, settings, data)
   if rec.k == "settings" then
     if rec.id ~= "settings" then return false, "shape" end
     if M.same(rec, state.settings) then return false, "dup" end

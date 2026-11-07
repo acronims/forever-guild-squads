@@ -496,14 +496,36 @@ function H.OnHello(rh, sender)
   end)
 end
 
--- adoption: "Guild Squads instalado: X/Y miembros activos"
+-- adoption (v1.1): "Guild Squads: X/Y miembros (30 días)" = roster members with a `presence` record in the last
+-- adoptDays (Core/P2P.lua, saved and relayed: offline members count). Ourselves always count, and so does a member
+-- whose hello we heard in that window (1.0.x clients publish no presence). -> x, y, days, info
 function H.Adoption()
-  local members = {}
-  local me = ns.me()
-  for name, r in pairs(ns.rosterList and ns.rosterList() or {}) do
-    members[#members + 1] = { name = name, days = r.seen or 0, self = name == me }
+  local me, t = ns.me(), now()
+  local hello = rdb and rdb.hello or {}
+  local a = ns.P2P.adoption(ns.state, ns.rosterList and ns.rosterList() or {}, t, function(name, days)
+    if name == me then return true, ns.VERSION end
+    local h = hello[name]
+    return type(h) == "number" and t - h <= days * 86400, nil
+  end)
+  return a.n, a.total, a.days, a
+end
+-- the visible line; officers also read "El GM no lo tiene instalado" when rank 0 has no presence
+function H.AdoptionText()
+  local x, y, days, a = H.Adoption()
+  local text = L.ADOPTION:format(x, y, days)
+  if a.gmMissing and P.isOfficer(ns.roster, ns.me(), M.settingsOf(ns.state)) then
+    text = text .. "  |cffff8800" .. L.ADOPTION_GM .. "|r"
   end
-  return R.adoption(members, rdb and rdb.hello or {}, now())
+  return text, a
+end
+-- tooltip: who has it and which version
+function H.AdoptionTooltip(gt)
+  local _, _, days, a = H.Adoption()
+  gt:SetText(L.ADOPTION_TIP:format(days), 1, 0.82, 0)
+  for i, e in ipairs(a.list) do
+    if i > 40 then gt:AddLine("...", 0.6, 0.6, 0.6); break end
+    gt:AddLine(ns.shortName(e.name) .. "  |cff999999" .. tostring(e.ver) .. "|r", 1, 1, 1)
+  end
 end
 
 -------------------------------------------------------------------------------

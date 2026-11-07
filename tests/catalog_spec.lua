@@ -239,7 +239,9 @@ test("extension kinds: order after vconfirm, old hello order unchanged, compacti
   local core = { "settings", "squad", "profile", "reject", "boss", "annul" }
   for i, k in ipairs(core) do eq(M.ORDER[k], i) end
   local n = #M.EXT_ORDER
-  eq(M.EXT_ORDER[n - 1], "achdef"); eq(M.EXT_ORDER[n], "achgrant")
+  -- v1.1 appends presence and repudiate after the catalog kinds (the older positions stay the same)
+  eq(M.EXT_ORDER[n - 3], "achdef"); eq(M.EXT_ORDER[n - 2], "achgrant")
+  eq(M.EXT_ORDER[n - 1], "presence"); eq(M.EXT_ORDER[n], "repudiate")
   local st, store = fresh(), R.newStore()
   ok(apply(st, rec("achdef", "gm.lvl40", GM, T, { custom = true, metric = "level", thr = 40, size = 10 })))
   level(store, "P1-R", 40, T + 10)

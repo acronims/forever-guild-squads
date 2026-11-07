@@ -296,8 +296,7 @@ end, function(f, bar)
   end
   hall.history:SetText(#hist > 0 and (L.HALL_HISTORY .. ": " .. table.concat(hist, " · ")) or "")
   hall.restore:SetShown(#hist > 0 and isGM())
-  local x, y = g.Adoption()
-  bar.status:SetText(L.ADOPTION:format(x, y))
+  bar.status:SetText((g.AdoptionText()))
 end, function() return M.settingsOf(ns.state).squadsEnabled and ns.HallGlue and ns.HallGlue.Enabled() end,
    { icon = ICONS .. "INV_Misc_Trophy_Argent" })
 

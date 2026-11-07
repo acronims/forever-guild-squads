@@ -1213,6 +1213,9 @@ local function buildSquads(f)
   seg(f, 12, -212, L.S_MAX_SQUADS, "maxSquads", M.MAX_SQUADS, maxs)
   -- adoption, so the GM can encourage installing the addon
   st.adopt = W.Label(f, "", "GameFontNormal"); st.adopt:SetPoint("TOPLEFT", 12, -248)
+  -- hover: who has Guild Squads and which version (presence records)
+  st.adoptHover = CreateFrame("Frame", nil, f); st.adoptHover:SetAllPoints(st.adopt)
+  W.Tooltip(st.adoptHover, function(_, gt) if ns.HallGlue and ns.HallGlue.AdoptionTooltip then ns.HallGlue.AdoptionTooltip(gt) end end)
 end
 
 local function buildComp(f)
@@ -1389,9 +1392,9 @@ local function contentRefresh()
   end
   st.bossEmpty:SetShown(#list == 0)
   if ns.HallGlue then
-    local x, y = ns.HallGlue.Adoption()
-    st.celAdopt:SetText(L.ADOPTION:format(x, y))
-    if st.adopt then st.adopt:SetText(L.ADOPTION:format(x, y)) end
+    local text = ns.HallGlue.AdoptionText()
+    st.celAdopt:SetText(text)
+    if st.adopt then st.adopt:SetText(text) end
   end
 end
 
