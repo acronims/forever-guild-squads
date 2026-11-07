@@ -678,4 +678,63 @@ function S14(seed) {
   return { pass: pass(), checks, metrics: { oldBad: bad, ref: REF, ...sim.stats } };
 }
 
-module.exports = { S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+// S8g (v1.2 AC0/AC2/AC3/AC5): the S13 guild (200 members: GM, 2 officers, 197 members; 200 profiles + 20 squads on
+// disk), 40 clients online (GM + 2 officers + 37 members) for `minutes` of profile edits, then a newcomer with an
+// empty SavedVariables logs in. Measures the totals the v1.2 criteria compare against the reference builds
+// (run it with GSQ_ROOT = a checkout of 1.1 / 1.0.1): parts sent in total and per client, max queue, mean msgs/s,
+// newcomer time to 95 % / 100 % of what it lacked, time to converge.
+function S8g(seed, minutes) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  minutes = minutes || 15;
+  makeGuild(sim, 2, 197);
+  const names = sim.roster.filter((r) => /^Mb/.test(r.name)).map((r) => full(sim, r.name));
+  names.unshift(full(sim, 'Of2'), full(sim, 'Of1'), full(sim, 'Gm'));
+  const gen = sim.client('Gm');
+  gen.login(); sim.run(3); gmSettings(gen); sim.run(1);
+  const n = gen.run(`return SIM_genRecords({ ${names.map(luaStr).join(',')} }, 20, ${sim.epoch - 86400 * 5})`)[0];
+  gen.logout();
+  const saved = gen.saved;
+  delete sim.clients.Gm;
+  const online = ['Gm', 'Of1', 'Of2', ...Array.from({ length: 37 }, (_, i) => 'Mb' + (i * 4 + 1))];
+  const cs = online.map((nm) => sim.client(nm, { saved }));
+  for (const c of cs) { c.login(); sim.run(1 + sim.rand() * 4); }
+  const t0 = sim.t;
+  for (const c of cs) { c.sent = 0; c.sentAt = []; c.maxQueue = 0; c.throttled = 0; }
+  const end = t0 + minutes * 60;
+  while (sim.t < end) {
+    const c = cs[Math.floor(sim.rand() * cs.length)];
+    c.run(`return A.SaveProfile({ note = "n${Math.floor(sim.rand() * 1000)}" })`);
+    sim.run(5 + sim.rand() * 20);
+  }
+  const dur = sim.t - t0;
+  const parts = cs.map((c) => c.sent);
+  const total = parts.reduce((a, b) => a + b, 0);
+  const maxQ = Math.max(...cs.map((c) => c.maxQueue));
+  const thr = cs.reduce((a, c) => a + c.throttled, 0);
+  const top = cs.map((c, i) => [c.name, parts[i]]).sort((a, b) => b[1] - a[1]);
+  // newcomer: empty SavedVariables, counts profiles + squads it holds (stored = verified) every 10 s for 10 min
+  const cnt = `(function() local n = 0 for _ in pairs(NS.state.profiles) do n = n + 1 end for _ in pairs(NS.state.squads) do n = n + 1 end return n end)()`;
+  const target = Number(cs[0].val(cnt)[0]);
+  const nc = sim.client('Mb2');
+  const tn = sim.t;
+  nc.login();
+  let t95 = null, t100 = null;
+  for (let k = 0; k < 60 && t100 === null; k++) {
+    sim.run(10);
+    const h = Number(nc.val(cnt)[0]);
+    if (t95 === null && h >= 0.95 * target) t95 = Math.round(sim.t - tn);
+    if (h >= target) t100 = Math.round(sim.t - tn);
+  }
+  const tc = sim.t;
+  const conv = sim.settle(900, 15);
+  const tConv = Math.round(sim.t - tc);
+  check('caught Lua errors = 0', sim.errors() === 0, sim.errors() ? sim.errorText().slice(0, 300) : 0);
+  check('model converged', conv, tConv + ' s');
+  return { pass: pass(), checks, metrics: { clients: cs.length, seconds: Math.round(dur), records: n, partsTotal: total,
+    partsTopClient: top.slice(0, 5).map((e) => e.join(':')).join(','), topShare: +(top[0][1] / Math.max(1, total)).toFixed(3),
+    maxQueue: maxQ, throttled: thr, meanAll: +(total / cs.length / dur).toFixed(3), newcomerTarget: target,
+    newcomerT95: t95, newcomerT100: t100, convergeAfterNewcomer: tConv, ...sim.stats } };
+}
+
+module.exports = { S8g, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };

@@ -21,6 +21,7 @@ for (const name of list) {
       if (name === 'S5') r = SC.S5(s, Number(opt('s5seeds', 100)));
       else if (name === 'S8') r = SC.S8(s, Number(opt('s8min', 15)));
       else if (name === 'S9') r = SC.S9(s, Number(opt('s9min', 60)));
+      else if (name === 'S8g') r = SC.S8g(s, Number(opt('s8gmin', 15)));
       else if (name === 'S13') r = SC.S13(s, Number(opt('s13min', 15)));
       else r = SC[name](s);
     } catch (e) { r = { pass: false, checks: [['exception', false, String(e && e.stack || e).slice(0, 600)]], metrics: {} }; }
