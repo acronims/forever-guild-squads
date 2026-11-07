@@ -273,6 +273,31 @@ test("v1.2: repudiate works on authority kinds (settings verified by 2 relayers 
   eq(select(2, ap(s2, bad, "Z-R")), "denied")
 end)
 
+-- v1.2 AC4 (S16): the stored copy of a verified fake has another content hash (defaults filled in on store), so the
+-- GM denies that hash. The same signed version (same kind:id@ts.sq.author) with the wire content, still pending on
+-- other clients, goes too, and never comes back by relay; the author's live record is not blocked.
+test("v1.2: a repudiate removes pending copies of the same signed version with another content hash", function()
+  local s = newState()
+  local wire = { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 50, sq = 7, d = { squadsEnabled = false } }
+  eq(select(2, ap(s, wire, "Y-R")), "pending")
+  local filled = copy(wire); filled.d.bench = 0; filled.d.minCreateRank = 9
+  ok(X.vkey(filled) ~= X.vkey(wire), "two content hashes of one signed version")
+  ok(ap(s, X.repudiation(filled, "Gm-R", T0 + 60, 8), "Gm-R"))
+  eq(X.unverified(s, "settings", "settings"), nil, "the wire copy is no longer pending")
+  eq(X.relayerScore(s, "Y-R"), 1, "its relayer is counted")
+  local _, why = ap(s, wire, "Z-R")
+  eq(why, "repudiated", "the wire copy never comes back by relay")
+  -- the same for a squad that nobody stored (only pending)
+  local sq = { k = "squad", id = "Cap-R:1", a = "Cap-R", ts = T0 + 70, sq = 3, d = { name = "Hack", captain = "Cap-R", members = { "Cap-R" } } }
+  eq(select(2, ap(s, sq, "Y-R")), "pending")
+  local sq2 = copy(sq); sq2.d.ct = T0 + 70
+  ok(ap(s, X.repudiation(sq2, "Cap-R", T0 + 80, 4), "Cap-R"))
+  eq(X.unverified(s, "squad", "Cap-R:1"), nil, "the pending squad is gone")
+  -- a newer live version of the author is untouched
+  ok(ap(s, { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 90, sq = 9, d = { squadsEnabled = true } }, "Gm-R"))
+  eq(s.settings.d.squadsEnabled, true)
+end)
+
 test("v1.2: one relayer holds at most MAX_PEND_RELAYER pending versions; others are not evicted", function()
   local s = newState()
   eq(select(2, ap(s, prof("V-R", T0 + 5, { note = "legit" }), "Z-R")), "pending")

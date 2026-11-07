@@ -49,6 +49,20 @@ function X.vkey(rec)
   return kidOf(rec) .. "@" .. num(rec.ts) .. "." .. num(rec.sq) .. "." .. tostring(rec.a) .. "#" .. S.hash(S.encode(rec.d or {})):sub(1, 8)
 end
 
+-- the signed part of a version key (kind:id@ts.sq.author, without the content hash). The stored copy of a record can
+-- carry another hash than the wire copy (M.settingsOf / validateSquad fill fields in on store); a repudiation denies
+-- the signed version, whatever hash the author saw.
+function X.vbase(vk) return (vk:match("^(.*)#[^#]*$")) or vk end
+local function repudiatedBase(state, vk)
+  local r = state.repudiates
+  if not (r and next(r)) then return false end
+  if r[vk] then return true end
+  local b = X.vbase(vk)
+  for id in pairs(r) do if X.vbase(id) == b then return true end end
+  return false
+end
+X.repudiatedBase = repudiatedBase
+
 function X.st(state)
   local st = state.p2p
   if type(st) ~= "table" then st = {}; state.p2p = st end
@@ -162,7 +176,7 @@ function X.offer(state, rec, ctx, settings, u)
   local now = ctx.now or rec.ts
   local sender = ctx.sender
   local kid, vk = kidOf(rec), X.vkey(rec)
-  if state.repudiates and state.repudiates[vk] then return false, "repudiated" end
+  if repudiatedBase(state, vk) then return false, "repudiated" end
   local stored = M.stored(state, rec)
   if stored and M.same(rec, stored) then
     if X.vkey(stored) == vk then return false, "dup" end
@@ -398,14 +412,17 @@ local function enforce(state, d, now)
     if via and via.v == d.v then add(via.by); st.via[d.t] = nil end
   end
   if st.contra[d.v] then add(st.contra[d.v].by); st.contra[d.v] = nil end
+  -- every pending copy of the denied signed version (any content hash: the wire copy, the filled-in one)
   local byId = st.pend[d.t]
-  local e = byId and byId[d.v]
-  if e then
-    for n in pairs(e.by) do relayers[n] = true end
-    if e.from then relayers[e.from] = true end
-    byId[d.v] = nil
-    if next(byId) == nil then st.pend[d.t] = nil end
+  local base = X.vbase(d.v)
+  for vk, e in pairs(byId or {}) do
+    if vk == d.v or X.vbase(vk) == base then
+      for n in pairs(e.by) do relayers[n] = true end
+      if e.from then relayers[e.from] = true end
+      byId[vk] = nil
+    end
   end
+  if byId and next(byId) == nil then st.pend[d.t] = nil end
   local any = false
   for n in pairs(relayers) do
     local r = st.rep[n] or { n = 0 }
