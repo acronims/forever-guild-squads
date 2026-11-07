@@ -139,6 +139,7 @@ end
 -- a bulk write (the GM's "activar/desactivar todo") = N ordinary records, applied locally and
 -- sent 3 per message through the normal throttled queue (1 msg/s, burst 4), no special record. -> applied, refused
 Sync.BATCH = 3
+Sync.MAX_PRESENCE_REPLY = 6
 function Sync.PublishMany(list)
   local okList, refused = {}, 0
   for _, rec in ipairs(list or {}) do
@@ -223,6 +224,8 @@ end
 function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff)
   local all = {}
   local p2p = X and payload.p2 == X.PROTO and not p2pOff
+  local me = ns.me and ns.me() or nil
+  local nPres = 0
   for ki, k in ipairs(KINDS) do
     local list = (CORE_KIND[k] or payload.h[k] ~= nil) and M.diffRecords(ns.state, k, payload.h[k]) or {}
     for _, r in ipairs(list) do
@@ -230,7 +233,12 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff)
         -- skip: not ours to relay
       elseif queued[r.id] == vkey(r) then
         -- this version is already waiting in our send queue
+      elseif r.k == "presence" and r.a ~= me and (onlyAuthor == nil or nPres >= Sync.MAX_PRESENCE_REPLY) then
+        -- v1.1: GMs/officers never relay others' presences and members relay a few per reply (S8: relaying them
+        -- filled the officers' queues past 500). Each login reaches everyone online live; members' P2P replies and
+        -- the anti-entropy hellos bring the rest
       elseif not suppressed(r, startedAt, p2p) then
+        if r.k == "presence" and r.a ~= me then nPres = nPres + 1 end
         all[#all + 1] = { key = ("%03d|%s"):format(ki, r.id), r = r }   -- numeric kind order
       end
     end
