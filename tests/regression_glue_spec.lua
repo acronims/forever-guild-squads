@@ -392,6 +392,54 @@ end }
 
 -- v1.2 AC5 (S8 load): a 1.2 hello carries fine buckets h2 (Sync.FINE_NB) for the big kinds; a 1.2 replier diffs
 -- on them, so it does not resend a whole coarse bucket the requester already holds
+-- v1.2 AC5 arreglo 3 (S8 tally: RX:profile:dup = 56561, MEM:D:G:profile = 2650 of 4481 parts): a reply is chosen
+-- 2-8 s after the hello but leaves the send queue up to ~150 s later; by then the same versions may be on the wire
+-- (author / officer / quorum). The check of suppressed() runs again when the message is about to leave: the records
+-- already served go out of it, and a message left empty is not sent at all.
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a queued reply drops the records already on the wire when it leaves", function(c)
+  local ns = c.ns
+  local S, M, Comm = ns.Sync, ns.Model, ns.Comm
+  local h = {}
+  for _, k in ipairs({ "settings", "squad", "profile", "reject", "boss", "annul" }) do h[k] = M.bucketHashes(ns.state, k) end
+  for _, k in ipairs(M.EXT_ORDER) do h[k] = M.bucketHashes(ns.state, k) end
+  local added, recs = {}, {}
+  for i = 1, 40 do
+    local id = ("Pw%03d-Realm"):format(i)
+    local r = { k = "profile", id = id, a = id, ts = 1795000000, sq = 1, d = { role = "DAMAGER" } }
+    ns.state.profiles[id] = r
+    added[#added + 1] = id; recs[#recs + 1] = r
+  end
+  h.profile = {}
+  local oldOnline, origRand, origSAM = ns.onlineCount, math.random, C_ChatInfo.SendAddonMessage
+  ns.onlineCount = function() return 40 end
+  math.random = function(x, y) if x == nil then return 0 end return origRand(x, y) end   -- this one replies
+  local wire = 0
+  local okAll, err = pcall(function()
+    local tq = GetTime()
+    for i = 1, 600 do if Comm.queue:size() == 0 then break end Comm.queue:pump(tq + i) end   -- leftovers of other checks
+    Comm.queue:setBlocked("ac5t", true)
+    S.OnMessage("H", { h = h, p2 = 2, nonce = 301 }, "Nw1-Realm")
+    runTimers(c, 10)
+    ok(Comm.queue:size() > 0, Comm.queue:size() .. " parts queued for the reply")
+    -- every author puts its own version on the wire while our reply waits
+    for i = 1, #recs, 20 do
+      local part = {}
+      for j = i, math.min(#recs, i + 19) do part[#part + 1] = recs[j] end
+      for _, r in ipairs(part) do S.OnMessage("D", { r = { r } }, r.a) end
+    end
+    C_ChatInfo.SendAddonMessage = function(_, msg, ch) if msg:find("Pw0", 1, true) then wire = wire + 1 end return 0 end
+    Comm.queue:setBlocked("ac5t", false)
+    local t0 = GetTime()
+    for i = 1, 400 do Comm.queue:pump(t0 + 20 + i) if Comm.queue:size() == 0 then break end end
+    eq(Comm.queue:size(), 0, "queue drained")
+    eq(wire, 0, "parts sent with records already on the wire")
+  end)
+  Comm.queue:setBlocked("ac5t", false)
+  C_ChatInfo.SendAddonMessage, ns.onlineCount, math.random = origSAM, oldOnline, origRand
+  for _, id in ipairs(added) do ns.state.profiles[id] = nil end
+  if not okAll then error(err, 0) end
+end }
+
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a 1.2 replier diffs profiles on the fine buckets h2 of the hello", function(c)
   local ns = c.ns
   local S, M = ns.Sync, ns.Model

@@ -115,7 +115,9 @@ end
 
 -- Send a message table. channel "GUILD" (default) or "WHISPER" with target. onSent (optional) runs when the last
 -- part has really left (claims are timed from that moment).
-function Comm.Send(tag, payload, channel, target, onSent, urgent)
+-- refresh (optional, v1.2 AC5): function() -> payload | nil, called once right before the first part leaves; nil
+-- drops the whole message, a new payload replaces it (it can only shrink: the parts beyond its length are dropped)
+function Comm.Send(tag, payload, channel, target, onSent, urgent, refresh)
   -- an identical message still waiting in the queue (same payload, channel and target, e.g.
   -- the same record version published twice while comms are locked) is not queued again (the stamp is not part of
   -- the key)
@@ -130,10 +132,25 @@ function Comm.Send(tag, payload, channel, target, onSent, urgent)
   local tail = "s1:t" .. S.encode(tag) .. "s1:v" .. S.encode(Comm.PROTO) .. "e"
   local m = { items = {} }
   function m.build(at) return C.split(S.escape(pre .. "s1:s" .. S.encode(stampOf(at)) .. tail), id) end
+  local function prep()
+    local okR, np = pcall(refresh)
+    if not okR or np == payload then return end
+    if np == nil then for _, it in ipairs(m.items) do it.dead = true end; return end
+    local newPre = S.encode({ p = np }):sub(1, -2)
+    local oldPre = pre
+    pre = newPre
+    local fresh = m.build(serverNow())
+    if #fresh > #m.items then pre = oldPre; return end     -- never grows: keep the message as queued
+    local keep = {}
+    for i, it in ipairs(m.items) do
+      if i <= #fresh then it.msg = fresh[i]; keep[i] = it else it.dead = true end
+    end
+    m.items = keep
+  end
   local parts = {}
   for i, part in ipairs(m.build(serverNow())) do
     local it = { msg = part, channel = ch, target = target }
-    if i == 1 then it.stamp = m end
+    if i == 1 then it.stamp = m; if refresh then it.prep = prep end end
     m.items[i] = it
     parts[#parts + 1] = it
   end

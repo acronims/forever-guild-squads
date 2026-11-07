@@ -85,18 +85,30 @@ function Q:pump(now)
   end
   if self:blocked() then return 0 end
   local n = 0
-  while self.tokens >= 1 and self.head <= self.tail do
-    local item = self.items[self.head]
-    if self.send and self.send(item) == false then break end
+  local function pop(item)
     self.items[self.head] = nil
     if type(item) == "table" and item.key ~= nil and self.keys[item.key] then
       self.keys[item.key] = self.keys[item.key] - 1
       if self.keys[item.key] <= 0 then self.keys[item.key] = nil end
     end
     self.head = self.head + 1
-    self.tokens = self.tokens - 1
-    self.sent = self.sent + 1
-    n = n + 1
+  end
+  while self.tokens >= 1 and self.head <= self.tail do
+    local item = self.items[self.head]
+    -- v1.2 (AC5): item.prep runs once, right before the item would leave (it may trim its message or mark it dead);
+    -- a dead item is dropped without a token (its onSent still runs: callers clear their bookkeeping there)
+    if type(item) == "table" and item.prep then local f = item.prep; item.prep = nil; pcall(f, item) end
+    if type(item) == "table" and item.dead then
+      pop(item)
+      self.skipped = (self.skipped or 0) + 1
+      if item.onSent then pcall(item.onSent) end
+    else
+      if self.send and self.send(item) == false then break end
+      pop(item)
+      self.tokens = self.tokens - 1
+      self.sent = self.sent + 1
+      n = n + 1
+    end
   end
   if self.head > self.tail then self.items = {}; self.head = 1; self.tail = 0 end
   return n

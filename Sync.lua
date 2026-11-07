@@ -138,14 +138,24 @@ end
 -- a record version already waiting in our send queue is not queued again for the next
 -- hello (otherwise 30 logins would queue 30 copies of the same records: ~470 messages, 8 minutes of backlog per officer)
 local queued = {}             -- id -> version string waiting in the send queue
-local function sendRecords(list, to, urgent)
+-- keep (optional, v1.2 AC5): function(r) -> still needed?, asked again when the message is about to leave the queue
+local function sendRecords(list, to, urgent, keep)
   -- group a few records per message; Comm chunks large payloads
   local batch = {}
   local function flush()
     local ids = {}
     for i, r in ipairs(batch) do ids[i] = { r.id, vkey(r) }; queued[r.id] = vkey(r) end
     local function done() for _, x in ipairs(ids) do if queued[x[1]] == x[2] then queued[x[1]] = nil end end end
-    if Comm.Send("D", { r = batch }, to and "WHISPER" or nil, to, done, urgent) == false then done() end
+    local payload = { r = batch }
+    local refresh = keep and function()
+      local still = {}
+      for _, r in ipairs(payload.r) do if keep(r) then still[#still + 1] = r end end
+      if #still == #payload.r then return payload end
+      Sync.stats.lateDrop = (Sync.stats.lateDrop or 0) + #payload.r - #still
+      if #still == 0 then return nil end
+      return { r = still }
+    end or nil
+    if Comm.Send("D", payload, to and "WHISPER" or nil, to, done, urgent, refresh) == false then done() end
     batch = {}
   end
   for _, b in ipairs(Sync.PackRecords(list)) do batch = b; flush() end
@@ -505,8 +515,19 @@ local function onHello(payload, sender)
         if r.a == onlyMe or M.isP2P(r) then pub[#pub + 1] = r else priv[#priv + 1] = r end
       end
     end
-    sendRecords(pub, nil, urgent)
-    if priv and #priv > 0 then sendRecords(priv, from, urgent) end
+    -- AC5 arreglo 3: the reply may wait ~150 s in the queue; when it leaves, the records served meanwhile (same
+    -- rule as suppressed() at reply time, from the hello on) go out of it
+    local proto = X and X.protoOf(payload) or 0
+    local p2pReq = proto >= 1
+    local p2p = p2pReq and not p2pOff
+    local auth = p2p and proto >= 2
+    local me = ns.me and ns.me() or nil
+    local function keep(r)
+      local otherPres = r.k == "presence" and r.a ~= me
+      return not suppressed(r, startedAt, otherPres and p2pReq or p2p, auth)
+    end
+    sendRecords(pub, nil, urgent, keep)
+    if priv and #priv > 0 then sendRecords(priv, from, urgent, keep) end
     if p2pOff then return end
     -- unverified versions only go to the requester (a 1.0 client would trust them from an officer)
     local fw = Sync.ForwardsFor(payload)
