@@ -35,7 +35,12 @@ Sync.FINE_NB = 64
 Sync.FINE_KINDS = { profile = true, squad = true }
 local MAX_PENDING = 5000      -- records waiting for the guild roster (own disk + early network)
 local MAX_ROUNDS = 6          -- extra hellos while a fresh client keeps learning
-local MAX_PEND_ROUNDS = 12    -- v1.2 (AC3): extra hellos, every 30 s, while copies wait for quorum (6 min at most)
+-- v1.2 AC3 arreglo 1: only a client catching up (its first hello round taught >= CATCHUP_MIN records, e.g. a
+-- newcomer) asks every 30 s while it learns anything or holds pending copies, up to MAX_CATCHUP_ROUNDS (10 min);
+-- the members keep the 1.1 rounds (their pending rounds were 1960 parts of hellos in AC5)
+Sync.CATCHUP_MIN = 50
+local MAX_CATCHUP_ROUNDS = 20
+local catchup = false
 local MAX_FORWARD = 20        -- unverified versions (u = 1) whispered per hello reply
 local pending = {}            -- { rec, sender } waiting for the guild roster
 local seenAfter = {}          -- id -> version string seen on the wire (reply suppression)
@@ -284,12 +289,17 @@ function Sync.Hello(again)
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
   if ns.After then
-    -- v1.2 (AC3): while copies wait for quorum, a flat +30 s and no need to have learned anything new: the
-    -- second copies only come as answers to the pending hashes (ph) of the next hello
-    local pend = X and X.hasPend and X.hasPend(ns.state)
-    ns.After(pend and 30 or (30 + 15 * round), function()
-      local more = (learned >= 10 and round < MAX_ROUNDS)
-        or (X and X.hasPend and X.hasPend(ns.state) and round < MAX_PEND_ROUNDS)
+    -- v1.2 (AC3): while catching up, a flat +30 s and no need to have learned anything new: the second copies
+    -- only come as answers to the pending hashes (ph) of the next hello
+    if round == 0 then catchup = false end
+    ns.After(catchup and 30 or (30 + 15 * round), function()
+      if round == 0 and learned >= Sync.CATCHUP_MIN then catchup = true end
+      local more
+      if catchup then
+        more = round < MAX_CATCHUP_ROUNDS and (learned > 0 or (X and X.hasPend and X.hasPend(ns.state)) and true or false)
+      else
+        more = learned >= 10 and round < MAX_ROUNDS
+      end
       Sync.NoteRound(learned, now(), more)
       if more then
         round = round + 1; Sync.Hello(true)

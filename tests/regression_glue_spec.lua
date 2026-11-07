@@ -253,12 +253,53 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello rounds go on while replies brin
     -- intento 2 (S8g de cba3cc7: stalls between hellos at +210 and +300 s): while copies are still pending, the
     -- next round comes at a flat +30 s and goes on even if the last reply taught nothing new
     runTimers(c, 62)   -- runTimers does not advance the clock: 62 s after the first hello = 31 s after the second
-    eq(hellos, 3, "a third hello at +30 s while copies are still pending, even with no new records")
+    -- AC3 arreglo 1: only a client catching up (its first round taught >= Sync.CATCHUP_MIN) keeps the flat rounds
+    eq(hellos, 2, "a member whose first round taught < CATCHUP_MIN does not keep asking for its pending copies (AC5)")
   end)
   Comm.Send = origSend
   for _, n in ipairs(extra) do cache[n] = nil; ns.state.profiles[n] = nil end
   if ns.state.p2p and ns.state.p2p.pend then
     for k in pairs(ns.state.p2p.pend) do if k:find("Pr%d%d%-Realm") then ns.state.p2p.pend[k] = nil end end
+  end
+  if not okAll then error(err, 0) end
+end }
+
+-- v1.2 AC3 arreglo 1 (S8 de PROTO 2: the newcomer stops at 358/600 once the pending rounds run out; the members'
+-- pending rounds cost AC5 1960 parts of hellos): a client catching up (first round taught >= CATCHUP_MIN) asks
+-- every 30 s while it learns anything or holds pending copies, up to MAX_CATCHUP_ROUNDS; nobody else does
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a client catching up keeps flat hello rounds while it learns or holds pending copies", function(c)
+  local ns = c.ns
+  local S, Comm = ns.Sync, ns.Comm
+  local cache = ns.rosterList()
+  local extra = {}
+  for i = 1, 80 do local n = ("Pc%02d-Realm"):format(i); cache[n] = { rank = 5, online = true, level = 20 }; extra[#extra + 1] = n end
+  local origSend = Comm.Send
+  local hellos = 0
+  Comm.Send = function(tag, ...) if tag == "H" then hellos = hellos + 1 end end
+  local okAll, err = pcall(function()
+    ok(type(S.CATCHUP_MIN) == "number" and S.CATCHUP_MIN <= 70, "Sync.CATCHUP_MIN exists")
+    S.Hello()
+    local recs = {}
+    for i = 1, 70 do
+      local a = extra[i + 1]
+      recs[#recs + 1] = { k = "profile", id = a, a = a, ts = GetServerTime() - 1000 + i, sq = 1, d = { note = "c" .. i } }
+    end
+    for j = 0, 3 do   -- a D message carries at most 20 records
+      local part = {}
+      for i = j * 20 + 1, math.min(#recs, j * 20 + 20) do part[#part + 1] = recs[i] end
+      S.OnMessage("D", { r = part }, "Pc01-Realm")
+    end
+    runTimers(c, 31)
+    eq(hellos, 2, "second hello")
+    runTimers(c, 62)
+    eq(hellos, 3, "catching up: a third hello at +30 s with copies pending and nothing new")
+    runTimers(c, 93)
+    ok(hellos >= 4, "and it goes on (flat rounds)")
+  end)
+  Comm.Send = origSend
+  for _, n in ipairs(extra) do cache[n] = nil; ns.state.profiles[n] = nil end
+  if ns.state.p2p and ns.state.p2p.pend then
+    for k in pairs(ns.state.p2p.pend) do if k:find("Pc%d%d%-Realm") then ns.state.p2p.pend[k] = nil end end
   end
   if not okAll then error(err, 0) end
 end }
