@@ -86,6 +86,8 @@ local function pendCount(st)
   return n
 end
 
+function X.hasPend(state) return next(X.st(state).pend) ~= nil end
+
 function X.blocked(state, name, now)
   local st = state.p2p
   local e = st and st.rep and st.rep[name]

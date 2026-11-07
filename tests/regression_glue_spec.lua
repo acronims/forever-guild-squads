@@ -197,6 +197,10 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello rounds go on while replies brin
     ok(ns.state.p2p and ns.state.p2p.pend and ns.state.p2p.pend["profile:" .. extra[2]], "it is held pending")
     runTimers(c, 31)
     eq(hellos, 2, "a second hello after replies that only brought pending copies")
+    -- intento 2 (S8g de cba3cc7: stalls between hellos at +210 and +300 s): while copies are still pending, the
+    -- next round comes at a flat +30 s and goes on even if the last reply taught nothing new
+    runTimers(c, 62)   -- runTimers does not advance the clock: 62 s after the first hello = 31 s after the second
+    eq(hellos, 3, "a third hello at +30 s while copies are still pending, even with no new records")
   end)
   Comm.Send = origSend
   for _, n in ipairs(extra) do cache[n] = nil; ns.state.profiles[n] = nil end
