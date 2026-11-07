@@ -137,9 +137,16 @@ function X.offer(state, rec, ctx, settings, u)
     if ctx.me and rec.a == ctx.me then return false, "mine" end      -- my signature, not my content
     return false, "conflict"
   end
+  if ctx.me and rec.a == ctx.me and type(ctx.ledger) == "table" and X.ledgerSays(ctx.ledger, rec, vk) == false then
+    return false, "mine"
+  end
   if stored and not M.newer(rec, stored) then return false, "stale" end
   -- my own record in a version I never wrote (I hold an older one): refuse it and repudiate it
   if ctx.me and rec.a == ctx.me and stored then return false, "mine" end
+  -- my name, a version newer than my ledger start and not in it: I never wrote it (whatever its ts)
+  if ctx.me and rec.a == ctx.me and type(ctx.ledger) == "table" and X.ledgerSays(ctx.ledger, rec, vk) == false then
+    return false, "mine"
+  end
   if not u and X.captainNode(state, rec, sender) then return commit(state, rec, ctx, vk, kid, { sender }) end
   local byId = st.pend[kid]
   if not byId then byId = {}; st.pend[kid] = byId end
@@ -176,10 +183,46 @@ function X.before(state, rec, ctx)
   st.via[kid] = nil                                       -- the author speaks for this record from now on
   if cur and X.vkey(cur) ~= X.vkey(rec) then
     st.contra[via.v] = { by = via.by, t = ctx.now or rec.ts }
+    -- the contradicted version goes back to the author (Sync whispers it, u = 1): its client repudiates it
+    X.outbox = X.outbox or {}
+    X.outbox[#X.outbox + 1] = cur
     t[rec.id] = nil
-    return true, nil, function() t[rec.id] = cur; st.via[kid] = via; st.contra[via.v] = nil end
+    return true, nil, function() t[rec.id] = cur; st.via[kid] = via; st.contra[via.v] = nil; X.outbox[#X.outbox] = nil end
   end
   return true
+end
+
+-- the ledger of the versions I signed (per guild, SavedVariables): { since = ts, v = { [vkey] = ts } }.
+-- -> true (mine), false (newer than the ledger start and not in it: I never wrote it), nil (cannot tell)
+X.LEDGER_MAX = 3000
+function X.ledgerSays(ledger, rec, vk)
+  if type(ledger.v) ~= "table" or type(ledger.since) ~= "number" then return nil end
+  if ledger.v[vk or X.vkey(rec)] then return true end
+  if rec.ts >= ledger.since then return false end
+  return nil
+end
+function X.ledgerNote(ledger, rec, now)
+  ledger.since = tonumber(ledger.since) or now or rec.ts
+  ledger.v = type(ledger.v) == "table" and ledger.v or {}
+  ledger.v[X.vkey(rec)] = rec.ts
+  ledger.n = (tonumber(ledger.n) or 0) + 1
+  if ledger.n > X.LEDGER_MAX * 1.2 then
+    local list = {}
+    for k, t in pairs(ledger.v) do list[#list + 1] = { k, t } end
+    table.sort(list, function(a, b) return a[2] > b[2] end)
+    local keep = {}
+    for i = 1, math.min(#list, X.LEDGER_MAX) do keep[list[i][1]] = list[i][2] end
+    -- the forgotten ones are older than the new start: "cannot tell" again, never "not mine"
+    if list[X.LEDGER_MAX + 1] then ledger.since = list[X.LEDGER_MAX][2] end
+    ledger.v, ledger.n = keep, math.min(#list, X.LEDGER_MAX)
+  end
+end
+
+-- contradicted versions waiting to be shown to their author (transient, not saved)
+function X.popContra()
+  local out = X.outbox or {}
+  X.outbox = {}
+  return out
 end
 
 -- after a successful apply that was not a relay commit: pending versions not newer are obsolete

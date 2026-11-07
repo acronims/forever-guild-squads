@@ -44,7 +44,8 @@ local function serverNow()
 end
 
 local function ctxFor(sender)
-  return { roster = ns.roster, sender = sender, me = ns.me and ns.me() or nil, now = serverNow() }
+  return { roster = ns.roster, sender = sender, me = ns.me and ns.me() or nil, now = serverNow(),
+           ledger = ns.gdb and ns.gdb.mine or nil }
 end
 
 local function applyRaw(rec, ctx)
@@ -80,6 +81,13 @@ function Sync.Apply(rec, sender)
     local now = serverNow()
     local wait = now and type(rec.ts) == "number" and rec.ts - now - M.MAX_FUTURE + 2
     if wait and wait > 0 and wait <= 1800 and ns.After then ns.After(wait, function() Sync.Apply(rec, sender) end) end
+  end
+  -- the author contradicted a version we had by relay: whisper that version to the author (u = 1) so its client
+  -- can repudiate it everywhere
+  if ok and sender and X and X.outbox and #X.outbox > 0 then
+    for _, r in ipairs(X.popContra()) do
+      Comm.Send("D", { r = { { k = r.k, id = r.id, a = r.a, ts = r.ts, sq = r.sq, d = r.d, u = 1 } } }, "WHISPER", sender)
+    end
   end
   afterApply(rec, ok)
   return ok, why

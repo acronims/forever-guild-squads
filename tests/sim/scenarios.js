@@ -86,7 +86,7 @@ function S2(seed) {
 }
 
 // S3: a new client logs in with 200 records in the guild. (a) an officer online -> converges in <= N rounds.
-// (b) no GM / officer online -> it only gets what the connected authors own (documented behaviour).
+// (b) no GM / officer online -> v1.1: it gets every profile by P2P quorum (1.0: only what the connected authors own).
 function S3(seed) {
   const { check, checks, pass } = checker();
   const metrics = {};
@@ -120,7 +120,10 @@ function S3(seed) {
     sim.run(600);
     const got = nc.val('(function() local t = {} for id in pairs(NS.state.profiles) do t[#t+1] = id end table.sort(t) return table.concat(t, ",") end)()')[0];
     const want = ['Mb1', 'Mb150', 'Mb2', 'Mb3'].map((n) => full(sim, n)).sort().join(',');
-    check('without officers the newcomer gets only the connected authors\' records (+ its own)', got === want, got.slice(0, 120));
+    // v1.1: the 3 connected members hold the same 200 profiles; their replies give 2 distinct relayers per version
+    // (quorum) -> the newcomer converges on all of them without an officer (it used to get only the 3 authors' own)
+    const all = names.slice().sort().join(',');
+    check('without officers the newcomer gets every profile (P2P quorum of 2 relayers)', got === all, got.split(',').length + ' profiles');
     metrics.noOfficerProfiles = got.split(',').length;
     errorsCheck(sim, check);
   }
@@ -483,4 +486,196 @@ function S10(seed) {
   return { pass: pass(), checks, metrics: { catalogConvergeSeconds: tAll, bulkParts: bulk[3], coreConvergeSeconds: tCore, oldBad: bad, ref091: V091, ...sim.stats } };
 }
 
-module.exports = { S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10 };
+// ---- v1.1: P2P sync (docs/SPEC-v1.1-sync-p2p.md) ------------------------------------------------------------
+// what client `c` holds of the authorial records written by `authors` (profile note "soy <name>" + presence):
+// "v" = verified (stored), "u" = unverified (pending), "-" = missing. Returns one char per author and kind.
+function holdings(sim, c, authors) {
+  const list = authors.map((n) => `{ ${luaStr(full(sim, n))}, ${luaStr('soy ' + n)} }`).join(',');
+  return c.val(`(function() local X, out = NS.P2P, {}
+    for _, e in ipairs({ ${list} }) do
+      local p = NS.state.profiles[e[1]]
+      local u = X and X.unverified(NS.state, "profile", e[1])
+      out[#out + 1] = (p and p.d.note == e[2]) and "v" or ((u and u.r.d.note == e[2]) and "u" or "-")
+      local q = NS.state.presence and NS.state.presence[e[1]]
+      local uq = X and X.unverified(NS.state, "presence", e[1])
+      out[#out + 1] = q and "v" or (uq and "u" or "-")
+    end
+    return table.concat(out) end)()`)[0];
+}
+
+// S11 (AC1): no GM / officer with the addon. 5 clients log in staggered, never more than 2 online at once
+// (forward chain, backward chain, forward chain: <= 3 sessions per client, each one overlapping the next for 25 min).
+// Every authorial record (profiles + presence) of every author reaches every client.
+function S11(seed) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 1, 5);                         // Gm and Of1 exist in the roster but never run the addon
+  const names = ['Mb1', 'Mb2', 'Mb3', 'Mb4', 'Mb5'];
+  const cs = names.map((n) => sim.client(n));
+  const sessions = {}; let maxOnline = 0;
+  const OVER = 25 * 60;
+  const on = (c) => {
+    if (c.online) return;
+    c.login(); sessions[c.name] = (sessions[c.name] || 0) + 1;
+    maxOnline = Math.max(maxOnline, sim.online().length);
+    sim.run(20);
+    c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`);
+  };
+  const chain = (order) => {
+    on(cs[order[0]]);
+    for (let i = 1; i < order.length; i++) { on(cs[order[i]]); sim.run(OVER); cs[order[i - 1]].logout(); }
+  };
+  chain([0, 1, 2, 3, 4]);
+  chain([4, 3, 2, 1, 0]);
+  const after2 = {};
+  cs[0].logout();
+  for (const c of cs) { c.login(); after2[c.name] = holdings(sim, c, names); c.logout(); }
+  chain([0, 1, 2, 3, 4]);
+  cs[4].logout();
+  const after3 = {};
+  for (const c of cs) { c.login(); after3[c.name] = holdings(sim, c, names); c.logout(); }
+  const cells = Object.values(after3).join('');
+  const arrived = cells.split('').filter((x) => x !== '-').length, total = cells.length;
+  const verified = cells.split('').filter((x) => x === 'v').length;
+  check('never more than 2 clients online at once', maxOnline <= 2, maxOnline);
+  check('<= 3 sessions per client', Object.values(sessions).every((n) => n <= 3), JSON.stringify(sessions));
+  check('100 % of the authorial records reached every client (verified or unverified) after 3 passes', arrived === total, `${arrived}/${total} ${JSON.stringify(after3)}`);
+  check('no GM / officer ever online', !sim.clients.Gm && !sim.clients.Of1, '');
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { arrived, total, verified, after2, after3, sessions, t: Math.round(sim.t), ...sim.stats } };
+}
+
+// S12 (AC2 + AC4): a forged profile of an offline author. One malicious relayer -> unverified on every client and never
+// verified; a second colluder -> verified by quorum. The author logs in: its version wins, its client repudiates the
+// fake, the fake disappears from every client and both relayers are listed in /gsq diag.
+function S12(seed) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 1, 6);
+  const [au, y, z, c1, c2] = ['Mb1', 'Mb2', 'Mb3', 'Mb4', 'Mb5'].map((n) => sim.client(n));
+  const honest = [c1, c2];
+  for (const c of [au, c1, c2]) { c.login(); sim.run(5); }
+  au.run('return A.SaveProfile({ note = "real" })');
+  sim.run(60);
+  au.logout();
+  for (const c of [y, z]) { c.login(); sim.run(5); }
+  sim.run(30);
+  const AU = full(sim, 'Mb1');
+  const FTS = sim.epoch + Math.round(sim.t) + 250;   // the same forged version from both colluders
+  const forge = `NS.Comm.Send("D", { r = { { k = "profile", id = ${luaStr(AU)}, a = ${luaStr(AU)}, ts = ${FTS}, sq = 777, d = { note = "falso", level = 60 } } } })`;
+  y.run(forge); sim.run(1); y.run(forge);
+  sim.run(120);
+  const view = (c) => c.val(`(function() local p = NS.state.profiles[${luaStr(AU)}]; local u = NS.P2P.unverified(NS.state, "profile", ${luaStr(AU)})
+    return (p and p.d.note or "nil") .. "/" .. (u and u.r.d.note or "nil") end)()`)[0];
+  const v1 = honest.map(view);
+  check('one malicious relayer: the fake is unverified on every honest client, the real one stays', v1.every((x) => x === 'real/falso'), v1.join(','));
+  sim.run(1200);     // hellos and anti-entropy: nobody turns it into verified
+  const v1b = honest.map(view);
+  check('20 min later, still never verified (single relayer)', v1b.every((x) => x === 'real/falso'), v1b.join(','));
+  z.run(forge);
+  sim.run(60);
+  const v2 = honest.map(view);
+  check('a second colluder: verified by quorum', v2.every((x) => x.startsWith('falso/')), v2.join(','));
+  au.login();
+  sim.run(300);
+  const all = [au, y, z, c1, c2];
+  const v3 = all.map(view);
+  check('the author logs in: the real version on every client, the fake gone (stored and pending)', v3.every((x) => x === 'real/nil'), v3.join(','));
+  const rep = c1.val('NS.DiagGlue.Report()')[0];
+  const line = (rep.match(/p2p pend=[^\n|]*/) || [''])[0];
+  check('/gsq diag lists both relayers with a repudiation', line.includes('Mb2-Realm:1') && line.includes('Mb3-Realm:1'), line);
+  const nRep = all.map((c) => c.val('(function() local n = 0 for _ in pairs(NS.state.repudiates or {}) do n = n + 1 end return n end)()')[0]);
+  check('the repudiate reached every client', nRep.every((n) => Number(n) >= 1), nRep.join(','));
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { diag: line, t: Math.round(sim.t), ...sim.stats } };
+}
+
+// S13 (AC8): channel load. 40 clients (GM, 2 officers, 37 members) with 200 profiles + 20 squads on disk, 15 min
+// of profile edits: messages per minute per client of v1.1 vs the reference build (GSQ_REF, default v1.0.1 = 406029a)
+// with the same seed, the same MAX_REPLY and the same queue. Second run without GM / officers online. During an
+// encounter no client sends anything.
+const REF = process.env.GSQ_REF || '406029a';
+function loadRun(seed, code, minutes, withOfficers) {
+  const sim = new Sim({ seed });
+  makeGuild(sim, 2, 197);
+  const names = sim.roster.filter((r) => /^Mb/.test(r.name)).map((r) => full(sim, r.name));
+  const gen = sim.client('Gm', code ? { code } : {});
+  gen.login(); sim.run(3); gmSettings(gen); sim.run(1);
+  gen.run(`return SIM_genRecords({ ${names.map(luaStr).join(',')} }, 20, ${sim.epoch - 86400 * 5})`);
+  gen.logout();
+  const saved = gen.saved;
+  delete sim.clients.Gm;
+  const online = (withOfficers ? ['Gm', 'Of1', 'Of2'] : []).concat(Array.from({ length: withOfficers ? 37 : 40 }, (_, i) => 'Mb' + (i * 4 + 1)));
+  const cs = online.map((nm) => sim.client(nm, code ? { saved, code } : { saved }));
+  for (const c of cs) { c.login(); sim.run(1 + sim.rand() * 4); }
+  const t0 = sim.t;
+  for (const c of cs) { c.sent = 0; c.sentAt = []; }
+  const end = t0 + minutes * 60;
+  while (sim.t < end) {
+    const c = cs[Math.floor(sim.rand() * cs.length)];
+    c.run(`return A.SaveProfile({ note = "n${Math.floor(sim.rand() * 1000)}" })`);
+    sim.run(5 + sim.rand() * 20);
+  }
+  const dur = (sim.t - t0) / 60;
+  const per = cs.map((c) => c.sent / dur);
+  // encounter: every client locked for 2 min while edits continue -> 0 messages sent
+  for (const c of cs) { c.run('SIM_ENCOUNTER = true'); c.fire('ENCOUNTER_START', 663, 'Lucifron', 9, 40); }
+  const before = cs.map((c) => c.sent);
+  for (let k = 0; k < 8; k++) { cs[k].run(`return A.SaveProfile({ note = "enc${k}" })`); sim.run(15); }
+  const inEnc = cs.reduce((a, c, i) => a + c.sent - before[i], 0);
+  for (const c of cs) { c.run('SIM_ENCOUNTER = false'); c.fire('ENCOUNTER_END', 663, 'Lucifron', 9, 40, 1); }
+  const conv = sim.settle(900, 15);
+  return { mean: per.reduce((a, b) => a + b, 0) / per.length, busiest: Math.max(...per), inEnc, conv, errors: sim.errors(), errText: sim.errorText() };
+}
+function S13(seed, minutes) {
+  const { check, checks, pass } = checker();
+  minutes = minutes || 15;
+  const old = sourcesAt(REF);
+  const metrics = { ref: REF };
+  for (const off of [true, false]) {
+    const tag = off ? 'officers' : 'noOfficers';
+    const a = loadRun(seed, old, minutes, off), b = loadRun(seed, null, minutes, off);
+    metrics[tag] = { refMean: +a.mean.toFixed(3), newMean: +b.mean.toFixed(3), refBusiest: +a.busiest.toFixed(3), newBusiest: +b.busiest.toFixed(3) };
+    check(`${tag}: mean msgs/min per client v1.1 <= 1.3 x ${REF}`, b.mean <= a.mean * 1.3, `${b.mean.toFixed(2)} vs ${a.mean.toFixed(2)}`);
+    check(`${tag}: busiest client v1.1 <= 1.3 x ${REF}`, b.busiest <= a.busiest * 1.3, `${b.busiest.toFixed(2)} vs ${a.busiest.toFixed(2)}`);
+    check(`${tag}: messages sent during the encounter = 0`, b.inEnc === 0, b.inEnc);
+    check(`${tag}: v1.1 converged after the run`, b.conv, '');
+    check(`${tag}: caught Lua errors = 0`, b.errors === 0, b.errors ? b.errText.slice(0, 300) : 0);
+  }
+  return { pass: pass(), checks, metrics };
+}
+
+// S14 (AC7): 2 clients on v1.0.1 (GSQ_REF) among 6 on v1.1, no officers online. The old clients get relays, presence
+// and repudiate records they do not know: no Lua error, and their own records still reach everybody.
+function S14(seed) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 1, 8);
+  const old = sourcesAt(REF);
+  const oldNames = new Set(['Mb2', 'Mb5']);
+  const names = ['Mb1', 'Mb2', 'Mb3', 'Mb4', 'Mb5', 'Mb6', 'Mb7', 'Mb8'];
+  const cs = names.map((n) => sim.client(n, oldNames.has(n) ? { code: old } : {}));
+  for (const c of cs) { c.login(); sim.run(2 + sim.rand() * 3); }
+  sim.run(30);
+  for (const c of cs) { c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`); sim.run(2); }
+  sim.run(120);
+  // a forged record and its repudiation travel the guild too
+  const M1 = full(sim, 'Mb1');
+  cs[2].run(`NS.Comm.Send("D", { r = { { k = "profile", id = ${luaStr(M1)}, a = ${luaStr(M1)}, ts = GetServerTime() + 200, sq = 555, d = { note = "falso" } } } })`);
+  sim.run(60);
+  cs[0].logout(); sim.run(5); cs[0].login();
+  sim.run(600);
+  const olds = cs.filter((c) => oldNames.has(c.name)), news = cs.filter((c) => !oldNames.has(c.name));
+  const bad = olds.map((c) => Number(c.val('NS.Sync.stats.bad')[0]));
+  check('old clients received and dropped the unknown kinds (presence / repudiate)', bad.every((b) => b > 0), bad.join(','));
+  const oldNotes = news.map((c) => olds.map((o) => c.val(`(function() local p = NS.state.profiles[${luaStr(o.full)}]; return p and p.d.note or "nil" end)()`)[0]).join('+'));
+  check('every v1.1 client holds the old clients\' own profiles', oldNotes.every((x) => x === 'soy Mb2+soy Mb5'), oldNotes.join(','));
+  const newOnOld = olds.map((o) => news.map((c) => o.val(`(function() local p = NS.state.profiles[${luaStr(c.full)}]; return p and p.d.note or "nil" end)()`)[0]).filter((x) => x.startsWith('soy ')).length);
+  check('the old clients hold the v1.1 authors\' own profiles (live)', newOnOld.every((n) => n === news.length), newOnOld.join(','));
+  const fake = olds.map((o) => o.val(`(function() local p = NS.state.profiles[${luaStr(M1)}]; return p and p.d.note or "nil" end)()`)[0]);
+  check('the forged relay was refused by the old clients too', fake.every((x) => x === 'soy Mb1'), fake.join(','));
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { oldBad: bad, ref: REF, ...sim.stats } };
+}
+
+module.exports = { S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };

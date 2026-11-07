@@ -257,7 +257,12 @@ local function write(kind, id, data)
   db.seq = (db.seq or 0) + 1
   local rec = { k = kind, id = id, a = ns.me(), ts = serverTime(), sq = db.seq, d = data }
   local ok, why = Sync.Publish(rec)
-  if not ok then ns.ShowError(why) end
+  if not ok then ns.ShowError(why)
+  elseif ns.P2P and ns.gdb then
+    -- v1.1: the ledger of my own versions (a relayed version with my name that is not here gets repudiated)
+    ns.gdb.mine = type(ns.gdb.mine) == "table" and ns.gdb.mine or {}
+    pcall(ns.P2P.ledgerNote, ns.gdb.mine, { k = kind, id = id, a = rec.a, ts = rec.ts, sq = rec.sq, d = M.sanitize(kind, data) or {} }, rec.ts)
+  end
   return ok, why
 end
 
