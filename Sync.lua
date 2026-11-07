@@ -25,7 +25,9 @@ local KINDS = { "settings", "squad", "profile", "reject", "boss", "annul" }
 local CORE_KIND = {}
 for _, k in ipairs(KINDS) do CORE_KIND[k] = true end
 for _, k in ipairs(M.EXT_ORDER or {}) do KINDS[#KINDS + 1] = k end
-local MAX_REPLY = 60          -- records per hello reply
+local MAX_REPLY = 60          -- records per hello reply (1.0 / 1.1 requesters)
+Sync.MAX_SAMPLE = 30          -- v1.2: records per reply to a 1.2 requester (random sample of 2 of 8 cubes)
+Sync.CUBES, Sync.CUBES_PICK = 8, 2
 local MAX_PENDING = 5000      -- records waiting for the guild roster (own disk + early network)
 local MAX_ROUNDS = 6          -- extra hellos while a fresh client keeps learning
 local MAX_FORWARD = 20        -- unverified versions (u = 1) whispered per hello reply
@@ -34,7 +36,7 @@ local seenAfter = {}          -- id -> version string seen on the wire (reply su
 local corrections = {}        -- id -> true when a correction is already scheduled
 local cursor = {}             -- requester -> last reply key sent (pagination)
 local heard = {}              -- sender -> GetTime() of the last addon message (addon detection)
-Sync.stats = { bad = 0, relayRefused = 0, future = 0, errors = 0, quarantined = 0, pending = 0, mine = 0 }
+Sync.stats = { hellos = 0, replied = 0, bad = 0, relayRefused = 0, future = 0, errors = 0, quarantined = 0, pending = 0, mine = 0 }
 
 local function vkey(r) return tostring(r.ts) .. "." .. tostring(r.sq) .. "." .. tostring(r.a) end
 local function serverNow()
@@ -189,6 +191,7 @@ function Sync.Hello(again)
   -- v1.1: we take authorial relays from anyone; bucket hashes of the versions we hold unverified
   if X then
     msg.p2 = X.PROTO
+    msg.nonce = math.random(1, 2147483646)          -- v1.2: the cubes the repliers pick from (Sync.CubeOf)
     local ph
     for _, k in ipairs(KINDS) do
       if M.P2P_KINDS[k] or M.P2P_AUTH then           -- v1.2: authority kinds wait as pending too
@@ -218,6 +221,21 @@ local function suppressed(r, startedAt, p2p, auth)
   local n = 0
   for _, t in pairs(seen.by or {}) do if t >= startedAt then n = n + 1 end end
   return n >= X.quorumFor(r)
+end
+
+-- v1.2: the cube (0..CUBES-1) of a record for a hello nonce; every replier picks CUBES_PICK cubes at random, so
+-- each record goes out from ~2 distinct nodes and two nodes rarely send the same thing
+function Sync.CubeOf(id, nonce)
+  local h = ns.Serialize.hash(tostring(id) .. "/" .. tostring(nonce))
+  return (tonumber(h:sub(1, 8), 16) + tonumber(h:sub(9, 16), 16)) % Sync.CUBES
+end
+local function pickCubes()
+  local c, n = {}, 0
+  while n < Sync.CUBES_PICK do
+    local x = math.random(0, Sync.CUBES - 1)
+    if not c[x] then c[x] = true; n = n + 1 end
+  end
+  return c
 end
 
 -- records that differ from the requester, starting after the last one we sent it (cursor), at most MAX_REPLY.
@@ -264,6 +282,18 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
     all = kept
   end
   if #all == 0 then return {} end
+  -- v1.2 requester (nonce): a random sample of 2 of 8 cubes, at most MAX_SAMPLE records, no cursor
+  local nonce = proto >= 2 and tonumber(payload.nonce) or nil
+  if nonce then
+    local cubes, inCubes = pickCubes(), {}
+    for _, e in ipairs(all) do if cubes[Sync.CubeOf(e.r.id, nonce)] then inCubes[#inCubes + 1] = e.r end end
+    for i = 1, math.min(Sync.MAX_SAMPLE, #inCubes) do
+      local j = math.random(i, #inCubes)
+      inCubes[i], inCubes[j] = inCubes[j], inCubes[i]
+    end
+    for i = #inCubes, Sync.MAX_SAMPLE + 1, -1 do inCubes[i] = nil end
+    return inCubes
+  end
   local last = cursor[sender]
   local start = 1
   if last then
@@ -317,7 +347,11 @@ local function onHello(payload, sender)
   local online = ns.onlineCount and ns.onlineCount() or 1
   local p = math.min(1, 8 / math.max(1, online))
   local officer = isOfficerMe()
-  if not officer and math.random() > p then return end
+  Sync.stats.hellos = Sync.stats.hellos + 1
+  -- v1.2 (D2): officers keep answering every 1.0 / 1.1 requester; a 1.2 requester gets them as one more node
+  local always = officer and not (X and X.protoOf(payload) >= 2)
+  if not always and math.random() > p then return end
+  Sync.stats.replied = Sync.stats.replied + 1
   local startedAt = GetTime and GetTime() or 0
   local onlyMe = (not officer) and ns.me and ns.me() or nil
   -- v1.1: while a GM/officer with the addon is online, their trusted relays already serve the requester: a member

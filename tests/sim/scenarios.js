@@ -841,9 +841,22 @@ function S8g(seed, minutes) {
   const tc = sim.t;
   const conv = sim.settle(900, 15);
   const tConv = Math.round(sim.t - tc);
+  // v1.2 hello counters (nil on 1.0.1 / 1.1 builds): hellos heard and answered by each officer / the GM
+  const hs = cs.slice(0, 3).map((c) => c.val('Sync.stats.hellos or -1, Sync.stats.replied or -1').map(Number));
+  const ofShare = Math.max(...hs.map(([h, r]) => (h > 0 ? r / h : 1)));
+  const share = top[0][1] / Math.max(1, total);
   check('caught Lua errors = 0', sim.errors() === 0, sim.errors() ? sim.errorText().slice(0, 300) : 0);
   check('model converged', conv, tConv + ' s');
-  return { pass: pass(), checks, metrics: { clients: cs.length, seconds: Math.round(dur), records: n, partsTotal: total,
+  if (process.env.GSQ_S8G_AC !== '0') {   // GSQ_S8G_AC=0: reference runs (AC0) only measure
+    check('AC2 no client sends > 15 % of the parts', share <= 0.15, top[0].join(':') + ' = ' + (100 * share).toFixed(1) + ' %');
+    check('AC2 an officer answers <= 30 % of the hellos', ofShare <= 0.30, JSON.stringify(hs));
+    check('AC3 newcomer 95 % in <= 180 s', t95 !== null && t95 <= 180, t95 + ' s');
+    check('AC3 newcomer 100 % in <= 600 s', t100 !== null && t100 <= 600, t100 + ' s');
+    check('AC5 parts total <= 1.1 + 20 % (6914)', total <= 6914, total);
+    check('AC5 max queue <= 500', maxQ <= 500, maxQ);
+    check('AC5 never throttled', thr === 0, thr);
+  }
+  return { pass: pass(), checks, metrics: { clients: cs.length, officerHellos: hs, seconds: Math.round(dur), records: n, partsTotal: total,
     partsTopClient: top.slice(0, 5).map((e) => e.join(':')).join(','), topShare: +(top[0][1] / Math.max(1, total)).toFixed(3),
     maxQueue: maxQ, throttled: thr, meanAll: +(total / cs.length / dur).toFixed(3), newcomerTarget: target,
     newcomerT95: t95, newcomerT100: t100, convergeAfterNewcomer: tConv, ...sim.stats } };

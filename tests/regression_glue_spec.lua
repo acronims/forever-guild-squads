@@ -97,6 +97,42 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "hello-reply pagination reaches every witnes
   eq(n, 100, "distinct witness records sent in 5 replies (300 slots)")
 end }
 
+-- v1.2 AC2/AC5: a 1.2 requester (p2 = 2, nonce) gets a random sample of 2 of 8 cubes, at most MAX_SAMPLE records
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello reply to a 1.2 requester = 2 of 8 cubes by nonce, <= MAX_SAMPLE", function(c)
+  local ns = c.ns
+  local S, M = ns.Sync, ns.Model
+  local h = {}
+  for _, k in ipairs({ "settings", "squad", "profile", "reject", "boss", "annul" }) do h[k] = M.bucketHashes(ns.state, k) end
+  for _, k in ipairs(M.EXT_ORDER) do h[k] = M.bucketHashes(ns.state, k) end
+  local added = {}
+  for i = 1, 200 do
+    local id = ("Pc%03d-Realm"):format(i)
+    ns.state.profiles[id] = { k = "profile", id = id, a = id, ts = 1795000000, sq = 1, d = { role = "DAMAGER" } }
+    added[#added + 1] = id
+  end
+  h.profile = {}
+  local nonce = 123457
+  local okAll, err = pcall(function()
+    local seen, union = {}, 0
+    for _ = 1, 100 do
+      local out = S.ReplyFor({ h = h, p2 = 2, nonce = nonce }, "Zed-Realm", nil, nil)
+      ok(#out <= S.MAX_SAMPLE, #out .. " records in a 1.2 reply")
+      local cubes, nc = {}, 0
+      for _, r in ipairs(out) do
+        local cb = S.CubeOf(r.id, nonce)
+        if not cubes[cb] then cubes[cb] = true; nc = nc + 1 end
+        if r.k == "profile" and r.id:find("^Pc") and not seen[r.id] then seen[r.id] = true; union = union + 1 end
+      end
+      ok(nc <= S.CUBES_PICK, nc .. " cubes in one reply")
+    end
+    eq(union, 200, "100 sampled replies cover every record")
+    local old = S.ReplyFor({ h = h, p2 = 1, nonce = nonce }, "Old-Realm", nil, nil)
+    eq(#old, 60, "a 1.1 requester still gets MAX_REPLY = 60, paginated")
+  end)
+  for _, id in ipairs(added) do ns.state.profiles[id] = nil end
+  if not okAll then error(err, 0) end
+end }
+
 -- leaving the guild and joining another in-session switches the per-guild data partition
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "leaving the guild and joining another in-session switches the per-guild data", function(c)
   local ns = c.ns
