@@ -172,7 +172,11 @@ function Sync.Hello(again)
   learned = 0
   syncUntil = (GetTime and GetTime() or 0) + 120
   local h = {}
-  for _, k in ipairs(KINDS) do h[k] = M.bucketHashes(ns.state, k) end
+  for _, k in ipairs(KINDS) do
+    h[k] = M.bucketHashes(ns.state, k)
+    -- v1.1 kinds: an empty table when we hold none (same meaning as 16 "0" buckets, fewer bytes; 1.0 peers ignore them)
+    if (k == "presence" or k == "repudiate") and not next(M.kindTable(ns.state, k)) then h[k] = {} end
+  end
   local msg = { h = h }
   -- per-author MetricEvent counts, so authors can re-send their own events to whoever lacks them
   if ns.ProgressGlue and ns.ProgressGlue.Enabled() then
@@ -216,9 +220,9 @@ end
 
 -- records that differ from the requester, starting after the last one we sent it (cursor), at most MAX_REPLY.
 -- a non-officer replies with its own records, plus (v1.1, to a 1.1 requester) the authorial records of others.
-function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor)
+function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff)
   local all = {}
-  local p2p = X and payload.p2 == X.PROTO
+  local p2p = X and payload.p2 == X.PROTO and not p2pOff
   for ki, k in ipairs(KINDS) do
     local list = (CORE_KIND[k] or payload.h[k] ~= nil) and M.diffRecords(ns.state, k, payload.h[k]) or {}
     for _, r in ipairs(list) do
@@ -286,10 +290,14 @@ local function onHello(payload, sender)
   if not officer and math.random() > p then return end
   local startedAt = GetTime and GetTime() or 0
   local onlyMe = (not officer) and ns.me and ns.me() or nil
+  -- v1.1: while a GM/officer with the addon is online, their trusted relays already serve the requester: a member
+  -- answers like 1.0 (own records only, no unverified forwards). P2P relaying is for the hours without them.
+  local p2pOff = (not officer) and Sync.TrustedOnline()
   ns.After(2 + math.random() * 6, function()
-    local out = Sync.ReplyFor(payload, from, startedAt, onlyMe)
+    local out = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff)
     if ns.debug then ns.debug(("hello from %s: replying %d records"):format(tostring(sender), #out)) end
     sendRecords(out)
+    if p2pOff then return end
     -- unverified versions only go to the requester (a 1.0 client would trust them from an officer)
     local fw = Sync.ForwardsFor(payload)
     for i = 1, #fw, Sync.BATCH do
@@ -322,7 +330,8 @@ local function onRecords(payload, sender)
         else seen.by[from] = t end
       end
       local ok, why = Sync.Apply(rec, from)
-      if ok then learned = learned + 1; syncUntil = math.max(syncUntil, t + 60) end
+      -- presences do not keep the hello rounds going (one per member, low value; the next hello brings them)
+      if ok and rec.k ~= "presence" then learned = learned + 1; syncUntil = math.max(syncUntil, t + 60) end
       if ns.debug then ns.debug(("rec %s/%s from %s: %s"):format(tostring(rec.k), rec.id, tostring(sender), ok and "applied" or tostring(why))) end
       if why == "stale" and not corrections[rec.id] then
         -- the sender has an older copy; re-broadcast ours unless someone else does it first
@@ -359,6 +368,21 @@ function Sync.OnMessage(tag, payload, sender, _, sentAt)
     Sync.stats.errors = Sync.stats.errors + 1
     if ns.debug then ns.debug("sync error: " .. tostring(err)) end
   end
+end
+
+-- a GM/officer (by the roster) online that sent us an addon message in the last 15 min
+Sync.TRUSTED_FRESH = 900
+function Sync.TrustedOnline()
+  local P = ns.Permissions
+  if not (P and ns.roster) then return false end
+  local now, settings = GetTime and GetTime() or 0, M.settingsOf(ns.state)
+  for name, t in pairs(heard) do
+    if now - t <= Sync.TRUSTED_FRESH and name ~= (ns.me and ns.me()) then
+      local r = ns.roster(name)
+      if r and r.online and P.isOfficer(ns.roster, name, settings) then return true end
+    end
+  end
+  return false
 end
 
 function Sync.PendingCount() return #pending end
