@@ -221,27 +221,44 @@ end
 
 -- records that differ from the requester, starting after the last one we sent it (cursor), at most MAX_REPLY.
 -- a non-officer replies with its own records, plus (v1.1, to a 1.1 requester) the authorial records of others.
-function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff)
+-- presences of others (v1.1, BRO 7-nov): an officer never relays them (S8: officers relaying them on every hello
+-- filled their queues past 500); a member relays them to a 1.1 requester even while an officer is online
+-- (p2pOff), at most MAX_PRESENCE_REPLY per reply, picked at random among the candidates.
+function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
   local all = {}
-  local p2p = X and payload.p2 == X.PROTO and not p2pOff
+  local p2pReq = X and payload.p2 == X.PROTO or false
+  local p2p = p2pReq and not p2pOff
   local me = ns.me and ns.me() or nil
-  local nPres = 0
+  local pres = {}               -- indexes in all of others' presences (candidates)
   for ki, k in ipairs(KINDS) do
     local list = (CORE_KIND[k] or payload.h[k] ~= nil) and M.diffRecords(ns.state, k, payload.h[k]) or {}
     for _, r in ipairs(list) do
-      if onlyAuthor and r.a ~= onlyAuthor and not (p2p and M.isP2P(r)) then
+      local otherPres = r.k == "presence" and r.a ~= me
+      if otherPres and officer then
+        -- skip: officers never relay others' presences
+      elseif otherPres and onlyAuthor and r.a ~= onlyAuthor and not p2pReq then
+        -- skip: a 1.0 requester only takes a member's own records
+      elseif not otherPres and onlyAuthor and r.a ~= onlyAuthor and not (p2p and M.isP2P(r)) then
         -- skip: not ours to relay
       elseif queued[r.id] == vkey(r) then
         -- this version is already waiting in our send queue
-      elseif r.k == "presence" and r.a ~= me and nPres >= Sync.MAX_PRESENCE_REPLY then
-        -- v1.1: at most MAX_PRESENCE_REPLY others' presences per hello reply, for everyone (S8: relaying them all
-        -- filled the officers' queues past 500). a321d40 skipped them entirely whenever onlyAuthor was nil, so nobody
-        -- relayed presences and S2 stopped converging; the cap keeps both. Pagination (cursor) brings the rest.
-      elseif not suppressed(r, startedAt, p2p) then
-        if r.k == "presence" and r.a ~= me then nPres = nPres + 1 end
+      elseif not suppressed(r, startedAt, otherPres and p2pReq or p2p) then
         all[#all + 1] = { key = ("%03d|%s"):format(ki, r.id), r = r }   -- numeric kind order
+        if otherPres then pres[#pres + 1] = #all end
       end
     end
+  end
+  if #pres > Sync.MAX_PRESENCE_REPLY then
+    -- keep MAX_PRESENCE_REPLY of them at random (partial Fisher-Yates), drop the rest; order of all is kept
+    for i = 1, Sync.MAX_PRESENCE_REPLY do
+      local j = math.random(i, #pres)
+      pres[i], pres[j] = pres[j], pres[i]
+    end
+    local drop = {}
+    for i = Sync.MAX_PRESENCE_REPLY + 1, #pres do drop[pres[i]] = true end
+    local kept = {}
+    for i, e in ipairs(all) do if not drop[i] then kept[#kept + 1] = e end end
+    all = kept
   end
   if #all == 0 then return {} end
   local last = cursor[sender]
@@ -302,7 +319,7 @@ local function onHello(payload, sender)
   -- answers like 1.0 (own records only, no unverified forwards). P2P relaying is for the hours without them.
   local p2pOff = (not officer) and Sync.TrustedOnline()
   ns.After(2 + math.random() * 6, function()
-    local out = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff)
+    local out = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff, officer)
     if ns.debug then ns.debug(("hello from %s: replying %d records"):format(tostring(sender), #out)) end
     sendRecords(out)
     if p2pOff then return end

@@ -67,3 +67,10 @@ simulador S1 S2 S3 S4 S5(5 semillas) S6 S7 = 7/7 PASS.
 - Suposición que sospecho falsa: «el tope por respuesta basta». S8 indica que lo que llena la cola es que los OFICIALES reenvíen presence ajenas en cada hello, aunque sean pocas por respuesta.
 - Propuesta (4.º intento, solo con el OK de BRO): los oficiales no reenvían presence ajenas (`isOfficerMe()`), los miembros en P2P sí, con el tope de 6. Alternativas: aceptar ~550 en el umbral de S8, o que presence no se reenvíe nunca (el contador va más lento).
 - AC8 (S13, 40 clientes): en este entorno no acaba ni con `--s13min 15` (timeout de 25 min) ni con `--s13min 5` (timeout de 26 min; probado con a321d40). Hay que medirlo en otra máquina o con menos clientes (p. ej., 20 y su versión 1.0.1 de referencia). Mientras tanto, la referencia de carga es S8 (20 clientes).
+
+## 7-nov 10:xx — 4.º intento (OK de BRO 10:13, «⭐ modificada»): PASS
+**Cambio de spec (decisión de BRO del 7-nov):** los miembros reenvían presence ajenas a un solicitante 1.1 **aunque haya un oficial conectado** (`p2pOff`); la excepción es solo para `presence`, el resto sigue como en la 1.0 (solo lo suyo). Los oficiales (`isOfficerMe()`) **no** incluyen nunca presence ajenas en `ReplyFor`. Tope `Sync.MAX_PRESENCE_REPLY = 6` por respuesta, elegidas al azar (Fisher-Yates parcial) entre las candidatas; se respetan `queued` y `suppressed` (quórum). Umbral de S8 sin tocar (500).
+| # | Cambio | S8 (cola ≤500) | S2 (convergencia) | S14 |
+|---|---|---|---|---|
+| 4 | oficiales 0 presence ajenas; miembros ≤6 al azar también con oficial conectado | **PASS 409** (meanAll 0,212, meanBusiest 0,924, pico 4) | **PASS** (ajustes en 2,0 s, 0 errores) | **PASS** |
+Unidad `RESULT: 266 passed, 0 failed`; `GATES: OK`. Simulador `--seed 7303`. Regresión S1–S9 lanzada a continuación (`/tmp/gsq4/all.log`).
