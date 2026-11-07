@@ -623,6 +623,85 @@ function S12(seed) {
   return { pass: pass(), checks, metrics: { diag: line, t: Math.round(sim.t), ...sim.stats } };
 }
 
+// S16 (v1.2 AC4): poisoning of authority records. Mb2, then Mb3 too, forge a GM `settings` (bench 0, squads off) and
+// Mb1's squad (renamed) while the GM and Mb1 are offline. 1 relayer and QUORUM_AUTH - 1 = 2 relayers: never verified
+// on any honest client. A flood of 5,000 fake pending records from one relayer stays capped at 200 and does not evict
+// a legitimate pending version. The GM logs in -> repudiates the settings, Mb1 logs in -> repudiates the squad: both
+// fakes gone from every client and both relayers listed in /gsq diag.
+function S16(seed) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 1, 8);
+  const [gm, cap] = [sim.client('Gm'), sim.client('Mb1')];
+  const [y, z] = [sim.client('Mb2'), sim.client('Mb3')];
+  const honest = ['Mb4', 'Mb5', 'Mb6'].map((n) => sim.client(n));
+  const pub = sim.client('Mb7');
+  for (const c of [gm, cap, ...honest]) { c.login(); sim.run(5); }
+  check('GM settings written', gmSettings(gm));
+  sim.run(20);
+  cap.run('return A.CreateSquad({ name = "Lobos", icon = 1, color = 1, border = 1, tags = {}, open = true })');
+  const SID = String(cap.val('A.MySquadId()')[0]);
+  sim.run(60);
+  gm.logout(); cap.logout();
+  const GM = full(sim, 'Gm'), CAP = full(sim, 'Mb1');
+  const FTS = sim.epoch + Math.round(sim.t) + 200;
+  const fakeSet = `{ k = "settings", id = "settings", a = ${luaStr(GM)}, ts = ${FTS}, sq = 9001, d = { squadsEnabled = false, bench = 0, minCreateRank = 9, officerRanks = { 1 }, banned = {}, compEnabled = true } }`;
+  const fakeSq = `{ k = "squad", id = ${luaStr(SID)}, a = ${luaStr(CAP)}, ts = ${FTS}, sq = 9002, d = { name = "Hackeado", captain = ${luaStr(CAP)}, members = { ${luaStr(CAP)} }, bench = {}, icon = 1, color = 1, border = 1, tags = {}, open = true, approved = true } }`;
+  const forge = `NS.Comm.Send("D", { r = { ${fakeSet}, ${fakeSq} } })`;
+  for (const c of [y, z]) { c.login(); sim.run(5); }
+  sim.run(30);
+  const view = (c) => c.val(`(function() local s = NS.Model.settingsOf(NS.state); local q = NS.state.squads[${luaStr(SID)}]
+    local us = NS.P2P.unverified(NS.state, "settings", "settings"); local uq = NS.P2P.unverified(NS.state, "squad", ${luaStr(SID)})
+    return tostring(s.bench) .. "/" .. (q and q.d.name or "nil") .. "|" .. (us and tostring(us.r.d.bench) or "nil") .. "/" .. (uq and uq.r.d.name or "nil") end)()`)[0];
+  y.run(forge); sim.run(1); y.run(forge);
+  sim.run(120);
+  const v1 = honest.map(view);
+  check('one malicious relayer: the fakes are pending on every honest client, the real ones stay', v1.every((x) => x === '2/Lobos|0/Hackeado'), v1.join(','));
+  sim.run(1200);
+  const v1b = honest.map(view);
+  check('20 min later, still never verified (1 relayer)', v1b.every((x) => x.startsWith('2/Lobos|')), v1b.join(','));
+  z.run(forge);
+  sim.run(600);
+  const v2 = honest.map(view);
+  check('QUORUM_AUTH - 1 = 2 colluders: still never verified', v2.every((x) => x.startsWith('2/Lobos|')), v2.join(','));
+  // a legitimate pending version (Mb7's profile relayed by one honest member), then 5,000 fakes from Mb2 alone
+  pub.login(); sim.run(10); pub.run('return A.SaveProfile({ note = "legit" })'); sim.run(30); pub.logout();
+  const PUB = full(sim, 'Mb7'), Y = full(sim, 'Mb2');
+  const h0 = honest[0];
+  const legitIn = h0.val(`(function() local p = NS.state.profiles[${luaStr(PUB)}]; return p and p.d.note or "nil" end)()`)[0];
+  const t0 = sim.epoch + Math.round(sim.t);
+  const flood = h0.val(`(function()
+    local X = NS.P2P
+    -- the honest client drops what it got live from Mb7 and gets it again relayed by Mb4's neighbour Mb5 only
+    local real = NS.state.profiles[${luaStr(PUB)}]
+    NS.state.profiles[${luaStr(PUB)}] = nil
+    local legit = { k = real.k, id = real.id, a = real.a, ts = real.ts, sq = real.sq, d = real.d }
+    NS.Sync.Apply(legit, ${luaStr(full(sim, 'Mb5'))})
+    for i = 1, 5000 do
+      NS.Sync.Apply({ k = "squad", id = ${luaStr(CAP)} .. ":" .. (1000 + i), a = ${luaStr(CAP)}, ts = ${t0} - i, sq = 100 + i,
+        d = { name = "F" .. i, captain = ${luaStr(CAP)}, members = { ${luaStr(CAP)} }, bench = {}, icon = 1, color = 1, border = 1, tags = {}, open = true, approved = true } }, ${luaStr(Y)})
+    end
+    local byY = 0
+    for _, byId in pairs(NS.state.p2p.pend) do for _, e in pairs(byId) do if e.by[${luaStr(Y)}] then byY = byY + 1 end end end
+    local u = X.unverified(NS.state, "profile", ${luaStr(PUB)})
+    return byY .. "|" .. (u and u.r.d.note or "nil") .. "|" .. X.stats(NS.state, 0).pend
+  end)()`)[0];
+  const [byY, legitAfter] = String(flood).split('|');
+  check('Mb7 profile arrived live before the flood', legitIn === 'legit', legitIn);
+  check('5,000 fakes from one relayer: at most 200 pending by him', Number(byY) <= 200, flood);
+  check('the legitimate pending version survives the flood', legitAfter === 'legit', flood);
+  gm.login(); sim.run(300);
+  cap.login(); sim.run(300);
+  const all = [gm, cap, y, z, ...honest];
+  const v3 = all.map(view);
+  check('GM and Mb1 log in: real versions everywhere, both fakes gone (stored and pending)', v3.every((x) => x === '2/Lobos|nil/nil'), v3.join(','));
+  const rep = honest[1].val('NS.DiagGlue.Report()')[0];
+  const line = (rep.match(/p2p pend=[^\n|]*/) || [''])[0];
+  check('/gsq diag lists both relayers', line.includes('Mb2-Realm:') && line.includes('Mb3-Realm:'), line);
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { sid: SID, flood, diag: line, t: Math.round(sim.t), ...sim.stats } };
+}
+
 // S13 (AC8): channel load. 40 clients (GM, 2 officers, 37 members) with 200 profiles + 20 squads on disk, 15 min
 // of profile edits: messages per minute per client of v1.1 vs the reference build (GSQ_REF, default v1.0.1 = 406029a)
 // with the same seed, the same MAX_REPLY and the same queue. Second run without GM / officers online. During an
@@ -770,4 +849,4 @@ function S8g(seed, minutes) {
     newcomerT95: t95, newcomerT100: t100, convergeAfterNewcomer: tConv, ...sim.stats } };
 }
 
-module.exports = { S8g, S15, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+module.exports = { S8g, S15, S16, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };

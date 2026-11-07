@@ -256,3 +256,33 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.1: an unverified profile is listed grey 
   ok(found, "grey unverified card in the finder")
   cache["Uv-Realm"], cache["Rl-Realm"] = nil, nil
 end }
+
+-- v1.2 AC4: the GM repudiates a forged settings verified by quorum; a flooding relayer is capped at 200 pending
+test("v1.2: repudiate works on authority kinds (settings verified by 3 relayers is removed, relayers counted)", function()
+  local s = newState()
+  local fake = { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 50, sq = 7, d = { squadsEnabled = false } }
+  for _, n in ipairs({ "Y-R", "Z-R", "W-R" }) do ap(s, fake, n) end
+  eq(s.settings.d.squadsEnabled, false, "verified by quorum 3")
+  ok(ap(s, X.repudiation(fake, "Gm-R", T0 + 60, 8), "Gm-R"))
+  eq(s.settings, nil, "the forged settings is gone")
+  eq(X.relayerScore(s, "Y-R"), 1); eq(X.relayerScore(s, "W-R"), 1)
+  -- someone else cannot repudiate the GM's version
+  local s2 = newState()
+  ap(s2, fake, "Y-R")
+  local bad = X.repudiation(fake, "Gm-R", T0 + 60, 8); bad.a = "Z-R"
+  eq(select(2, ap(s2, bad, "Z-R")), "denied")
+end)
+
+test("v1.2: one relayer holds at most MAX_PEND_RELAYER pending versions; others are not evicted", function()
+  local s = newState()
+  eq(select(2, ap(s, prof("V-R", T0 + 5, { note = "legit" }), "Z-R")), "pending")
+  local capped = 0
+  for i = 1, 1000 do
+    local _, why = ap(s, { k = "squad", id = "Cap-R:" .. i, a = "Cap-R", ts = T0 + 10, sq = i,
+      d = { name = "F" .. i, captain = "Cap-R", members = { "Cap-R" } } }, "Y-R")
+    if why == "cap" then capped = capped + 1 end
+  end
+  eq(X.pendBy(s, "Y-R"), X.MAX_PEND_RELAYER)
+  eq(capped, 1000 - X.MAX_PEND_RELAYER)
+  eq(X.unverified(s, "profile", "V-R").r.d.note, "legit", "the legit pending version survives")
+end)

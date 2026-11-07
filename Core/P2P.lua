@@ -32,6 +32,7 @@ function X.protoOf(payload)
 end
 X.PEND_TTL = 7 * 86400
 X.MAX_PEND = 2000
+X.MAX_PEND_RELAYER = 200       -- v1.2: pending versions one relayer may hold on a client (a flood cannot evict others)
 X.BLOCK_AT = 3
 X.BLOCK_TTL = 7 * 86400
 X.CONTRA_TTL = 7 * 86400
@@ -59,6 +60,25 @@ function X.st(state)
   st.repudiated = tonumber(st.repudiated) or 0
   return st
 end
+
+-- the stored record of kind/id and how to drop / put it back (settings is not a keyed table)
+local function getStored(state, kind, id)
+  if kind == "settings" then return state.settings end
+  return M.kindTable(state, kind)[id]
+end
+local function setStored(state, kind, id, rec)
+  if kind == "settings" then state.settings = rec; return end
+  M.kindTable(state, kind)[id] = rec
+end
+X.getStored, X.setStored = getStored, setStored
+
+-- pending versions brought by `name` (first relayer or voter)
+local function pendBy(st, name)
+  local n = 0
+  for _, byId in pairs(st.pend) do for _, e in pairs(byId) do if e.from == name or e.by[name] then n = n + 1 end end end
+  return n
+end
+X.pendBy = function(state, name) return pendBy(X.st(state), name) end
 
 local function pendCount(st)
   local n = 0
@@ -162,6 +182,11 @@ function X.offer(state, rec, ctx, settings, u)
   if not byId then byId = {}; st.pend[kid] = byId end
   local e = byId[vk]
   if not e then
+    -- v1.2: one relayer cannot hold more than MAX_PEND_RELAYER new pending versions here (flood guard)
+    if type(sender) == "string" and pendBy(st, sender) >= X.MAX_PEND_RELAYER then
+      if next(byId) == nil then st.pend[kid] = nil end
+      return false, "cap"
+    end
     if pendCount(st) >= X.MAX_PEND then evictOldest(st) end
     byId = st.pend[kid] or {}; st.pend[kid] = byId
     e = { r = rec, by = {}, t = now, from = sender }
@@ -188,16 +213,15 @@ function X.before(state, rec, ctx)
   local kid = kidOf(rec)
   local via = st.via[kid]
   if not via then return true end
-  local t = M.kindTable(state, rec.k)
-  local cur = t[rec.id]
+  local cur = getStored(state, rec.k, rec.id)
   st.via[kid] = nil                                       -- the author speaks for this record from now on
-  if cur and X.vkey(cur) ~= X.vkey(rec) then
+  if cur and X.vkey(cur) ~= X.vkey(rec) and via.v ~= X.vkey(rec) then
     st.contra[via.v] = { by = via.by, t = ctx.now or rec.ts }
     -- the contradicted version goes back to the author (Sync whispers it, u = 1): its client repudiates it
     X.outbox = X.outbox or {}
     X.outbox[#X.outbox + 1] = cur
-    t[rec.id] = nil
-    return true, nil, function() t[rec.id] = cur; st.via[kid] = via; st.contra[via.v] = nil; X.outbox[#X.outbox] = nil end
+    setStored(state, rec.k, rec.id, nil)
+    return true, nil, function() setStored(state, rec.k, rec.id, cur); st.via[kid] = via; st.contra[via.v] = nil; X.outbox[#X.outbox] = nil end
   end
   return true
 end
@@ -363,11 +387,12 @@ local function enforce(state, d, now)
   local id = d.t:sub(#kind + 2)
   local relayers = {}
   local function add(list) for _, n in ipairs(list or {}) do relayers[n] = true end end
-  local t = M.kindTable(state, kind)
-  local cur = t[id]
-  if cur and X.vkey(cur) == d.v then
-    t[id] = nil
-    local via = st.via[d.t]
+  local cur = getStored(state, kind, id)
+  local via = st.via[d.t]
+  -- the stored copy is the denied version (by its vkey, or by the relay record: M.settingsOf fills defaults
+  -- into the stored settings, so its content hash moves)
+  if cur and (X.vkey(cur) == d.v or (via and via.v == d.v)) then
+    setStored(state, kind, id, nil)
     if via and via.v == d.v then add(via.by); st.via[d.t] = nil end
   end
   if st.contra[d.v] then add(st.contra[d.v].by); st.contra[d.v] = nil end
@@ -394,7 +419,8 @@ function X.applyRepudiate(state, rec, roster, settings, ctx)
   if type(d.t) ~= "string" or type(d.v) ~= "string" or rec.id ~= d.v then return false, "shape" end
   if d.v:sub(1, #d.t + 1) ~= d.t .. "@" then return false, "shape" end
   local kind = d.t:match("^([^:]+):")
-  if not kind or not M.P2P_KINDS[kind] or kind == "repudiate" then return false, "shape" end
+  -- v1.2: authority kinds can be repudiated by their author too (the GM denies a forged settings)
+  if not kind or not (M.P2P_KINDS[kind] or (M.P2P_AUTH and M.SCHEMA[kind])) or kind == "repudiate" then return false, "shape" end
   -- only the author of the denied version signs its repudiation
   local tail = "." .. rec.a .. "#"
   local p = d.v:find(tail, #d.t + 2, true)
