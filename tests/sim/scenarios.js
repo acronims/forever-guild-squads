@@ -790,6 +790,76 @@ function S14(seed) {
   return { pass: pass(), checks, metrics: { oldBad: bad, ref: REF, ...sim.stats } };
 }
 
+// S17 (v1.2 AC6): S14 widened. 12 clients: 8 on v1.2 (GM, Of1, Mb1, Mb3, Mb7-Mb10); Mb4, Mb6 on v1.1 (GSQ_REF11, default
+// 636e545); Mb2, Mb5 on v1.0.1 (GSQ_REF, default 406029a). Everyone writes a profile. Then, with Mb2, Mb4 and Mb7 offline,
+// the GM changes the settings (bench 1) and the GM and the officer log out. Mb2, Mb4 and Mb7 come back while only
+// members are online: the v1.2 members relay the new settings to Mb7 (quorum), and an authority record relayed by a
+// member must never reach a client with p2 < 2 (it would count it as `relay` refused). Last, Of1 logs in: the old
+// clients get the settings from the officer. 0 Lua errors.
+const REF11 = process.env.GSQ_REF11 || '636e545';
+function S17(seed) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 1, 10);
+  const v101 = sourcesAt(REF), v11 = sourcesAt(REF11);
+  const ver = { Mb2: '1.0.1', Mb5: '1.0.1', Mb4: '1.1', Mb6: '1.1' };
+  const names = ['Gm', 'Of1', 'Mb1', 'Mb2', 'Mb3', 'Mb4', 'Mb5', 'Mb6', 'Mb7', 'Mb8', 'Mb9', 'Mb10'];
+  const cs = {};
+  for (const n of names) cs[n] = sim.client(n, ver[n] === '1.0.1' ? { code: v101 } : ver[n] === '1.1' ? { code: v11 } : {});
+  const all = names.map((n) => cs[n]);
+  for (const c of all) { c.login(); sim.run(2 + sim.rand() * 3); }
+  sim.run(20);
+  check('GM settings written', gmSettings(cs.Gm));
+  sim.run(30);
+  for (const c of all) { c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`); sim.run(2); }
+  sim.run(120);
+  const olds = ['Mb2', 'Mb5', 'Mb4', 'Mb6'];
+  // relay refusals counted from here on (a re-login starts a fresh Lua state, the counter with it); the spy keeps kind<sender
+  const spy = `NS.SIM_REF = {} local ap = NS.Sync.Apply NS.Sync.Apply = function(rec, sender, ...) local ok, why = ap(rec, sender, ...)
+    if not ok and why == "relay" then NS.SIM_REF[#NS.SIM_REF + 1] = tostring(rec.k) .. "<" .. tostring(sender) end return ok, why end`;
+  const base = {};
+  const arm = (n) => { cs[n].run(spy); base[n] = Number(cs[n].val('NS.Sync.stats.relayRefused')[0]); };
+  for (const n of ['Mb2', 'Mb4', 'Mb7']) cs[n].logout();
+  arm('Mb5'); arm('Mb6');
+  sim.run(10);
+  check('GM changes the settings (bench 1)', cs.Gm.run(`return A.SaveSettings({ ${SETTINGS.replace('bench = 2', 'bench = 1')} })`)[0] === true);
+  sim.run(60);
+  const bench = (c) => c.val('(function() local s = NS.state.settings; return s and s.d and tostring(s.d.bench) or "nil" end)()')[0];
+  const benchAfter = names.filter((n) => !['Mb2', 'Mb4', 'Mb7'].includes(n)).map((n) => `${n}:${bench(cs[n])}`).join(',');
+  check('the clients online at the change hold bench 1 (live from the GM)', !/:[^1,]/.test(benchAfter), benchAfter);
+  cs.Gm.logout(); cs.Of1.logout();
+  sim.run(10);
+  for (const n of ['Mb2', 'Mb4', 'Mb7']) { cs[n].login(); if (ver[n]) arm(n); sim.run(3); }
+  sim.run(300);
+  // authorial kinds relayed by members (v1.1, M.P2P_KINDS) are refused by a 1.0.1 client as before (S14); authority kinds
+  // relayed by a member must reach no old client at all
+  const AUTHORIAL = new Set(['profile', 'rsvp', 'witness', 'presence', 'reject', 'repudiate']);
+  const refused = olds.map((n) => Number(cs[n].val('NS.Sync.stats.relayRefused')[0]) - base[n]);
+  const refusedBy = olds.map((n) => n + '=' + cs[n].val('table.concat(NS.SIM_REF, " ")')[0]);
+  const authRef = olds.map((n) => cs[n].val('table.concat(NS.SIM_REF, " ")')[0].split(' ').filter((x) => x && !AUTHORIAL.has(x.split('<')[0])));
+  check('no authority record relayed by a member reached a client with p2 < 2 (members only online)',
+    authRef.every((l) => l.length === 0), olds.map((n, i) => `${n}=${authRef[i].join(' ') || '-'}`).join(' | '));
+  check('the v1.1 clients refused no relay at all', [2, 3].every((i) => refused[i] === 0), refusedBy.join(' | '));
+  const mb7 = bench(cs.Mb7);   // measured, not a criterion: the quorum of 3 needs 3 distinct relayers of the cube
+  cs.Of1.login();
+  sim.run(30);
+  // the old clients ask again (their next session): the officer serves them the settings
+  for (const n of ['Mb2', 'Mb4']) { cs[n].reload(); sim.run(3); }
+  sim.run(300);
+  const ob = olds.map((n) => `${n}:${bench(cs[n])}`);
+  check('the old clients got the new settings from the officer', olds.every((n) => bench(cs[n]) === '1'), ob.join(','));
+  const online = all.filter((c) => c.name !== 'Gm');
+  const own = (c, o) => c.val(`(function() local p = NS.state.profiles[${luaStr(o.full)}]; return p and p.d.note or "nil" end)()`)[0];
+  const miss = [];
+  for (const o of olds.map((n) => cs[n])) for (const c of online) if (own(o, c) !== 'soy ' + c.name) miss.push(`${o.name}<-${c.name}:${own(o, c)}`);
+  check('every old client holds the profile of every client online (theirs live, the rest relayed)', miss.length === 0, miss.slice(0, 8).join(','));
+  const missNew = [];
+  for (const n of ['Mb1', 'Mb3', 'Mb7']) for (const o of olds) if (own(cs[n], cs[o]) !== 'soy ' + o) missNew.push(`${n}<-${o}:${own(cs[n], cs[o])}`);
+  check('every v1.2 member holds the old clients\' profiles', missNew.length === 0, missNew.slice(0, 8).join(','));
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { ref: REF, ref11: REF11, refused, refusedBy, mb7BenchMembersOnly: mb7, ...sim.stats } };
+}
+
 // S8g (v1.2 AC0/AC2/AC3/AC5): the S13 guild (200 members: GM, 2 officers, 197 members; 200 profiles + 20 squads on
 // disk), 40 clients online (GM + 2 officers + 37 members) for `minutes` of profile edits, then a newcomer with an
 // empty SavedVariables logs in. Measures the totals the v1.2 criteria compare against the reference builds
@@ -862,4 +932,4 @@ function S8g(seed, minutes) {
     newcomerT95: t95, newcomerT100: t100, convergeAfterNewcomer: tConv, ...sim.stats } };
 }
 
-module.exports = { S8g, S15, S16, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+module.exports = { S8g, S15, S16, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };

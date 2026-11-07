@@ -133,7 +133,7 @@ local function sendRecords(list, to)
     local ids = {}
     for i, r in ipairs(batch) do ids[i] = { r.id, vkey(r) }; queued[r.id] = vkey(r) end
     local function done() for _, x in ipairs(ids) do if queued[x[1]] == x[2] then queued[x[1]] = nil end end end
-    if Comm.Send("D", { r = batch }, nil, nil, done) == false then done() end
+    if Comm.Send("D", { r = batch }, to and "WHISPER" or nil, to, done) == false then done() end
     batch = {}
   end
   for _, b in ipairs(Sync.PackRecords(list)) do batch = b; flush() end
@@ -378,7 +378,17 @@ local function onHello(payload, sender)
   ns.After(2 + math.random() * 6, function()
     local out = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff, officer)
     if ns.debug then ns.debug(("hello from %s: replying %d records"):format(tostring(sender), #out)) end
-    sendRecords(out)
+    -- v1.2 (AC6): a member's relay of someone else's authority record goes by WHISPER to the 1.2 requester only; on
+    -- the GUILD channel every 1.0 / 1.1 client online would take it and refuse it as "relay"
+    local pub, priv = out, nil
+    if not officer then
+      pub, priv = {}, {}
+      for _, r in ipairs(out) do
+        if r.a == onlyMe or M.isP2P(r) then pub[#pub + 1] = r else priv[#priv + 1] = r end
+      end
+    end
+    sendRecords(pub)
+    if priv and #priv > 0 then sendRecords(priv, from) end
     if p2pOff then return end
     -- unverified versions only go to the requester (a 1.0 client would trust them from an officer)
     local fw = Sync.ForwardsFor(payload)
