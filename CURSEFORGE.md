@@ -2,6 +2,8 @@
 
 Guild Squads is a guild-only addon for **World of Warcraft: Forever** (interface 16001). Build a squad of five with your guildmates, find people who play when you play, compete as squads every week, race for the guild's Hall of Fame and organise 10, 20 and 40-player raid rosters. The guild master stays in control of the rules.
 
+**New in 1.1: it syncs without officers.** If your guild master or officers do not run the addon, everyone who has it now passes on each other's profiles, raid sign-ups and presence. Anything that arrives second-hand shows in grey as *unverified* until a second player, the squad captain or the author confirms it, and only the author's own copy can override it. The installed counter is now real: "Guild Squads: X/Y members (30 days)" counts who has the addon even while they are offline.
+
 It is tested outside the game with a mocked client and a multi-client simulator; please report anything that misbehaves in the client on the issue tracker.
 
 **The guild master shapes the achievements.** In Settings > Achievements (visible to the guild master only) you can enable or disable every achievement and Hall of Fame race, one by one, per group or all at once; change the size and the visible name of an open Top; create up to 50 achievements of your own on what the addon already measures (a level, a boss, squad battleground wins, a profession skill, an Exalted reputation, or a badge you grant); and grant badges by hand with a reason. Disabled entries keep counting quietly and what players already earned stays visible under **Legacy**. A granted badge never puts anyone in a Top.
@@ -44,11 +46,12 @@ It is tested outside the game with a mocked client and a multi-client simulator;
 - "Next week" copies a roster, and weekly rosters create their own draft. Export any roster as text for Discord.
 
 **Diagnostics**
-- `/gsq diag` opens a copyable report of which client APIs exist, event counters and sync state. It is also saved in the addon's SavedVariables file.
+- **Installed counter**: "Guild Squads: X/Y members (30 days)"; the tooltip lists who has it and which version, and tells officers when the guild master does not have it.
+- `/gsq diag` opens a copyable report of which client APIs exist, event counters and sync state (including P2P: pending, verified, denied and blocked relays). It is also saved in the addon's SavedVariables file.
 
 ## How sync and trust work
 
-Everything travels over the guild addon channel; there is no server. Each player's client checks every record against the guild roster: only the guild master changes the settings, only you change your profile, only the captain (or the guild master) edits a squad. A record is accepted live from its author and relayed only by the guild master or an officer, so with no guild master or officer online you only get what the authors themselves send. A boss kill or a battleground counts for the rankings only when at least two squad members with the addon report it. Scores are computed on each client from these events; totals are never sent. Nothing is sent during boss encounters or PvP matches.
+Everything travels over the guild addon channel; there is no server. Each player's client checks every record against the guild roster: only the guild master changes the settings, only you change your profile, only the captain (or the guild master) edits a squad. A record is accepted live from its author. Guild decisions (settings, squads, rosters, the achievement catalog) are relayed only by the guild master or an officer. From 1.1, a player's own records (profile, raid sign-ups, witnesses, presence) are also passed on by any member with the addon: a copy relayed by one member stays *unverified* and counts for nothing until a second member, the squad captain or the author confirms it. If someone circulates a version you did not write, your client denies it automatically and it disappears from every client. Players still on 1.0.x keep working but do not take part: ask your guild to update. A boss kill or a battleground counts for the rankings only when at least two squad members with the addon report it. Scores are computed on each client from these events; totals are never sent. Nothing is sent during boss encounters or PvP matches.
 
 ## Privacy
 

@@ -18,6 +18,8 @@ Guild-only squads of 5, with the guild master in control:
 - **The GM tailors the catalog** (**Settings > Achievements**): enable or disable each achievement or race (one by one, per group or all at once), change the size and visible name of an open Top, create up to 50 custom achievements on what the addon already measures, and grant badges by hand with a reason. Disabled entries keep counting and what was already earned stays under **Legacy**.
 - **Raids**: rosters of 10/20/40, RSVP (Yes/Maybe/No/Bench), "Invite confirmed", attendance.
 - Optional **celebrations** in guild chat (off by default).
+- **Syncs without officers** (1.1): any member with the addon relays profiles, RSVPs, witnesses and presence; a relayed record stays *unverified* (grey) until a second relayer, the squad captain or the author confirms it. The author can deny a forged version.
+- **Real installed counter** (1.1): "Guild Squads: X/Y members (30 days)" counts who has the addon even while offline.
 - Copyable **diagnostics** with `/gsq diag`.
 - **English and Spanish** throughout: interface, default achievements and races, statuses and celebrations follow the client language. Guild-chat announcements use the language of the client that announces.
 
@@ -66,16 +68,17 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
 - **Can I be in two squads?** No, one per character. Your alts can be in others, and an alt in another guild keeps its data apart.
 - **Why does my score differ from a guildmate's?** Each client computes the ranking from the events it has; once you both have the same data, it matches.
 - **Can an officer change the settings or the achievement catalog?** No: only the GM (rank 0). Officers moderate squads and relay data.
+- **Our GM does not have the addon. Does it still sync?** Yes, from 1.1: members relay each other's profiles, RSVPs and presence. The counter tooltip tells officers when the GM does not have it installed.
 - **Does it cost anything?** No. Free, MIT, no ads, no donations.
 
 ## Troubleshooting
 - `/gsq diag` → Ctrl+A, Ctrl+C and paste it in the issue.
 - Data file: `WTF\Account\<ACCOUNT>\SavedVariables\GuildSquads.lua` (in the Forever client folder).
-- With no GM or officer online, a freshly logged-in client only receives what authors publish live. See [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md).
+- With no GM or officer online, other members with 1.1 relay the authors' own records (profiles, RSVPs, witnesses, presence); squads, settings and other authority records still need the author, the GM or an officer. Grey entries are *unverified*. Members on 1.0.x do not relay: ask them to update. See [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md).
 
 ## Known limitations
 - No cryptographic signatures: a GM/officer running a modified client can still forge relays.
-- With no GM or officer online, each player only receives what authors publish live.
+- With no GM or officer online, authority records (settings, squads, rosters, catalog) only arrive live from their author. Authorial records relayed by a single member stay *unverified* until a second relayer, the captain or the author confirms them.
 - A full resync of a large guild takes minutes by design (throttle).
 - Forever encounter/instance IDs are unknown: instances match by name and learn the ID when seen.
 - The 1.60.1 client has no `UnitPVPRank`: PvP rank achievements and races are not shown there.

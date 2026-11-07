@@ -13,7 +13,7 @@ Ejecutar: `NODE_PATH=… node tests/sim/run.js [S1 … S10] [--seed N] [--s5seed
 | S1 10 clientes, squads/solicitudes/aceptar/expulsar al azar | PASS | 50 acciones efectivas; mismo hash del modelo en los 10 |
 | S2 el GM cambia ajustes con 30 clientes; un miembro falsifica | PASS | los 30 aplican los ajustes en 2 s; 0 clientes aceptan la falsificación (firmada por él y suplantando al GM) |
 | S3a cliente nuevo, 200 registros, oficial conectado | PASS | converge en 210 s simulados (≤ 450 s exigidos) |
-| S3b sin GM ni oficiales (semilla 7304) | PASS | recibe solo los perfiles de los 3 autores conectados + el suyo (comportamiento documentado) |
+| S3b sin GM ni oficiales (semilla 7304) | PASS | desde la 1.1 recibe los 200 perfiles por los reenvíos de los miembros (1.0.x: solo los de los 3 autores conectados) |
 | S4 banda de 10, 2 squads, jefe con comunicación bloqueada | PASS | 0 mensajes durante el encuentro; misma puntuación y Top en los 10 |
 | S5 celebraciones, 20 clientes | PASS | 20 semillas (7303–7322): 60 eventos → 60 mensajes, exactamente 1 por evento |
 | S6 cambio de wipe con desfase de reloj ±200 s | PASS | mismo resumen canónico de ambos wipes en los 10; puntuación en vivo del wipe cerrado igual en todos (`liveScoreVariants` = 1; en el wipe abierto, 2) |
@@ -47,6 +47,18 @@ La cola es el atraso de un oficial respondiendo hellos cuando 20 clientes entran
 | `achdef` falsificado por un miembro (firmado por él y suplantando al GM) y `achgrant` falsificado | aceptado por **0** clientes; la copia que suplanta al GM se rechaza como reenvío (`relayRefused`) |
 | Clientes que no conocen esos tipos | reciben e ignoran los tipos desconocidos sin error (`sync bad=` 68 en cada uno), no guardan nada del catálogo, aplican los ajustes del GM y el resto del modelo converge en los 30 en 5 s |
 | Errores de Lua capturados | **0** |
+
+## 1.1 — Sincronización P2P (semilla 7303)
+
+| Escenario | Resultado | Cifras |
+|---|---|---|
+| S11 5 clientes, sin GM ni oficiales, entradas escalonadas (nunca más de 2 conectados) | PASS | 50/50 registros autorales (perfiles + presence) en los 5 en 3 sesiones; con la 1.0.1, 13/50 |
+| S12 un miembro falsifica el perfil de otro jugador | PASS | sin verificar en todos los clientes y sigue sin verificar 20 min después; cuando el autor entra, la falsa se desmiente y desaparece de los 5 |
+| S14 2 clientes con la 1.0.1 entre 8 | PASS | 0 errores de Lua; los viejos descartan `presence`/`repudiate` como tipo desconocido y siguen sincronizando lo suyo |
+| S8 carga, 20 clientes, 500 miembros, 3 min | PASS | cola máxima 409 (límite 500; 1.0.1: 379), cliente más cargado 0,924 msg/s, pico de 4 en 1 s |
+| S8g carga, 40 clientes, 200 miembros, 3 min | PASS | cola máxima 299 (1.0.1: 236), cliente más cargado 1,001 msg/s, pico de 4 en 1 s, 0 rechazos del throttle |
+
+S13 (40 clientes frente a la 1.0.1, mensajes por minuto de cada cliente) no acaba en el entorno de la CI; la referencia de carga son S8 y S8g.
 
 ## Límites del simulador
 

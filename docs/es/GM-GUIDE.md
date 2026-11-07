@@ -19,7 +19,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 
 1. Instala el addon y abre `/gsq` > **Ajustes**.
 2. Repasa las 9 secciones (abajo; **Logros** solo la ves tú). Cambia lo que quieras y pulsa **Guardar y compartir**. Si sales de la pestaña sin guardar, avisa.
-3. Pide a tus oficiales que lo instalen: sin GM ni oficial conectado, los jugadores que acaban de entrar solo reciben lo que publican en vivo los autores (ver *Problemas*).
+3. Pide a tus oficiales que lo instalen y a todos que usen la 1.1: sin GM ni oficial conectado, los miembros con la 1.1 se reenvían perfiles, RSVP y presence, pero los squads, ajustes y rosters solo viajan con el GM, un oficial o su autor (ver *Problemas*).
 4. Anuncia el addon en la guild. La bienvenida del addon ya les guía (perfil → squad → ranking).
 
 ## Ajustes, sección a sección
@@ -82,7 +82,7 @@ El % de asistencia de cada jugador cuenta las 8 últimas bandas con asistencia r
 
 ## Problemas
 
-**No sincroniza nada sin GM u oficial conectado.** Es así por diseño: un dato se acepta en vivo de su autor y solo lo reenvían GM u oficiales. Si queréis que los nuevos se pongan al día rápido, que haya un oficial con el addon conectado en las horas punta.
+**Qué sincroniza sin GM ni oficial conectado.** Desde la 1.1, los miembros reenvían los registros autorales (perfiles, RSVP, testigos, presence, una invitación rechazada). Un registro que reenvía un solo miembro queda *sin verificar* (gris) hasta que lo confirma un segundo reenviador, el capitán de su squad o su autor; el autor desmiente solo las versiones falsas. Los registros de autoridad (ajustes, squads, anulaciones, jefes, catálogo, rosters, asistencia) siguen reenviándolos solo el GM o los oficiales. Mientras haya un oficial conectado, los miembros no reenvían (la puesta al día la sirven los oficiales), salvo presence: los oficiales nunca reenvían las ajenas y los miembros sí, hasta 6 por respuesta. Quien tenga la 1.0.x rechaza los reenvíos de los miembros: pídele que actualice.
 
 **Los datos parecen perderse al reiniciar.** Se ha visto que el cliente de Forever a veces no relee las SavedVariables. Haz `/gsq export` después de cambiar ajustes o cerrar bandas y guarda el texto; los demás los recuperan de cualquier GM/oficial conectado.
 

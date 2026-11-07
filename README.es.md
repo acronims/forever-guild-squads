@@ -18,6 +18,8 @@ Squads de 5 dentro de la guild, con el GM al mando:
 - **El GM adapta el catálogo** (**Ajustes > Logros**): activar o desactivar cada logro o carrera (uno a uno, por grupo o todos), cambiar el tamaño de un Top abierto y su nombre visible, crear hasta 50 logros propios sobre lo que el addon ya mide y otorgar insignias a mano con motivo. Lo desactivado sigue contando y lo ya conseguido queda en **Legado**.
 - **Bandas**: rosters de 10/20/40, RSVP (Sí/Tal vez/No/Suplente), "Invitar confirmados", asistencia.
 - **Celebraciones** opcionales en el chat de guild (desactivadas por defecto).
+- **Sincroniza sin oficiales** (1.1): cualquier miembro con el addon reenvía perfiles, RSVP, testigos y presence; un registro reenviado queda *sin verificar* (gris) hasta que lo confirma un segundo reenviador, el capitán del squad o el autor. El autor puede desmentir una versión falsa.
+- **Contador real de instalados** (1.1): «Guild Squads: X/Y miembros (30 días)» cuenta a quien tiene el addon aunque no esté conectado.
 - **Diagnóstico** copiable con `/gsq diag`.
 - **Inglés y español** en todo: la interfaz, los logros y carreras de serie, los estados y las celebraciones siguen el idioma del cliente. Los anuncios en el chat de la guild salen en el idioma del cliente que anuncia.
 
@@ -66,16 +68,17 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
 - **¿Puedo estar en dos squads?** No, uno por personaje. Tus alts pueden estar en otros, y un alt en otra guild guarda sus datos aparte.
 - **¿Por qué veo una puntuación distinta a la de un compañero?** Cada cliente calcula el ranking con los eventos que tiene; en cuanto os llegan los mismos datos, coincide.
 - **¿Puede un oficial cambiar los ajustes o el catálogo de logros?** No: solo el GM (rango 0). Los oficiales moderan squads y reenvían datos.
+- **El GM de mi guild no tiene el addon. ¿Sincroniza igual?** Sí, desde la 1.1: los miembros se reenvían los perfiles, RSVP y presence. El tooltip del contador avisa a los oficiales si el GM no lo tiene instalado.
 - **¿Cuesta algo?** No. Gratis, MIT, sin anuncios ni donaciones.
 
 ## Problemas
 - `/gsq diag` → Ctrl+A, Ctrl+C y pégalo en la incidencia.
 - Fichero de datos: `WTF\Account\<CUENTA>\SavedVariables\GuildSquads.lua` (en la carpeta del cliente Forever).
-- Sin GM ni oficial conectado, un cliente recién entrado solo recibe lo que publican en vivo sus autores. Más en [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md).
+- Sin GM ni oficial conectado, los demás miembros con la 1.1 reenvían los registros propios de cada autor (perfiles, RSVP, testigos, presence); squads, ajustes y demás registros de autoridad siguen necesitando al autor, al GM o a un oficial. Lo gris está *sin verificar*. Quien tenga la 1.0.x no reenvía: pídele que actualice. Más en [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md).
 
 ## Limitaciones conocidas
 - Sin firmas criptográficas: un GM u oficial con un cliente modificado puede falsificar reenvíos.
-- Sin GM ni oficial conectado, cada uno solo recibe lo que publican en vivo sus autores.
+- Sin GM ni oficial conectado, los registros de autoridad (ajustes, squads, rosters, catálogo) solo llegan en vivo de su autor. Los registros autorales que reenvía un solo miembro quedan *sin verificar* hasta que los confirma un segundo reenviador, el capitán o el autor.
 - Una resincronización completa de una guild grande tarda minutos (throttle, por diseño).
 - Los IDs de encuentros/instancias de Forever no se conocen: las instancias se reconocen por nombre y aprenden el ID al verlo.
 - El cliente 1.60.1 no ofrece `UnitPVPRank`: ahí los logros y carreras de rango PvP no se muestran.

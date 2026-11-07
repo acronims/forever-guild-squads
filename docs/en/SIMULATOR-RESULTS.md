@@ -13,7 +13,7 @@ Run: `NODE_PATH=… node tests/sim/run.js [S1 … S10] [--seed N] [--s5seeds N] 
 | S1 10 clients, random squads/requests/accepts/kicks | PASS | 50 effective actions; same model hash on all 10 |
 | S2 the GM changes settings with 30 clients; a member forges them | PASS | all 30 apply the settings within 2 s; 0 clients accept the forgery (signed as himself or impersonating the GM) |
 | S3a fresh client, 200 records, officer online | PASS | converges in 210 simulated s (≤ 450 s required) |
-| S3b no GM and no officers (seed 7304) | PASS | receives only the profiles of the 3 online authors + its own (documented behaviour) |
+| S3b no GM and no officers (seed 7304) | PASS | from 1.1 it receives all 200 profiles through member relays (1.0.x: only those of the 3 online authors) |
 | S4 10-player raid, 2 squads, boss with comms locked | PASS | 0 messages during the encounter; same score and Top on all 10 |
 | S5 celebrations, 20 clients | PASS | 20 seeds (7303–7322): 60 events → 60 messages, exactly 1 per event |
 | S6 wipe change with ±200 s clock skew | PASS | same canonical summary of both wipes on all 10; live score of the closed wipe identical everywhere (`liveScoreVariants` = 1; on the open wipe, 2) |
@@ -47,6 +47,18 @@ The queue is the backlog of an officer answering hellos while 20 clients log in 
 | `achdef` forged by a member (signed as himself or impersonating the GM) and forged `achgrant` | accepted by **0** clients; the copy impersonating the GM is refused as a relay (`relayRefused`) |
 | Clients that do not know those kinds | receive and ignore the unknown kinds without error (`sync bad=` 68 on each), store nothing from the catalog, apply the GM's settings, and the rest of the model converges on all 30 within 5 s |
 | Captured Lua errors | **0** |
+
+## 1.1 — P2P sync (seed 7303)
+
+| Scenario | Result | Figures |
+|---|---|---|
+| S11 5 clients, no GM or officers, staggered logins (never more than 2 online) | PASS | 50/50 authorial records (profiles + presence) on all 5 within 3 sessions; with 1.0.1, 13/50 |
+| S12 a member forges another player's profile | PASS | unverified on every client and still unverified 20 min later; when the author logs in the forgery is denied and disappears from all 5 |
+| S14 2 clients on 1.0.1 among 8 | PASS | 0 Lua errors; the old clients drop `presence`/`repudiate` as unknown kinds and keep syncing their own records |
+| S8 load, 20 clients, 500 members, 3 min | PASS | max queue 409 (limit 500; 1.0.1: 379), busiest client 0.924 msg/s, peak 4 in 1 s |
+| S8g load, 40 clients, 200 members, 3 min | PASS | max queue 299 (1.0.1: 236), busiest client 1.001 msg/s, peak 4 in 1 s, 0 throttle refusals |
+
+S13 (40 clients against 1.0.1, per-client messages per minute) does not finish in the CI environment; S8 and S8g are the load reference.
 
 ## Simulator limits
 

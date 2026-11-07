@@ -19,7 +19,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 
 1. Install the addon and open `/gsq` > **Settings**.
 2. Go through the 9 sections (below; **Achievements** is shown to you only). Change what you want and press **Save and share**. Leaving the tab with unsaved changes asks first.
-3. Ask your officers to install it: with no GM or officer online, players who just logged in only receive what the authors publish live (see *Troubleshooting*).
+3. Ask your officers to install it and everyone to use 1.1: with no GM or officer online, 1.1 members relay each other's profiles, RSVPs and presence, but squads, settings and rosters only travel with the GM, an officer or their author (see *Troubleshooting*).
 4. Announce the addon in the guild. The in-addon welcome guides them (profile → squad → ranking).
 
 ## Settings, section by section
@@ -82,7 +82,7 @@ A player's attendance % counts the last 8 raids with recorded attendance where t
 
 ## Troubleshooting
 
-**Nothing syncs without a GM or officer online.** By design: a record is accepted live from its author and relayed only by the GM or officers. If you want new players to catch up quickly, have an officer with the addon online at peak hours.
+**What syncs without a GM or officer online.** From 1.1, members relay authorial records (profiles, RSVPs, witnesses, presence, a declined invitation). A record relayed by one member stays *unverified* (grey) until a second relayer, the captain of its squad or its author confirms it; an author denies forged versions automatically. Authority records (settings, squads, annulments, bosses, catalog, rosters, attendance) are still relayed only by the GM or officers. While an officer is online, members do not relay (officers serve the catch-up), except presence: officers never relay other players' presence and members do, up to 6 per reply. Players on 1.0.x refuse members' relays: ask them to update.
 
 **Data seems lost after a restart.** The Forever client has been seen not reading SavedVariables back. Run `/gsq export` after changing settings or closing raids and keep the text; the others get it back from any online GM/officer.
 

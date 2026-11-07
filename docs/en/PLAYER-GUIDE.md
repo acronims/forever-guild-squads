@@ -71,7 +71,7 @@ Guide for guild masters, officers and raid leaders: [GM-GUIDE.md](GM-GUIDE.md).
 
 **My data is gone after logging in again.** The Forever client has been seen writing SavedVariables on exit but not reading them back. What to do: run `/gsq export` now and then and keep the text; if you lose data, `/gsq import`. Also, on login you get it back from the guild if a GM or officer is online (`/gsq sync`).
 
-**Nothing syncs / I don't see other squads.** Other people's data reaches you only live from its author, or relayed by the **GM or an officer**. With no GM or officer online you only receive what the authors themselves publish at that moment. Wait for one to log in and run `/gsq sync`. In big guilds catching up takes a few minutes (on purpose, so the channel is not flooded).
+**Nothing syncs / I don't see other squads.** Other people's data reaches you live from its author, relayed by the **GM or an officer**, or (from 1.1) relayed by any member with 1.1 for profiles, RSVPs, witnesses and presence. Squads, settings and rosters still need the author, the GM or an officer online. Run `/gsq sync`; members still on 1.0.x do not relay, so ask them to update. In big guilds catching up takes a few minutes (on purpose, so the channel is not flooded).
 
 **Nothing is announced in guild chat.** Guild chat celebrations are **off by default**; the GM turns them on in Settings > Celebrate (*Announce in guild chat*, *What is announced*: 1st place / Top 3 / Any entry, and *Also announce squad achievements*). The in-addon notice always shows. The chat message uses the language of the client that announces it, which may not be yours.
 
@@ -95,6 +95,7 @@ It opens a window with the report to copy (Ctrl+A, Ctrl+C); the same copy is kep
 - `prof path=<path> n=<N>`: which client API read your professions (`GetProfessions`, `C_SkillInfo`, `empty` or `none`) and how many it found.
 - `raid apis <API>=yes|no … rosters=<N>`: which group/raid APIs the client has and how many raid rosters exist.
 - `comm sent= recv= failed= pending=`: addon messages sent, received, failed and queued.
+- `p2p pend= verified= repudiated= blocked=` (1.1): relayed versions waiting for quorum, verified relays, denied versions (with the relayers who brought them) and relayers blocked for 7 days after 3 denials.
 - `sync bad= relayRefused= future= errors= quarantine= guild=`: refused records (malformed, unauthorised relay, future date), quarantined ones, and the loaded guild.
 - `[roster] me=<key> found=yes|no entries=<N> surnames=<N>`: whether your character was found in the guild roster (character surnames are supported).
 - `catalog achdef=<N> custom=<N> grants=<N> off=<N>`: the GM's achievement catalog (entries, custom achievements, granted badges, disabled).
@@ -102,6 +103,10 @@ It opens a window with the report to copy (Ctrl+A, Ctrl+C); the same copy is kep
 ## FAQ
 
 **Does anything leave the guild?** No. Only the guild addon channel and addon whispers to guild members. No internet requests.
+
+**Why is a player grey in the Finder?** (1.1) Their profile reached you through a single member, not from them or a second relayer: it is *unverified*. The tooltip says who brought it ("Arrived via X; it will be confirmed when Y logs in"). It does not count for rankings, Tops or celebrations until it is confirmed.
+
+**What does "Guild Squads: X/Y members (30 days)" count?** (1.1) Members who published their presence (once a day, on login) in the last 30 days, even if they are offline now. The tooltip lists who has it and which version.
 
 **Do I need the addon to be in the Hall of Fame?** Levels of members without the addon are seen through the guild roster (from when someone with the addon observes them, not backwards). Bosses, PvP and counters need the addon.
 

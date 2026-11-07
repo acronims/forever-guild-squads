@@ -71,7 +71,7 @@ Guía del GM, los oficiales y los líderes de banda: [GM-GUIDE.md](GM-GUIDE.md).
 
 **Al volver a entrar no tengo mis datos.** Se ha visto que el cliente de Forever guarda las SavedVariables al salir pero a veces no las vuelve a leer. Qué hacer: haz `/gsq export` de vez en cuando y guarda el texto; si pierdes datos, `/gsq import`. Además, al conectar, lo recuperas de la guild si hay un GM u oficial conectado (`/gsq sync`).
 
-**No me llega nada / no veo los squads de otros.** Los datos de otros solo te llegan en vivo de su autor o reenviados por el **GM o un oficial**. Sin GM ni oficial conectados, solo recibes lo que publican en ese momento los propios autores. Espera a que entre uno y haz `/gsq sync`. En guilds grandes, ponerse al día tarda unos minutos (a propósito, para no saturar el canal).
+**No me llega nada / no veo los squads de otros.** Los datos de otros te llegan en vivo de su autor, reenviados por el **GM o un oficial** o (desde la 1.1) reenviados por cualquier miembro con la 1.1 si son perfiles, RSVP, testigos o presence. Los squads, los ajustes y los rosters siguen necesitando al autor, al GM o a un oficial conectado. Haz `/gsq sync`; quien siga en la 1.0.x no reenvía, así que pídele que actualice. En guilds grandes, ponerse al día tarda unos minutos (a propósito, para no saturar el canal).
 
 **No se anuncia nada en el chat de la guild.** Las celebraciones en el chat de la guild están **desactivadas por defecto**; las activa el GM en Ajustes > Celebrac. (*Anunciar en el chat de la guild*, *Qué se anuncia*: Puesto 1 / Top 3 / Cualquiera, y *Anunciar también los logros de squad*). El aviso dentro del addon sale siempre. El mensaje del chat va en el idioma del cliente que lo anuncia, que puede no ser el tuyo.
 
@@ -95,6 +95,7 @@ Abre una ventana con el informe para copiar (Ctrl+A, Ctrl+C); la misma copia que
 - `prof path=<vía> n=<N>`: qué API del cliente leyó tus profesiones (`GetProfessions`, `C_SkillInfo`, `empty` o `none`) y cuántas encontró.
 - `raid apis <API>=yes|no … rosters=<N>`: qué APIs de grupo y banda existen en el cliente y cuántos rosters de banda hay.
 - `comm sent= recv= failed= pending=`: mensajes de addon enviados, recibidos, fallidos y en cola.
+- `p2p pend= verified= repudiated= blocked=` (1.1): versiones reenviadas que esperan quórum, reenvíos verificados, versiones desmentidas (con los reenviadores que las trajeron) y reenviadores bloqueados 7 días tras 3 desmentidos.
 - `sync bad= relayRefused= future= errors= quarantine= guild=`: registros rechazados (mal formados, reenvío no autorizado, fecha futura), en cuarentena, y la guild cargada.
 - `[roster] me=<clave> found=yes|no entries=<N> surnames=<N>`: si tu personaje aparece en el roster de la guild (se admiten los apellidos de personaje).
 - `catalog achdef=<N> custom=<N> grants=<N> off=<N>`: el catálogo de logros del GM (entradas, logros propios, insignias otorgadas, desactivados).
@@ -102,6 +103,10 @@ Abre una ventana con el informe para copiar (Ctrl+A, Ctrl+C); la misma copia que
 ## Preguntas frecuentes
 
 **¿Sale algo fuera de la guild?** No. Solo el canal de addon de la guild y susurros de addon a miembros de la guild. Sin peticiones a internet.
+
+**¿Por qué sale un jugador en gris en el Buscador?** (1.1) Su perfil te llegó por un solo miembro, no de él ni de un segundo reenviador: está *sin verificar*. El tooltip dice quién lo trajo («Llegado por X; se confirmará cuando Y se conecte»). No cuenta para rankings, Tops ni celebraciones hasta que se confirma.
+
+**¿Qué cuenta «Guild Squads: X/Y miembros (30 días)»?** (1.1) A los miembros que publicaron su presence (una vez al día, al entrar) en los últimos 30 días, aunque ahora no estén conectados. El tooltip dice quién lo tiene y con qué versión.
 
 **¿Necesito el addon para salir en el Salón de la fama?** Los niveles de miembros sin addon se ven por el roster de la guild (desde que alguien con addon lo observa, no hacia atrás). Jefes, PvP y contadores necesitan el addon.
 
