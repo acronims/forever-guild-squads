@@ -25,10 +25,11 @@ X.QUORUM_AUTH = 2              -- v1.2 D1 (BRO 7-nov 19:04, opción B): distinct
 -- relayers needed for this record: authorial kinds 2, authority kinds 3
 function X.quorumFor(rec) return M.isP2P(rec) and X.QUORUM or X.QUORUM_AUTH end
 -- what a hello payload can take: 0 = 1.0 (authors / officers only), 1 = 1.1 (+ authorial), 2 = 1.2 (+ authority)
+-- PROTO 2 (BRO 7-nov 21:20): Comm drops every message with v ~= 2, so every hello that gets here comes from a 1.2
+-- client. A hello claiming p2 < 2 can only come from a modified client trying the old paths (officers answering
+-- always, 60-record pages): it is served as a 1.2 one.
 function X.protoOf(payload)
-  local p = type(payload) == "table" and tonumber(payload.p2) or nil
-  if not p or p < 1 then return 0 end
-  return p >= 2 and 2 or 1
+  return 2
 end
 X.PEND_TTL = 7 * 86400
 X.MAX_PEND = 2000

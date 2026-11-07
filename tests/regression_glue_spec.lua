@@ -128,8 +128,11 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello reply to a 1.2 requester = 2 of
       ok(nc <= S.CUBES_PICK, nc .. " cubes in one reply")
     end
     eq(union, 200, "100 sampled replies cover every record")
+    -- PROTO 2 (BRO 7-nov 21:20): only a modified client can claim p2 = 1 now; it is served like any 1.2 requester
     local old = S.ReplyFor({ h = h, p2 = 1, nonce = nonce }, "Old-Realm", nil, nil)
-    eq(#old, 60, "a 1.1 requester still gets MAX_REPLY = 60, paginated")
+    local oc = {}; local noc = 0
+    for _, r in ipairs(old) do local cb = S.CubeOf(r.id, nonce); if not oc[cb] then oc[cb] = true; noc = noc + 1 end end
+    ok(noc <= S.CUBES_PICK, "a p2 = 1 hello gets the 1.2 sample (" .. noc .. " cubes), not the 1.1 pages")
   end)
   ns.onlineCount = oldOnline
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
@@ -292,7 +295,9 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a 1.2 replier diffs profiles on the f
     end
     ok(#coarse > 5, #coarse .. " records in the differing coarse bucket (the waste h2 avoids)")
     local old = S.ReplyFor({ h = h, h2 = h2, p2 = 1, nonce = 1 }, "Old-Realm", nil, nil)
-    eq(#old, #coarse, "a 1.1 requester is diffed on the coarse buckets (h2 ignored)")
+    for _, r in ipairs(old) do
+      if r.k == "profile" then ok(M.bucketOf(r.id, S.FINE_NB) == fineB, "PROTO 2: a p2 = 1 hello is diffed on h2 too") end
+    end
   end)
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
