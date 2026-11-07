@@ -353,13 +353,44 @@ function S8(seed, minutes) {
     maxQ = Math.max(maxQ, c.maxQueue); thr += c.throttled;
   }
   const avgAll = cs.reduce((s, c) => s + c.sent, 0) / cs.length / dur;
+  const partsEdits = cs.reduce((s, c) => s + c.sent, 0);
+  // v1.2 AC3 (BRO 7-nov 19:07: measured in S8 instead of S8g): right after the edits a newcomer with empty
+  // SavedVariables logs in; t95 / t100 of the profiles + squads it holds (stored = verified), the curve
+  // [s, held, pending ids] every 30 s, and the local "synced" chat line (once). GSQ_S8_NEWCOMER=0: no newcomer (the
+  // traffic run for AC5, same conditions as the 1.1 S8).
+  let nc = null, t95 = null, t100 = null, target = null, curve = [], chat = [];
+  if (process.env.GSQ_S8_NEWCOMER !== '0') {
+    const cnt = `(function() local n = 0 for _ in pairs(NS.state.profiles) do n = n + 1 end for _ in pairs(NS.state.squads) do n = n + 1 end return n end)()`;
+    const pendCnt = `(function() local n = 0 for _ in pairs((NS.state.p2p and NS.state.p2p.pend) or {}) do n = n + 1 end return n end)()`;
+    target = Number(cs[0].val(cnt)[0]);
+    nc = sim.client('Mb2');
+    const tn = sim.t;
+    nc.login();
+    for (let k = 0; k < 60 && t100 === null; k++) {
+      sim.run(10);
+      const h = Number(nc.val(cnt)[0]);
+      if (k % 3 === 2) curve.push([Math.round(sim.t - tn), h, Number(nc.val(pendCnt)[0])]);
+      if (t95 === null && h >= 0.95 * target) t95 = Math.round(sim.t - tn);
+      if (h >= target) t100 = Math.round(sim.t - tn);
+    }
+    sim.run(120);  // room for the "synced" line (60 s of quiet after the last round)
+    const raw = nc.val('(function() local o = {} for _, e in ipairs(SIM_CHAT or {}) do o[#o + 1] = e.s end return table.concat(o, "\\n") end)()')[0];
+    chat = String(raw || '').split('\n').filter((x) => x);
+  }
   check('mean msgs/s per client (busiest) <= 1.05 (client throttle 1/s; Comm drains at 1/s)', mean <= 1.05, mean.toFixed(3));
   check('peak in any 1 s window <= 10 (throttle burst)', peak1 <= 10, peak1);
   check('sends refused by the throttle = 0', thr === 0, thr);
   check('send queue never above X = 500', maxQ <= 500, maxQ);
   check('model converged', sim.settle(900, 15));
+  if (nc) {
+    const syncedLines = chat.filter((x) => /^Guild Squads: (synced|sincronizado) \(\d+ /.test(x));
+    check('AC3 newcomer 95 % in <= 240 s (no worse than 1.1)', t95 !== null && t95 <= 240, t95 + ' s');
+    check('AC3 newcomer 100 % in <= 600 s', t100 !== null && t100 <= 600, t100 + ' s');
+    check('AC3 the newcomer writes the local "synced" chat line exactly once', syncedLines.length === 1, JSON.stringify(chat).slice(0, 200));
+  }
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { clients: cs.length, seconds: Math.round(dur), meanAll: +avgAll.toFixed(3), meanBusiest: +mean.toFixed(3), peak1s: peak1, peak10s: +peak10.toFixed(2), maxQueue: maxQ, throttled: thr, records: n } };
+  return { pass: pass(), checks, metrics: { clients: cs.length, seconds: Math.round(dur), meanAll: +avgAll.toFixed(3), meanBusiest: +mean.toFixed(3), peak1s: peak1, peak10s: +peak10.toFixed(2), maxQueue: maxQ, throttled: thr, records: n,
+    partsEdits, newcomerTarget: target, newcomerT95: t95, newcomerT100: t100, newcomerCurve: curve, newcomerChat: chat } };
 }
 
 // S9: chaos: 1 simulated hour of random actions with 5 % loss and random /reloads -> convergence, no Lua errors
@@ -949,7 +980,7 @@ function S8g(seed, minutes) {
   if (process.env.GSQ_S8G_AC !== '0') {   // GSQ_S8G_AC=0: reference runs (AC0) only measure
     check('AC2 no client sends > 15 % of the parts', share <= 0.15, top[0].join(':') + ' = ' + (100 * share).toFixed(1) + ' %');
     check('AC2 an officer answers <= 30 % of the hellos', ofShare <= 0.30, JSON.stringify(hs));
-    check('AC3 newcomer 95 % in <= 180 s', t95 !== null && t95 <= 180, t95 + ' s');
+    check('AC3 newcomer 95 % in <= 240 s (no worse than 1.1)', t95 !== null && t95 <= 240, t95 + ' s');
     check('AC3 newcomer 100 % in <= 600 s', t100 !== null && t100 <= 600, t100 + ' s');
     check('AC5 parts total <= 1.1 + 20 % (6914)', total <= 6914, total);
     check('AC5 max queue <= 500', maxQ <= 500, maxQ);

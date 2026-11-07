@@ -149,6 +149,9 @@ local function addTimer(at, fn, period, iter)
   timers[#timers + 1] = t
   return t
 end
+-- local chat frame: lines written with DEFAULT_CHAT_FRAME:AddMessage stay on this client (SIM_CHAT, with sim time)
+SIM_CHAT = {}
+DEFAULT_CHAT_FRAME = { AddMessage = function(_, s) SIM_CHAT[#SIM_CHAT + 1] = { t = GetTime(), s = tostring(s) } end }
 C_Timer = {
   After = function(d, fn) addTimer(GetTime() + math.max(0, d or 0), fn) end,
   NewTicker = function(p, fn, n)
