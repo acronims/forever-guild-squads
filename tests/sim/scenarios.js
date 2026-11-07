@@ -503,23 +503,48 @@ function holdings(sim, c, authors) {
     return table.concat(out) end)()`)[0];
 }
 
+// squads held by client c: "v" = in NS.state.squads, "u" = pending / unverified (v1.2), "-" = missing
+function squadHoldings(c, ids) {
+  const list = ids.map((id) => luaStr(id)).join(',');
+  return c.val(`(function() local X, out = NS.P2P, {}
+    for _, id in ipairs({ ${list} }) do
+      local r = NS.state.squads[id]
+      local u = X and X.unverified and X.unverified(NS.state, "squad", id)
+      out[#out + 1] = r and "v" or (u and "u" or "-")
+    end
+    return table.concat(out) end)()`)[0];
+}
+
 // S11 (AC1): no GM / officer with the addon. 5 clients log in staggered, never more than 2 online at once
 // (forward chain, backward chain, forward chain: <= 3 sessions per client, each one overlapping the next for 25 min).
-// Every authorial record (profiles + presence) of every author reaches every client.
-function S11(seed) {
+// Every authorial record (profiles + presence) of every author reaches every client, and so do the squads (v1.2 AC1)
+// that Mb1 and Mb4 create in their first session (authority records: in v1.1 only the author or an officer may
+// hand them over, so Mb3/Mb5 never get Mb1's squad -> red expected on v1.1).
+// S15 (AC1) = S11 with the GM online all along (it is not counted in "online at once").
+function s11core(seed, withGm) {
   const sim = new Sim({ seed });
   const { check, checks, pass } = checker();
-  makeGuild(sim, 1, 5);                         // Gm and Of1 exist in the roster but never run the addon
+  makeGuild(sim, 1, 5);                         // Gm and Of1 exist in the roster; in S11 they never run the addon
   const names = ['Mb1', 'Mb2', 'Mb3', 'Mb4', 'Mb5'];
   const cs = names.map((n) => sim.client(n));
+  let gm = null;
+  if (withGm) { gm = sim.client('Gm'); gm.login(); sim.run(20); }
+  const members = () => sim.online().filter((c) => c !== gm).length;
   const sessions = {}; let maxOnline = 0;
+  const squadIds = [];
   const OVER = 25 * 60;
   const on = (c) => {
     if (c.online) return;
     c.login(); sessions[c.name] = (sessions[c.name] || 0) + 1;
-    maxOnline = Math.max(maxOnline, sim.online().length);
+    maxOnline = Math.max(maxOnline, members());
     sim.run(20);
     c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`);
+    if (sessions[c.name] === 1 && (c.name === 'Mb1' || c.name === 'Mb4')) {
+      sim.run(5);
+      c.run(`return A.CreateSquad({ name = ${luaStr('Squad ' + c.name)}, icon = 1, color = 1, border = 1, tags = {}, open = true })`);
+      const id = c.val('A.MySquadId()')[0];
+      if (id) squadIds.push(String(id));
+    }
   };
   const chain = (order) => {
     on(cs[order[0]]);
@@ -527,23 +552,31 @@ function S11(seed) {
   };
   chain([0, 1, 2, 3, 4]);
   chain([4, 3, 2, 1, 0]);
-  const after2 = {};
+  const after2 = {}, sq2 = {};
   cs[0].logout();
-  for (const c of cs) { c.login(); after2[c.name] = holdings(sim, c, names); c.logout(); }
+  for (const c of cs) { c.login(); after2[c.name] = holdings(sim, c, names); sq2[c.name] = squadHoldings(c, squadIds); c.logout(); }
   chain([0, 1, 2, 3, 4]);
   cs[4].logout();
-  const after3 = {};
-  for (const c of cs) { c.login(); after3[c.name] = holdings(sim, c, names); c.logout(); }
+  const after3 = {}, sq3 = {};
+  for (const c of cs) { c.login(); after3[c.name] = holdings(sim, c, names); sq3[c.name] = squadHoldings(c, squadIds); c.logout(); }
   const cells = Object.values(after3).join('');
   const arrived = cells.split('').filter((x) => x !== '-').length, total = cells.length;
   const verified = cells.split('').filter((x) => x === 'v').length;
-  check('never more than 2 clients online at once', maxOnline <= 2, maxOnline);
+  const sqCells = Object.values(sq3).join('');
+  const sqArrived = sqCells.split('').filter((x) => x !== '-').length, sqTotal = sqCells.length;
+  const sqVerified = sqCells.split('').filter((x) => x === 'v').length;
+  check('never more than 2 member clients online at once', maxOnline <= 2, maxOnline);
   check('<= 3 sessions per client', Object.values(sessions).every((n) => n <= 3), JSON.stringify(sessions));
   check('100 % of the authorial records reached every client (verified or unverified) after 3 passes', arrived === total, `${arrived}/${total} ${JSON.stringify(after3)}`);
-  check('no GM / officer ever online', !sim.clients.Gm && !sim.clients.Of1, '');
+  check('2 squads created (Mb1, Mb4)', squadIds.length === 2, JSON.stringify(squadIds));
+  check('100 % of the squads reached every client (verified or pending) after 3 passes', sqTotal > 0 && sqArrived === sqTotal, `${sqArrived}/${sqTotal} ${JSON.stringify(sq3)}`);
+  if (withGm) check('GM online all along, no officer', !!gm.online && !sim.clients.Of1, '');
+  else check('no GM / officer ever online', !sim.clients.Gm && !sim.clients.Of1, '');
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { arrived, total, verified, after2, after3, sessions, t: Math.round(sim.t), ...sim.stats } };
+  return { pass: pass(), checks, metrics: { arrived, total, verified, sqArrived, sqTotal, sqVerified, after2, after3, sq2, sq3, sessions, t: Math.round(sim.t), ...sim.stats } };
 }
+function S11(seed) { return s11core(seed, false); }
+function S15(seed) { return s11core(seed, true); }
 
 // S12 (AC2 + AC4): a forged profile of an offline author. One malicious relayer -> unverified on every client and never
 // verified; a second colluder -> verified by quorum. The author logs in: its version wins, its client repudiates the
@@ -737,4 +770,4 @@ function S8g(seed, minutes) {
     newcomerT95: t95, newcomerT100: t100, convergeAfterNewcomer: tConv, ...sim.stats } };
 }
 
-module.exports = { S8g, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+module.exports = { S8g, S15, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };

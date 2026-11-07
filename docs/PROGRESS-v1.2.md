@@ -17,8 +17,8 @@ Línea base (7-nov, 636e545, sin tocar nada): `RESULT: 266 passed, 0 failed`, `G
 Estados: no ejecutado · corriendo · reportado hecho · verificado (gate de evidencia).
 | AC | Estado | Test | Evidencia / notas |
 |---|---|---|---|
-| AC0 referencia S8g (1.1 y 1.0.1) | corriendo | sim `S8g` (`tests/sim/scenarios.js`) | contenedor detached `anton-gsq-ac0-*` en el Mac mini (Portainer, node:22); salida en `wt/ac0/s8g-110.log` y `s8g-101.log` (+ `.json`), `wt/ac0/DONE` al acabar |
-| AC1 convergencia S11 + S15 (squads incluidos, ≤3 sesiones) | no ejecutado | sim `S11`, `S15` | — |
+| AC0 referencia S8g (1.1 y 1.0.1) | verificado | sim `S8g` seed 7303 | 1.1 (636e545): partes **5762** (top Of2 718 = 12,5 %; Of1+Of2+Gm = 37 %), cola máx. 285, meanAll 0,159 msg/s, recién llegado t95 240 s / t100 250 s (220 registros), converge 15 s, 0 errores, PASS (1028 s). 1.0.1: partes 3299 (top Of1 588 = 17,8 %), cola máx. 235, meanAll 0,091, t95 260 s / t100 270 s, converge 15 s, PASS (687 s). Tope D3 para AC5: 5762 × 1,2 = **6914** partes. Ojo AC2: en la 1.1 ningún cliente pasa ya del 15 % (12,5 %); el reparto se mide por el peso conjunto de oficiales. Logs `wt/ac0/s8g-110.log`, `s8g-101.log` (+ `.json`). Contenedor borrado. |
+| AC1 convergencia S11 + S15 (squads incluidos, ≤3 sesiones) | rojo (test escrito) | sim `S11`, `S15` | Sobre 1.1 (código sin tocar): **S11 FAIL** squads 5/10 (Mb3–Mb5 nunca reciben el de Mb1, Mb1–Mb2 nunca el de Mb4: un miembro no puede reenviar autoridad), autorales 50/50. **S15 FAIL** autorales 45/50: con el GM conectado faltan presence (Mb1 sin la de Mb4/Mb5, Mb5 sin la de Mb1/Mb2…); squads 10/10. Rojo esperado en ambos. |
 | AC2 reparto (≤15 % por cliente, oficial ≤30 % de hellos) | no ejecutado | sim `S8g` + `tools/tally.js` | — |
 | AC3 latencia quórum (95 % ≤3 min, 100 % ≤10 min, 5 semillas) | no ejecutado | sim `S8g` | — |
 | AC4 envenenamiento (S16, tope 200 por reenviador) | no ejecutado | sim `S16` + unidad | — |
@@ -32,4 +32,5 @@ Estados: no ejecutado · corriendo · reportado hecho · verificado (gate de evi
   recién llegado vacío. Mide partes totales y por cliente, cola máxima, msg/s medios, t95/t100 del recién llegado y tiempo
   hasta converger. AC0 lanzado detached (no en Gilfoyle: no tiene node y es producción; el Mac mini sí). Copias congeladas:
   `wt/ac0/ref-110` (git archive 636e545) y `wt/ref-101`.
-- Siguiente: AC1 (escenario S15 con el GM conectado; S11 con squads) primero en rojo.
+- 7-nov 11:4x: AC0 acabado (cifras arriba). S11 ampliado con 2 squads (Mb1, Mb4) y S15 nuevo (= S11 con el GM conectado todo el rato); los dos en rojo sobre la 1.1.
+- Siguiente: AC1 en verde — quórum de autoridad (`QUORUM_AUTH = 3`) en `Core/P2P.lua` + que los miembros reenvíen presence aunque haya GM.
