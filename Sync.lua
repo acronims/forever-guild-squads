@@ -233,10 +233,10 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff)
         -- skip: not ours to relay
       elseif queued[r.id] == vkey(r) then
         -- this version is already waiting in our send queue
-      elseif r.k == "presence" and r.a ~= me and (onlyAuthor == nil or nPres >= Sync.MAX_PRESENCE_REPLY) then
-        -- v1.1: GMs/officers never relay others' presences and members relay a few per reply (S8: relaying them
-        -- filled the officers' queues past 500). Each login reaches everyone online live; members' P2P replies and
-        -- the anti-entropy hellos bring the rest
+      elseif r.k == "presence" and r.a ~= me and nPres >= Sync.MAX_PRESENCE_REPLY then
+        -- v1.1: at most MAX_PRESENCE_REPLY others' presences per hello reply, for everyone (S8: relaying them all
+        -- filled the officers' queues past 500). a321d40 skipped them entirely whenever onlyAuthor was nil, so nobody
+        -- relayed presences and S2 stopped converging; the cap keeps both. Pagination (cursor) brings the rest.
       elseif not suppressed(r, startedAt, p2p) then
         if r.k == "presence" and r.a ~= me then nPres = nPres + 1 end
         all[#all + 1] = { key = ("%03d|%s"):format(ki, r.id), r = r }   -- numeric kind order
