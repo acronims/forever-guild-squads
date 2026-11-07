@@ -65,3 +65,28 @@ Un agente QA distinto del que lo construye (juez a ciegas) y Anton. La prueba en
 
 ## Estimación
 Unos 2 días: spec cerrada, código, tests y simulador, más una ronda de QA. Después, la beta y la prueba de BRO en el juego.
+
+## Anexo A — Tipos AUTORALES frente a tipos de AUTORIDAD (confirmado contra el código, 7-nov)
+Revisado `M.apply` (`Core/Model.lua:552-652`) y los `applyFn` de las extensiones (`Core/Roster.lua:422-529`, `Core/Races.lua:1309`, `Core/Catalog.lua:166-226`). La lista cerrada vive en el código como `M.P2P_KINDS` (`Core/Model.lua`) más la función `M.isP2P(rec)`, que excluye los casos marcados abajo. Regla aplicada: si la validez del registro depende de la autoridad de otro jugador, o si otro registro de autoridad se apoya en él, se queda en autoridad.
+
+| Tipo | Clase | Motivo | Código |
+|---|---|---|---|
+| `profile` | **autoral**, salvo si lleva `xferTo` | Solo lo firma el propio jugador (`rec.a == rec.id`). Pero un perfil con `xferTo = "sid>Nuevo"` es la firma del capitán que **valida** el traspaso de su squad (`validateSquad`): si aceptásemos un `xferTo` reenviado por quórum, dos cómplices podrían quedarse con un squad. Un perfil con `xferTo` reenviado sigue la regla de autoridad (solo GM/oficial o en directo). | `Core/Model.lua:575`, dependencia en `Core/Model.lua:437-441` |
+| `reject` con `kind = "inv"` | **autoral** | Lo emite solo el invitado que declina (`rec.a == d.name`). | `Core/Model.lua:604-605` |
+| `reject` con `kind = "req"` | **autoridad** | Lo emite el capitán (o el GM) que rechaza una solicitud: depende de quién es el capitán. | `Core/Model.lua:606-608` |
+| `rsvp` | **autoral** | Solo el jugador responde por sí mismo (`rec.a == d.name`). Exige que exista el roster publicado (dato, no autoridad del firmante). | `Core/Roster.lua:459-466` |
+| `witness` | **autoral** | El id va atado al autor (`rid#autor`) y el autor tiene que estar en la lista. Exige el roster cerrado (dato). | `Core/Roster.lua:513-520` |
+| `presence` (nuevo) | **autoral** | `id == a`, solo describe al autor (versión del addon y día). | `Core/Roster.lua` (nuevo, ver P2P) |
+| `repudiate` (nuevo) | **autoral** (regla propia) | Lo firma el autor de la versión que desmiente; se acepta del autor en directo o con quórum de 2. | `Core/P2P.lua` (nuevo) |
+| `settings` | autoridad | Solo el GM. | `Core/Model.lua:570` |
+| `squad` | autoridad | Capitán / oficial / GM, con traspasos y moderación. | `Core/Model.lua:388-478` |
+| `annul` | autoridad | Solo el GM. | `Core/Model.lua:617` |
+| `boss` | autoridad | Cualquiera lo enseña una vez, pero el GM lo corrige y marca `final` (primer escritor determinista + prioridad del GM). El spec lo deja en autoridad; no cambia. | `Core/Model.lua:624-648` |
+| `roster` | autoridad | RL / oficial / GM (`R.canLead`, `R.canEdit`). | `Core/Roster.lua:430-439` |
+| `attendance` | autoridad | Solo quien puede editar el roster (`R.canEdit`). **Desvío del spec 3b**: el spec menciona «la asistencia» entre lo que el capitán valida, pero es un registro de autoridad (lo firma el RL), así que el capitán no la valida. | `Core/Roster.lua:482` |
+| `vconfirm` | autoridad | Solo oficiales. | `Core/Races.lua:1313` |
+| `achdef`, `achgrant` | autoridad | Solo el GM. | `Core/Catalog.lua:173`, `Core/Catalog.lua:214` |
+
+La suposición del apartado Riesgos era **parcialmente falsa**: `reject` depende de la autoridad del capitán cuando es `req`, y `profile` sostiene la autoridad del traspaso cuando lleva `xferTo`. Ambos casos se quedan en autoridad.
+
+Capitanes como nodo (3b), cómo se decide «el squad del registro»: `profile` → `d.squad`; `reject inv` → `d.sid`; `rsvp` y `witness` → el squad del dueño (`owner`) del roster del evento (`M.squadOf(owner)`). El capitán vigente es el `captain` del registro `squad` guardado, no disuelto, y cuyo perfil no lleva un `xferTo` de ese squad (ya lo ha cedido).
