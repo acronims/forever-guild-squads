@@ -17,7 +17,7 @@ Línea base (7-nov, 636e545, sin tocar nada): `RESULT: 266 passed, 0 failed`, `G
 Estados: no ejecutado · corriendo · reportado hecho · verificado (gate de evidencia).
 | AC | Estado | Test | Evidencia / notas |
 |---|---|---|---|
-| AC0 referencia S8g (1.1 y 1.0.1) | no ejecutado | sim `S8g` | — |
+| AC0 referencia S8g (1.1 y 1.0.1) | corriendo | sim `S8g` (`tests/sim/scenarios.js`) | contenedor detached `anton-gsq-ac0-*` en el Mac mini (Portainer, node:22); salida en `wt/ac0/s8g-110.log` y `s8g-101.log` (+ `.json`), `wt/ac0/DONE` al acabar |
 | AC1 convergencia S11 + S15 (squads incluidos, ≤3 sesiones) | no ejecutado | sim `S11`, `S15` | — |
 | AC2 reparto (≤15 % por cliente, oficial ≤30 % de hellos) | no ejecutado | sim `S8g` + `tools/tally.js` | — |
 | AC3 latencia quórum (95 % ≤3 min, 100 % ≤10 min, 5 semillas) | no ejecutado | sim `S8g` | — |
@@ -28,3 +28,8 @@ Estados: no ejecutado · corriendo · reportado hecho · verificado (gate de evi
 
 ## Bitácora
 - 7-nov: worktree `wt/v1.2` creado desde 636e545; spec copiado; línea base en verde.
+- 7-nov 11:4x: escenario `S8g` (commit «test(sim): escenario S8g…»): 200 miembros, 40 clientes, 15 min de ediciones y un
+  recién llegado vacío. Mide partes totales y por cliente, cola máxima, msg/s medios, t95/t100 del recién llegado y tiempo
+  hasta converger. AC0 lanzado detached (no en Gilfoyle: no tiene node y es producción; el Mac mini sí). Copias congeladas:
+  `wt/ac0/ref-110` (git archive 636e545) y `wt/ref-101`.
+- Siguiente: AC1 (escenario S15 con el GM conectado; S11 con squads) primero en rojo.
