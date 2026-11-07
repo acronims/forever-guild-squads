@@ -342,6 +342,54 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) gets
   if not okAll then error(err, 0) end
 end }
 
+-- v1.2 AC3 arreglo 3 (S8 c2: t95 320 / 310 s with 120-record samples; the replies wait in the replier's send queue,
+-- maxQueue 151 at 1 msg/s): the catch-up sized reply to a cu = 1 hello skips the queue (urgent, like Sync.Publish).
+-- Only that one (once per CATCHUP_COOLDOWN per requester): a normal or a repeated cu hello queues as before.
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: the catch-up reply to a cu = 1 hello skips the send queue, once per cooldown", function(c)
+  local ns = c.ns
+  local S, M, Comm = ns.Sync, ns.Model, ns.Comm
+  local h = {}
+  for _, k in ipairs({ "settings", "squad", "profile", "reject", "boss", "annul" }) do h[k] = M.bucketHashes(ns.state, k) end
+  for _, k in ipairs(M.EXT_ORDER) do h[k] = M.bucketHashes(ns.state, k) end
+  local added = {}
+  for i = 1, 400 do
+    local id = ("Pu%03d-Realm"):format(i)
+    ns.state.profiles[id] = { k = "profile", id = id, a = id, ts = 1795000000, sq = 1, d = { role = "DAMAGER" } }
+    added[#added + 1] = id
+  end
+  h.profile = {}
+  local oldOnline, origSend, origRand = ns.onlineCount, Comm.Send, math.random
+  ns.onlineCount = function() return 40 end     -- the sampled path (more online than SAMPLE_MIN_ONLINE)
+  math.random = function(x, y) if x == nil then return 0 end return origRand(x, y) end   -- this one replies
+  local sent = {}
+  Comm.Send = function(tag, msg, ch, to, onSent, urgent)
+    if tag == "D" then sent[#sent + 1] = { urgent = urgent and true or false, n = #(msg.r or {}) } end
+    if onSent then onSent() end
+    return true
+  end
+  local function hello(from, nonce, cu)
+    sent = {}
+    S.OnMessage("H", { h = h, p2 = 2, nonce = nonce, cu = cu }, from)
+    runTimers(c, 10)
+    local u, q, n = 0, 0, 0
+    for _, x in ipairs(sent) do n = n + x.n; if x.urgent then u = u + 1 else q = q + 1 end end
+    return u, q, n
+  end
+  local okAll, err = pcall(function()
+    local u, q, n = hello("Cu1-Realm", 201, 1)
+    ok(n > S.MAX_SAMPLE, n .. " records in the catch-up reply")
+    ok(u > 0 and q == 0, ("catch-up reply: %d urgent, %d queued D messages"):format(u, q))
+    u, q = hello("Cu1-Realm", 202, 1)
+    eq(u, 0, "a second cu hello inside the cooldown is queued as usual")
+    u, q = hello("Cu2-Realm", 203, nil)
+    eq(u, 0, "a hello without cu is queued as usual")
+    ok(q > 0, "and it does get a reply")
+  end)
+  Comm.Send, ns.onlineCount, math.random = origSend, oldOnline, origRand
+  for _, id in ipairs(added) do ns.state.profiles[id] = nil end
+  if not okAll then error(err, 0) end
+end }
+
 -- v1.2 AC5 (S8 load): a 1.2 hello carries fine buckets h2 (Sync.FINE_NB) for the big kinds; a 1.2 replier diffs
 -- on them, so it does not resend a whole coarse bucket the requester already holds
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a 1.2 replier diffs profiles on the fine buckets h2 of the hello", function(c)

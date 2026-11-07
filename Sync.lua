@@ -138,14 +138,14 @@ end
 -- a record version already waiting in our send queue is not queued again for the next
 -- hello (otherwise 30 logins would queue 30 copies of the same records: ~470 messages, 8 minutes of backlog per officer)
 local queued = {}             -- id -> version string waiting in the send queue
-local function sendRecords(list, to)
+local function sendRecords(list, to, urgent)
   -- group a few records per message; Comm chunks large payloads
   local batch = {}
   local function flush()
     local ids = {}
     for i, r in ipairs(batch) do ids[i] = { r.id, vkey(r) }; queued[r.id] = vkey(r) end
     local function done() for _, x in ipairs(ids) do if queued[x[1]] == x[2] then queued[x[1]] = nil end end end
-    if Comm.Send("D", { r = batch }, to and "WHISPER" or nil, to, done) == false then done() end
+    if Comm.Send("D", { r = batch }, to and "WHISPER" or nil, to, done, urgent) == false then done() end
     batch = {}
   end
   for _, b in ipairs(Sync.PackRecords(list)) do batch = b; flush() end
@@ -413,19 +413,19 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
       for i = 1, #t - 1 do local j = math.random(i, #t); t[i], t[j] = t[j], t[i] end
     end
     shuffle(prio); shuffle(rest)
-    local cap = Sync.MAX_SAMPLE
+    local cap, big = Sync.MAX_SAMPLE, nil
     if payload.cu == 1 then
       local t = GetTime and GetTime() or 0
       local last = bigReply[sender]
       if not last or t - last >= Sync.CATCHUP_COOLDOWN or t < last then
-        bigReply[sender] = t; cap = Sync.MAX_SAMPLE_CATCHUP
+        bigReply[sender] = t; cap = Sync.MAX_SAMPLE_CATCHUP; big = true
       end
     end
     local out = {}
     for _, t in ipairs({ prio, rest }) do
       for _, r in ipairs(t) do if #out < cap then out[#out + 1] = r end end
     end
-    return out
+    return out, big
   end
   local last = cursor[sender]
   local start = 1
@@ -492,7 +492,9 @@ local function onHello(payload, sender)
   -- v1.2: only for 1.0 / 1.1 requesters; a 1.2 requester is served P2P whoever is online (officers are one more node)
   local p2pOff = (not officer) and (not X or X.protoOf(payload) < 2) and Sync.TrustedOnline()
   ns.After(2 + math.random() * 6, function()
-    local out = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff, officer)
+    -- AC3 arreglo 3: the catch-up sized reply (once per cooldown per requester) skips our send queue, like
+    -- Sync.Publish; otherwise it waits behind the S8 backlog (~150 s at 1 msg/s) and the newcomer stalls
+    local out, urgent = Sync.ReplyFor(payload, from, startedAt, onlyMe, p2pOff, officer)
     if ns.debug then ns.debug(("hello from %s: replying %d records"):format(tostring(sender), #out)) end
     -- v1.2 (AC6): a member's relay of someone else's authority record goes by WHISPER to the 1.2 requester only; on
     -- the GUILD channel every 1.0 / 1.1 client online would take it and refuse it as "relay"
@@ -503,8 +505,8 @@ local function onHello(payload, sender)
         if r.a == onlyMe or M.isP2P(r) then pub[#pub + 1] = r else priv[#priv + 1] = r end
       end
     end
-    sendRecords(pub)
-    if priv and #priv > 0 then sendRecords(priv, from) end
+    sendRecords(pub, nil, urgent)
+    if priv and #priv > 0 then sendRecords(priv, from, urgent) end
     if p2pOff then return end
     -- unverified versions only go to the requester (a 1.0 client would trust them from an officer)
     local fw = Sync.ForwardsFor(payload)
