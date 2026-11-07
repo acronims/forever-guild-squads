@@ -369,7 +369,7 @@ function S8(seed, minutes) {
     for (let k = 0; k < 60 && t100 === null; k++) {
       sim.run(10);
       const h = Number(nc.val(cnt)[0]);
-      if (k % 3 === 2) curve.push([Math.round(sim.t - tn), h, Number(nc.val(pendCnt)[0])]);
+      if (k % 3 === 2) { curve.push([Math.round(sim.t - tn), h, Number(nc.val(pendCnt)[0])]); console.error('S8 newcomer', JSON.stringify(curve[curve.length - 1]), 'of', target); }
       if (t95 === null && h >= 0.95 * target) t95 = Math.round(sim.t - tn);
       if (h >= target) t100 = Math.round(sim.t - tn);
     }
