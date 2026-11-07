@@ -6,15 +6,18 @@
 --   * relay trust: live = sender is the author; relayed = sender is GM/officer. Nothing else.
 --     There is no "announced hash" path (24-bit hashes are forgeable). Records >300 s
 --     in the future are refused; refused records are never stored, so they are never relayed.
---     Without a GM/officer online, each client only gets what the authors themselves publish (live or in their
---     hello replies, which only carry their own records).
+--   * v1.1 (Core/P2P.lua): AUTHORIAL records (M.P2P_KINDS) relayed by anyone wait as "unverified" until the same
+--     version comes from 2 distinct relayers (or the captain of their squad, or the author). Every 1.1 client
+--     answers a 1.1 hello (p2 = 1) with authorial records of others too; up to 2 relayed copies of a version go on
+--     the wire per hello. Versions held unverified are whispered to the requester flagged u = 1 (shown, never a
+--     vote). Authority records keep the old rule: live, or relayed by a GM/officer.
 --   * hello replies page with a per-requester cursor and the requester re-hellos while it keeps learning
 local _, ns = ...
 ns = ns or {}
 
 local Sync = {}
 ns.Sync = Sync
-local M, Comm = ns.Model, ns.Comm
+local M, Comm, X = ns.Model, ns.Comm, ns.P2P
 
 local KINDS = { "settings", "squad", "profile", "reject", "boss", "annul" }
 -- kinds registered by pure modules (roster, rsvp, attendance) travel the same way. A peer only gets them
@@ -25,12 +28,13 @@ for _, k in ipairs(M.EXT_ORDER or {}) do KINDS[#KINDS + 1] = k end
 local MAX_REPLY = 60          -- records per hello reply
 local MAX_PENDING = 5000      -- records waiting for the guild roster (own disk + early network)
 local MAX_ROUNDS = 6          -- extra hellos while a fresh client keeps learning
+local MAX_FORWARD = 20        -- unverified versions (u = 1) whispered per hello reply
 local pending = {}            -- { rec, sender } waiting for the guild roster
 local seenAfter = {}          -- id -> version string seen on the wire (reply suppression)
 local corrections = {}        -- id -> true when a correction is already scheduled
 local cursor = {}             -- requester -> last reply key sent (pagination)
 local heard = {}              -- sender -> GetTime() of the last addon message (addon detection)
-Sync.stats = { bad = 0, relayRefused = 0, future = 0, errors = 0, quarantined = 0 }
+Sync.stats = { bad = 0, relayRefused = 0, future = 0, errors = 0, quarantined = 0, pending = 0, mine = 0 }
 
 local function vkey(r) return tostring(r.ts) .. "." .. tostring(r.sq) .. "." .. tostring(r.a) end
 local function serverNow()
@@ -40,7 +44,7 @@ local function serverNow()
 end
 
 local function ctxFor(sender)
-  return { roster = ns.roster, sender = sender, now = serverNow() }
+  return { roster = ns.roster, sender = sender, me = ns.me and ns.me() or nil, now = serverNow() }
 end
 
 local function applyRaw(rec, ctx)
@@ -63,6 +67,12 @@ function Sync.Apply(rec, sender)
     if #pending < MAX_PENDING then pending[#pending + 1] = { rec = rec, sender = sender } end
   elseif not ok and why == "relay" then
     Sync.stats.relayRefused = Sync.stats.relayRefused + 1
+  elseif not ok and (why == "pending" or why == "conflict") then
+    Sync.stats.pending = Sync.stats.pending + 1
+  elseif not ok and why == "mine" then
+    -- a relayed version with my name that I never wrote: deny it (repudiate) and resend mine
+    Sync.stats.mine = Sync.stats.mine + 1
+    if ns.OnMine then pcall(ns.OnMine, rec) end
   elseif not ok and why == "future" then
     Sync.stats.future = Sync.stats.future + 1
     -- a record from a peer whose clock is ahead of ours is applied again once it is no
@@ -142,6 +152,7 @@ function Sync.EstimateParts(list)
   end
   return parts
 end
+function Sync.Resend(rec) if rec then sendRecords({ rec }) end end
 function Sync.QueuedCount() local n = 0 for _ in pairs(queued) do n = n + 1 end return n end
 
 local round, learned = 0, 0
@@ -162,6 +173,18 @@ function Sync.Hello(again)
   end
   -- bucket hashes of the race observations / closed races (peers answer with paginated diffs)
   if ns.HallGlue and ns.HallGlue.Enabled() then msg.rh = ns.HallGlue.HelloHashes() end
+  -- v1.1: we take authorial relays from anyone; bucket hashes of the versions we hold unverified
+  if X then
+    msg.p2 = X.PROTO
+    local ph
+    for _, k in ipairs(KINDS) do
+      if M.P2P_KINDS[k] then
+        local hs, any = X.pendHashes(ns.state, k)
+        if any then ph = ph or {}; ph[k] = hs end
+      end
+    end
+    msg.ph = ph
+  end
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
   if ns.After then
@@ -171,19 +194,31 @@ function Sync.Hello(again)
   end
 end
 
+-- already on the wire since the hello: any copy for authority records (and for 1.0 requesters); for authorial
+-- records sent to a 1.1 requester, a copy from the author / an officer, or copies from 2 distinct relayers
+local function suppressed(r, startedAt, p2p)
+  local seen = seenAfter[r.id]
+  if not (seen and startedAt and seen.v == vkey(r)) then return false end
+  if not (p2p and M.isP2P(r)) then return seen.t >= startedAt end
+  if (seen.tt or -1) >= startedAt then return true end
+  local n = 0
+  for _, t in pairs(seen.by or {}) do if t >= startedAt then n = n + 1 end end
+  return n >= X.QUORUM
+end
+
 -- records that differ from the requester, starting after the last one we sent it (cursor), at most MAX_REPLY.
--- a non-officer only replies with its own records (anything else would be refused as a relay).
+-- a non-officer replies with its own records, plus (v1.1, to a 1.1 requester) the authorial records of others.
 function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor)
   local all = {}
+  local p2p = X and payload.p2 == X.PROTO
   for ki, k in ipairs(KINDS) do
     local list = (CORE_KIND[k] or payload.h[k] ~= nil) and M.diffRecords(ns.state, k, payload.h[k]) or {}
     for _, r in ipairs(list) do
-      local seen = seenAfter[r.id]
-      if onlyAuthor and r.a ~= onlyAuthor then
+      if onlyAuthor and r.a ~= onlyAuthor and not (p2p and M.isP2P(r)) then
         -- skip: not ours to relay
       elseif queued[r.id] == vkey(r) then
         -- this version is already waiting in our send queue
-      elseif not (seen and startedAt and seen.t >= startedAt and seen.v == vkey(r)) then
+      elseif not suppressed(r, startedAt, p2p) then
         all[#all + 1] = { key = ("%03d|%s"):format(ki, r.id), r = r }   -- numeric kind order
       end
     end
@@ -203,6 +238,22 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor)
     cursor[sender] = all[i].key
     i = i % #all + 1
   until #out >= MAX_REPLY or i == start
+  return out
+end
+
+-- versions we hold unverified that a 1.1 requester lacks (copies flagged u = 1), at most MAX_FORWARD
+function Sync.ForwardsFor(payload)
+  if not (X and payload.p2 == X.PROTO) then return {} end
+  local ph = type(payload.ph) == "table" and payload.ph or {}
+  local all = {}
+  for _, k in ipairs(KINDS) do
+    if M.P2P_KINDS[k] then
+      for _, r in ipairs(X.pendDiff(ns.state, k, type(ph[k]) == "table" and ph[k] or nil)) do all[#all + 1] = r end
+    end
+  end
+  if #all <= MAX_FORWARD then return all end
+  local out, start = {}, math.random(1, #all)
+  for i = 0, MAX_FORWARD - 1 do out[#out + 1] = all[(start + i - 1) % #all + 1] end
   return out
 end
 
@@ -231,6 +282,13 @@ local function onHello(payload, sender)
     local out = Sync.ReplyFor(payload, from, startedAt, onlyMe)
     if ns.debug then ns.debug(("hello from %s: replying %d records"):format(tostring(sender), #out)) end
     sendRecords(out)
+    -- unverified versions only go to the requester (a 1.0 client would trust them from an officer)
+    local fw = Sync.ForwardsFor(payload)
+    for i = 1, #fw, Sync.BATCH do
+      local batch = {}
+      for j = i, math.min(#fw, i + Sync.BATCH - 1) do batch[#batch + 1] = fw[j] end
+      Comm.Send("D", { r = batch }, "WHISPER", from)
+    end
   end)
 end
 
@@ -245,7 +303,16 @@ local function onRecords(payload, sender)
     if not M.validShape(rec) then
       Sync.stats.bad = Sync.stats.bad + 1
     else
-      seenAfter[rec.id] = { t = t, v = vkey(rec) }
+      if rec.u == nil then
+        -- who put this version on the wire since the hello (reply suppression, see suppressed())
+        local v = vkey(rec)
+        local seen = seenAfter[rec.id]
+        if not seen or seen.v ~= v then seen = { v = v, by = {} }; seenAfter[rec.id] = seen end
+        seen.t = t
+        local P = ns.Permissions
+        if from == rec.a or (P and P.isOfficer(ns.roster, from, M.settingsOf(ns.state))) then seen.tt = t
+        else seen.by[from] = t end
+      end
       local ok, why = Sync.Apply(rec, from)
       if ok then learned = learned + 1; syncUntil = math.max(syncUntil, t + 60) end
       if ns.debug then ns.debug(("rec %s/%s from %s: %s"):format(tostring(rec.k), rec.id, tostring(sender), ok and "applied" or tostring(why))) end

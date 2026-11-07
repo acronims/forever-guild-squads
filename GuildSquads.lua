@@ -145,6 +145,8 @@ local function selectGuild()
   ns.gdb, ns.guildKey = g, key
   g.ann = nil -- announced hashes are not used
   local saved = type(g.records) == "table" and g.records or {}
+  -- v1.1: pending (unverified) versions, relay provenance and repudiation counts, before the records
+  if ns.P2P then pcall(ns.P2P.import, ns.state, g.p2p) end
   for _, r in ipairs(saved) do Sync.Apply(r) end    -- own disk: re-validated, no relay rule
   for _, fn in ipairs(ns.guildHooks) do pcall(fn, g) end
   if migrated then ns.debug("data moved to guild " .. key) end
@@ -208,13 +210,17 @@ local function readRoster()
     ns.rosterReady = true
     Sync.FlushPending()
     ns.Actions.RefreshProfile(true)
+    ns.Actions.P2PHousekeeping()
     ns.After(3 + math.random() * 7, Sync.Hello)
     -- anti-entropy. A version that reached only some clients (loss, /reload mid-send)
     -- was never repaired while nobody logged in; one hello every 10-20 min (jittered) closes the gap
     if not ns.antiEntropy then
       ns.antiEntropy = true
       local function again()
-        ns.After(600 + math.random() * 600, function() if ns.rosterReady then Sync.Hello() end; again() end)
+        ns.After(600 + math.random() * 600, function()
+          if ns.rosterReady then ns.Actions.P2PHousekeeping(); Sync.Hello() end
+          again()
+        end)
       end
       again()
     end
@@ -253,6 +259,39 @@ local function write(kind, id, data)
   local ok, why = Sync.Publish(rec)
   if not ok then ns.ShowError(why) end
   return ok, why
+end
+
+-- v1.1: presence {ver, day}, at most once a day (the real installed counter); pending versions expire after 7 days;
+-- presences of members who left the guild or older than 60 days are pruned
+function A.PublishPresence()
+  if not ns.rosterReady then return false end
+  local me = ns.me()
+  local day = math.floor(serverTime() / 86400)
+  local ver = tostring(ns.VERSION or "?"):sub(1, 16)
+  local cur = ns.state.presence and ns.state.presence[me]
+  if cur and cur.d.day == day and cur.d.ver == ver then return false end
+  return write("presence", me, { ver = ver, day = day })
+end
+function A.P2PHousekeeping()
+  local X = ns.P2P
+  if not (X and ns.rosterReady) then return end
+  local t = serverTime()
+  pcall(X.expire, ns.state, t)
+  pcall(X.prunePresence, ns.state, rosterCache, t)
+  A.PublishPresence()
+end
+-- a relayed version with my name that I never wrote (Sync: "mine"): sign a repudiate once and resend my version
+local denied = {}
+function ns.OnMine(rec)
+  local X = ns.P2P
+  if not X or type(rec) ~= "table" then return end
+  local clean = { k = rec.k, id = rec.id, a = rec.a, ts = rec.ts, sq = rec.sq, d = M.sanitize(rec.k, rec.d) or {} }
+  if clean.a ~= ns.me() then return end
+  local vk = X.vkey(clean)
+  if denied[vk] or (ns.state.repudiates and ns.state.repudiates[vk]) then return end
+  denied[vk] = true
+  write("repudiate", vk, { t = X.kid(clean), v = vk })
+  Sync.Resend(M.stored(ns.state, clean))
 end
 
 -- generic signed record (boss catalog, GM annulments); validated by Model like every other record
@@ -558,7 +597,10 @@ end
 
 -- a character without guild (or before the roster) never overwrites anything
 function saveDB()
-  if db and ns.gdb and ns.rosterReady then ns.gdb.records = M.allRecords(ns.state) end
+  if db and ns.gdb and ns.rosterReady then
+    ns.gdb.records = M.allRecords(ns.state)
+    if ns.P2P then ns.gdb.p2p = ns.P2P.export(ns.state) end
+  end
 end
 
 -------------------------------------------------------------------------------

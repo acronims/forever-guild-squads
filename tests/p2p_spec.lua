@@ -219,3 +219,15 @@ test("p2p: pending store is bounded (2000) and expires after 7 days", function()
   eq(X.stats(s).pend, 0, "expired after 7 days")
   for i = 1, 2010 do RANKS["N" .. i .. "-R"] = nil end
 end)
+
+-- full client (zload fake WoW): /gsq diag carries the p2p line, our presence is published, the counter text is real
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.1: /gsq diag p2p line, own presence published, counter 'Guild Squads: X/Y (30 days)'", function(c)
+  local ns = c.ns
+  local rep = ns.DiagGlue.Report()
+  ok(type(rep) == "string" and rep:find("p2p pend=%d+ verified=%d+ repudiated=%d+ blocked=%d+"), "diag p2p line")
+  local p = ns.state.presence and ns.state.presence[ns.me()]
+  ok(p and p.d.day == math.floor(GetServerTime() / 86400), "own presence of today")
+  local text = ns.HallGlue.AdoptionText()
+  ok(text:find("%d+/%d+") and text:find("30"), text)
+  ok(ns.Actions.PublishPresence() == false, "at most once a day")
+end }

@@ -78,6 +78,9 @@ function G.Report()
     extra[#extra + 1] = ("sync bad=%d relayRefused=%d future=%d errors=%d quarantine=%d guild=%s"):format(y.bad, y.relayRefused,
       y.future, y.errors, ns.Sync.QuarantineCount(), tostring(ns.guildKey))
   end
+  if ns.P2P and ns.state then -- v1.1: unverified versions, verified by quorum/captain, repudiations, blocked relayers
+    extra[#extra + 1] = ns.P2P.diagLine(ns.state, (GetServerTime and GetServerTime()) or 0)
+  end
   if ns.Catalog and ns.Catalog.debugLine then extra[#extra + 1] = ns.Catalog.debugLine() end -- GM catalog
   if ns.RosterDiag then extra[#extra + 1] = ns.RosterDiag() end -- am I in the roster cache (surnames)
   return D.report(db, extra)
