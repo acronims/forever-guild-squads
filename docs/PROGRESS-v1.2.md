@@ -382,3 +382,5 @@ Se mantiene la regla de **≥2 certificados de emisores fuertes**. **AF7 se reha
   9. Bajos (F9-F13, F16, tests vacíos de la QA): después; los info (F14, F15) al CHANGELOG/README.
 - Para BRO en el mensaje final (no ahora): QA D7/F10 (un solo alt conocido en persona puede dejar «disputada» la clave de un desconocido para siempre; es la regla del spec).
 - **Retoma por:** respuesta de BRO a AF4; luego el punto 1 (test rojo primero en cert_spec/keys_wire_spec), unidad + gates + lint, y seguir por la lista. Al acabar los arreglos: batería reducida otra vez, y QA + seguridad a ciegas NUEVAS sobre el código final.
+- Cobertura de la revisión de seguridad: leídos 11/45 enteros + 3 en parte (todo Core/ de red y firmas; NO la aritmética de curva de Core/Ed25519.lua, ni UI/Hall.lua, locales, tests). Para la r2: pedir que lea entero todo lo que no es test/locale, incluido UI/Hall.lua (F16, códigos de escape en tooltips).
+- Reprogramado para las 10:23 (prompt con la lista de arreglos).
