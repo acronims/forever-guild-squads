@@ -676,8 +676,17 @@ local function watchSynced()
 end
 -- "initial sync" = 2 min after a hello, extended while replies keep teaching us records
 function Sync.Syncing() return (GetTime and GetTime() or 0) < syncUntil end
+-- v1.2 AC3 (margin): a client holding fewer than CATCHUP_MIN profiles + squads is catching up from its first hello
+function Sync.Fresh()
+  local n = 0
+  for _, k in ipairs({ "profile", "squad" }) do
+    for _ in pairs(M.kindTable(ns.state, k)) do n = n + 1; if n >= Sync.CATCHUP_MIN then return false end end
+  end
+  return true
+end
+
 function Sync.Hello(again)
-  if not again then round = 0 end
+  if not again then round = 0; catchup = X and Sync.Fresh() or false end
   learned = 0
   syncUntil = (GetTime and GetTime() or 0) + 120
   local h = {}
@@ -712,7 +721,7 @@ function Sync.Hello(again)
     end
     msg.h2 = h2
     msg.cn = Sync.HelloCn()                        -- v1.2 annex G: certificates we hold (Sync.CertKnownBy)
-    if catchup and again then msg.cu = 1 end      -- AC3 arreglo 2: bigger samples while catching up
+    if catchup then msg.cu = 1 end      -- AC3 arreglo 2: bigger samples while catching up
   end
   -- v1.2 annex F: our public key, learned strong by whoever hears it from us (WoW guarantees the sender)
   if ns.Trust and ns.myPk then local pk = ns.myPk(); if pk then msg.pk = ns.Trust.hex(pk) end end
@@ -722,7 +731,6 @@ function Sync.Hello(again)
   if ns.After then
     -- v1.2 (AC3): while catching up, a flat +30 s and no need to have learned anything new: the second copies
     -- only come as answers to the pending hashes (ph) of the next hello
-    if round == 0 then catchup = false end
     ns.After(catchup and 30 or (30 + 15 * round), function()
       if round == 0 and learned >= Sync.CATCHUP_MIN then catchup = true end
       local more

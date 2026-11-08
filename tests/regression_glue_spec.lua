@@ -236,6 +236,15 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello rounds go on while replies brin
   local origSend = Comm.Send
   local hellos = 0
   Comm.Send = function(tag, ...) if tag == "H" then hellos = hellos + 1 end end
+  -- AC3 margin: a member (holding >= CATCHUP_MIN profiles), not a newcomer (who says cu from its first hello)
+  local held = {}
+  for i = 1, S.CATCHUP_MIN do
+    local a = ("Pm%02d-Realm"):format(i)
+    if not ns.state.profiles[a] then
+      ns.state.profiles[a] = { k = "profile", id = a, a = a, ts = GetServerTime() - 5000 + i, sq = 1, d = { note = "m" } }
+      held[#held + 1] = a
+    end
+  end
   local okAll, err = pcall(function()
     S.Hello()
     eq(hellos, 1, "first hello")
@@ -257,6 +266,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello rounds go on while replies brin
     eq(hellos, 2, "a member whose first round taught < CATCHUP_MIN does not keep asking for its pending copies (AC5)")
   end)
   Comm.Send = origSend
+  for _, a in ipairs(held) do ns.state.profiles[a] = nil end
   for _, n in ipairs(extra) do cache[n] = nil; ns.state.profiles[n] = nil end
   if ns.state.p2p and ns.state.p2p.pend then
     for k in pairs(ns.state.p2p.pend) do if k:find("Pr%d%d%-Realm") then ns.state.p2p.pend[k] = nil end end
@@ -304,6 +314,37 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a client catching up keeps flat hello
   if ns.state.p2p and ns.state.p2p.pend then
     for k in pairs(ns.state.p2p.pend) do if k:find("Pc%d%d%-Realm") then ns.state.p2p.pend[k] = nil end end
   end
+  if not okAll then error(err, 0) end
+end }
+
+-- v1.2 AC3 margin (S8 r5 on c870423: T95vis 300 s; the first round was a normal sample, the catch-up ones only
+-- from +30 s): a client holding fewer than CATCHUP_MIN profiles + squads (a newcomer) is catching up from its very
+-- first hello (cu = 1); a client holding more starts as a member (no cu, AC5)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a client holding < CATCHUP_MIN profiles + squads says cu = 1 from its first hello", function(c)
+  local ns = c.ns
+  local S, Comm = ns.Sync, ns.Comm
+  local origSend = Comm.Send
+  local lastH
+  Comm.Send = function(tag, msg) if tag == "H" then lastH = msg end end
+  local added = {}
+  local okAll, err = pcall(function()
+    local n = 0
+    for _ in pairs(ns.state.profiles) do n = n + 1 end
+    for _ in pairs(ns.state.squads) do n = n + 1 end
+    ok(n < S.CATCHUP_MIN, n .. " records held before (< CATCHUP_MIN)")
+    S.Hello()
+    ok(lastH and lastH.cu == 1, "a newcomer's first hello carries cu = 1")
+    for i = 1, S.CATCHUP_MIN do
+      local a = ("Pf%02d-Realm"):format(i)
+      ns.state.profiles[a] = { k = "profile", id = a, a = a, ts = GetServerTime() - 5000 + i, sq = 1, d = { note = "f" } }
+      added[#added + 1] = a
+    end
+    lastH = nil
+    S.Hello()
+    ok(lastH and lastH.cu == nil, "a member holding >= CATCHUP_MIN starts without cu")
+  end)
+  Comm.Send = origSend
+  for _, a in ipairs(added) do ns.state.profiles[a] = nil end
   if not okAll then error(err, 0) end
 end }
 
