@@ -53,7 +53,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 ## Moderar el Salón de la fama
 
 - Clic derecho en un puesto: **Anular** con motivo (solo GM). El siguiente sube y queda historial. *Revertir* lo devuelve a su sitio.
-- Cada registro va firmado por su autor. Una copia reenviada solo se aplica con la firma verificada de su autor; si no, queda *sin verificar*. Nadie, ni un oficial ni un cliente modificado, puede falsificar ni borrar los datos de otro jugador ni tus ajustes.
+- Cada registro va firmado por su autor. Una copia reenviada solo se aplica con la firma verificada de su autor; si no, queda *sin verificar*. Nadie, ni un oficial ni un cliente modificado, puede falsificar ni borrar los datos de un jugador cuya clave tienes, ni tus ajustes. Las excepciones están en los límites conocidos del README (dos alts oídos en persona pueden certificar una clave falsa de alguien a quien nunca has oído).
 - Un Top lleno se congela; una carrera cerrada no se reabre.
 
 ## Bandas: flujo del RL

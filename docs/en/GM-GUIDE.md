@@ -53,7 +53,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 ## Moderating the Hall of Fame
 
 - Right-click an entry: **Annul** with a reason (GM only). The next one moves up and the history is kept. *Revert* puts it back.
-- Every record is signed by its author. A relayed copy is applied only with its author's verified signature; otherwise it is kept *unverified*. Nobody, officers or a modified client included, can forge or delete another player's data or your settings.
+- Every record is signed by its author. A relayed copy is applied only with its author's verified signature; otherwise it is kept *unverified*. Nobody, officers or a modified client included, can forge or delete the data of a player whose key you hold, or your settings. The exceptions are in the README known limits (two alts heard in person can certify a fake key for someone you have never heard).
 - A full Top is frozen; a closed race does not reopen.
 
 ## Raids: the RL workflow
