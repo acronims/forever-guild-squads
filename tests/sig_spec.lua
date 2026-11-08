@@ -82,3 +82,30 @@ test("sig: at most one verify per step, no key = retry later, queue capped", fun
   ok(G.step(db) == nil and db.man["B-R"] == nil, "no key: not accepted")
   ok(G.offer(db, G.build("B-R", 1, {}, skA, pkA), keys({ ["B-R"] = { pkA, "strong" } })) == "queued", "it can be offered again")
 end)
+
+test("sig: a parked fake manifest with a huge n does not displace the real one (one parked per sender, AF6)", function()
+  G.resetQueue()
+  local db = G.st({})
+  local map = {}
+  local k = keys(map)
+  local real = rec("A-R", { cls = "MAGE" }, 300)
+  local fake = rec("A-R", { cls = "WARRIOR" }, 900)
+  G.offer(db, G.build("A-R", 5, { real }, skA, pkA), k, "Honest-R"); G.step(db)
+  G.offer(db, G.build("A-R", 2000000000, { fake }, skM, pkM), k, "Mallory-R"); G.step(db)
+  ok(db.man["A-R"] == nil, "nothing accepted without a key")
+  ok(G.unpark("A-R") == true, "the author's key arrives: his parked manifests go to the queue")
+  map["A-R"] = { pkA, "strong" }  -- certified now (annex G)
+  for _ = 1, 4 do G.step(db) end
+  ok(G.status(db, real) == "strong", "the real manifest is verified after the key arrives")
+  ok(G.status(db, fake) == nil, "the fake one is rejected")
+  -- the same sender only keeps his newest; a sender cannot fill the author's slots
+  G.resetQueue()
+  local db2 = G.st({})
+  map["A-R"] = nil
+  G.offer(db2, G.build("A-R", 5, { real }, skA, pkA), k, "Honest-R"); G.step(db2)
+  for i = 1, 20 do G.offer(db2, G.build("A-R", 100 + i, { fake }, skM, pkM), k, "Mallory-R"); G.step(db2) end
+  map["A-R"] = { pkA, "strong" }
+  G.unpark("A-R")
+  for _ = 1, 4 do G.step(db2) end
+  ok(G.status(db2, real) == "strong", "20 fakes from one sender still leave the real one parked")
+end)

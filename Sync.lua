@@ -304,7 +304,7 @@ local function offerManifests(payload, from)
   for i = 1, math.min(#payload.m, 20) do
     local m = payload.m[i]
     if type(m) == "table" and type(m.a) == "string" and (authors[m.a] or m.a == from or #payload.r == 0) and m.a ~= me and (m.a == from or (ns.roster and ns.roster(m.a))) then
-      pcall(G.offer, db, m, keyOf)
+      pcall(G.offer, db, m, keyOf, from)
     end
   end
 end

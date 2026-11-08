@@ -75,22 +75,32 @@ end
 local queue, queued, parked = {}, {}, {}
 local nParked = 0
 G.MAX_PARKED = 300             -- manifests of authors whose key we do not hold yet (annex G: it may get certified)
+G.PARK_PER_AUTHOR = 8          -- parked per author: one per sender (AF6: a fake with a huge n cannot displace the real)
 function G.resetQueue() queue, queued, parked, nParked = {}, {}, {}, 0 end
--- the author's key just became usable (certified, annex G): his parked manifest gets its verify
+-- the author's key just became usable (certified, annex G): his parked manifests get their verify, newest first
+-- (a fake one fails its verify, then the real one is next)
 function G.unpark(name)
-  local q = parked[name]
-  if not q then return false end
-  parked[name], nParked = nil, nParked - 1
-  if queued[q.tag] or #queue >= G.MAX_QUEUE then return false end
-  queued[q.tag] = true
-  queue[#queue + 1] = q
-  return true
+  local P = parked[name]
+  if not P then return false end
+  parked[name] = nil
+  local list = {}
+  for _, q in pairs(P.by) do list[#list + 1] = q; nParked = nParked - 1 end
+  table.sort(list, function(x, y) return x.m.n > y.m.n end)
+  local any = false
+  for _, q in ipairs(list) do
+    if not queued[q.tag] and #queue < G.MAX_QUEUE then
+      queued[q.tag] = true
+      queue[#queue + 1] = q
+      any = true
+    end
+  end
+  return any
 end
 function G.pending() return #queue end
 
 -- a manifest heard from anyone: queued for verification unless we already hold this or a newer one
 -- keyOf(name) -> pk (raw), "strong" | "weak" | nil (Trust.keyOf bound to the trust db)
-function G.offer(db, m, keyOf)
+function G.offer(db, m, keyOf, from)
   G.st(db)
   if not G.validShape(m) then db.cnt.rejected = db.cnt.rejected + 1; return "bad" end
   local cur = db.man[m.a]
@@ -102,7 +112,7 @@ function G.offer(db, m, keyOf)
   if queued[tag] then return "queued" end
   if #queue >= G.MAX_QUEUE then return "full" end
   queued[tag] = true
-  queue[#queue + 1] = { m = m, tag = tag, keyOf = keyOf }
+  queue[#queue + 1] = { m = m, tag = tag, keyOf = keyOf, from = type(from) == "string" and from or "?" }
   return "queued"
 end
 
@@ -117,10 +127,15 @@ function G.step(db, onAccept)
   if cur and cur.n >= m.n then return nil end
   local pk, strength = q.keyOf(m.a)
   if not pk then
-    -- no key yet: it may arrive later (hello / ks / certificates, annex G): parked, the newest per author
-    local p = parked[m.a]
-    if p then if p.m.n < m.n then parked[m.a] = q end
-    elseif nParked < G.MAX_PARKED then parked[m.a] = q; nParked = nParked + 1 end
+    -- no key yet: it may arrive later (hello / ks / certificates, annex G): parked, the newest per author AND sender
+    -- (AF6: one sender's fake manifest with a huge n would otherwise displace the real one until the key arrives)
+    local P = parked[m.a]
+    if not P then P = { by = {}, c = 0 } end
+    local from = q.from or "?"
+    local p = P.by[from]
+    if p then if p.m.n < m.n then P.by[from] = q end
+    elseif P.c < G.PARK_PER_AUTHOR and nParked < G.MAX_PARKED then P.by[from] = q; P.c = P.c + 1; nParked = nParked + 1 end
+    if P.c > 0 then parked[m.a] = P end
     return nil
   end
   if not E.verify(pk, G.statement(m), unhex(m.s)) then db.cnt.rejected = db.cnt.rejected + 1; return nil end
