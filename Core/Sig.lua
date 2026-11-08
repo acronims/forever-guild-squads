@@ -33,9 +33,19 @@ local function unhex(h)
 end
 
 -- the hash of a record (hex): only the fields the author wrote; u (relay flag) and local fields are left out
+-- fix/perf (runtime review M3): memoized by the encoded body (an exact key: a forged body never hits the real one's
+-- entry); G.status runs it per relayed record in the message handler and X.retry per pending copy. Flushed whole past
+-- HASH_MEMO entries.
+G.HASH_MEMO = 600
+local memo, memoN = {}, 0
 function G.recHash(rec)
   local body = S.encode({ k = rec.k, id = rec.id, ts = rec.ts, sq = rec.sq, a = rec.a, d = rec.d or {} })
-  return hex(E.sha512(G.TAG .. "|rec|" .. body):sub(1, G.HASH_LEN))
+  local h = memo[body]
+  if h then return h end
+  h = hex(E.sha512(G.TAG .. "|rec|" .. body):sub(1, G.HASH_LEN))
+  if memoN >= G.HASH_MEMO then memo, memoN = {}, 0 end
+  memo[body], memoN = h, memoN + 1
+  return h
 end
 
 -- the signed statement: canonical (sorted) so both ends build the same bytes. sec r3 S1: every kid goes with its
@@ -80,9 +90,12 @@ function G.pick(name, records)
   return out
 end
 
-function G.build(name, n, records, sk, pk)
-  local h = {}
-  for _, rec in ipairs(G.pick(name, records)) do h[rec.k .. ":" .. rec.id] = G.recHash(rec) end
+-- h (optional, fix/perf A2): the hashes of G.pick(name, records), already computed by the caller (Sync.OwnManifest)
+function G.build(name, n, records, sk, pk, h)
+  if not h then
+    h = {}
+    for _, rec in ipairs(G.pick(name, records)) do h[rec.k .. ":" .. rec.id] = G.recHash(rec) end
+  end
   local m = { a = name, n = n, h = h }
   m.s = hex(E.sign(sk, pk, G.statement(m)))
   return m

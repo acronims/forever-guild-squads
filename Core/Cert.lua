@@ -44,8 +44,20 @@ local function unhex(h)
   return (h:gsub("..", function(x) return string.char(tonumber(x, 16)) end))
 end
 
--- 12 bytes of sha512 in base64 (16 chars)
-function C.hash(name, pk) return b64(E.sha512(C.TAG .. "|" .. tostring(name) .. "|" .. pk):sub(1, C.HASH_LEN)) end
+-- 12 bytes of sha512 in base64 (16 chars). fix/perf (runtime review A1 / M1): a pure function, memoized by its own
+-- input (name|pk, so the memo is exact); evalAll and C.own call it for every candidate / every key heard in person,
+-- and a sha512 costs ~2-3 ms in the client. Flushed whole past HASH_MEMO entries (~60 B each).
+C.HASH_MEMO = 2000
+local memo, memoN = {}, 0
+function C.hash(name, pk)
+  local key = tostring(name) .. "|" .. pk
+  local h = memo[key]
+  if h then return h end
+  h = b64(E.sha512(C.TAG .. "|" .. key):sub(1, C.HASH_LEN))
+  if memoN >= C.HASH_MEMO then memo, memoN = {}, 0 end
+  memo[key], memoN = h, memoN + 1
+  return h
+end
 
 function C.statement(c) return C.TAG .. "\n" .. tostring(c.i) .. "\n" .. num(c.n) .. "\n" .. table.concat(c.e, "\n") end
 
@@ -127,24 +139,35 @@ function C.certOf(db, issuer)
   return { i = issuer, n = cur.n, e = cur.e, s = cur.s }
 end
 
--- how many in-person issuers (other than `name`) list hash12(name|pk)
-local function support(db, tdb, name, pk)
-  local h, n = C.hash(name, pk), 0
+-- the certificates of issuers in person for us: { {issuer, set}, ... }. fix/perf A1: built once per evalAll (it was
+-- two unhex + a keyOf per issuer and per candidate name); eval / evalAll do not change who is in person
+local function issuers(db, tdb)
+  local out = {}
   for issuer, cur in pairs(db.crt) do
-    if issuer ~= name and T.inPerson(tdb, issuer, unhex(cur.pk)) and setOf(cur)[h] then n = n + 1 end
+    if T.inPerson(tdb, issuer, unhex(cur.pk)) then out[#out + 1] = { issuer, setOf(cur) } end
+  end
+  return out
+end
+-- how many in-person issuers (other than `name`) list hash12(name|pk)
+local function support(db, tdb, name, pk, iss)
+  local h, n = C.hash(name, pk), 0
+  for _, it in ipairs(iss or issuers(db, tdb)) do
+    if it[1] ~= name and it[2][h] then n = n + 1 end
   end
   return n
 end
 
 -- decide the key of `name` from the certificates: "strong" (in person, nothing to do) | "cert" | "disputed" | nil.
 -- onDrop(name, oldPk) when a key in use (not in person) is dropped: the caller forgets what it signed.
-function C.eval(db, tdb, name, now, onDrop)
+function C.eval(db, tdb, name, now, onDrop, iss)
   C.st(db)
   T.st(tdb)
   if T.inPerson(tdb, name) then return "strong" end
   local best, bestN, others = nil, 0, 0
-  for _, pk in ipairs(T.candidates(tdb, name)) do
-    local n = support(db, tdb, name, pk)
+  local cands = T.candidates(tdb, name)
+  if #cands > 1 and not iss then iss = issuers(db, tdb) end
+  for _, pk in ipairs(cands) do
+    local n = support(db, tdb, name, pk, iss)
     if n >= C.NEED and n > bestN then
       if best then others = others + 1 end
       best, bestN = pk, n
@@ -172,8 +195,9 @@ function C.evalAll(db, tdb, now, onDrop, onCert)
   local names = {}
   for name in pairs(tdb.pend) do names[name] = true end
   for name, k in pairs(tdb.keys) do if k.s ~= "strong" then names[name] = true end end
+  local iss = issuers(db, tdb)
   for name in pairs(names) do
-    if C.eval(db, tdb, name, now, onDrop) == "cert" and onCert then onCert(name) end
+    if C.eval(db, tdb, name, now, onDrop, iss) == "cert" and onCert then onCert(name) end
   end
 end
 

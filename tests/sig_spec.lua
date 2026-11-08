@@ -252,3 +252,25 @@ test("sig sec r5 S5-1: ids full of characters that the wire escapes still fit (b
   ok(#NS.Chunk.split(wire, "zz") <= 64, "fits in 64 parts")
   ok(m.h["profile:A-R"] ~= nil, "the profile is signed")
 end)
+
+-- fix/perf (runtime review M3): G.status hashed every relayed record (up to 20 per D, in the message handler) and
+-- X.retry re-hashed every pending copy in the frame of its manifest's verify. G.recHash is now memoized by the
+-- encoded body (a string: an exact key, a forged body never hits the memo of the real one).
+test("sig perf M3: recHash memoized by the exact body", function()
+  local real, calls = E.sha512, 0
+  E.sha512 = function(s) calls = calls + 1; return real(s) end
+  local okR, err = pcall(function()
+    local r1 = { k = "profile", id = "PerfM3-R", a = "PerfM3-R", ts = 100, sq = 1, d = { note = "a" } }
+    local h1 = G.recHash(r1)
+    eq(calls, 1)
+    local copy = { k = "profile", id = "PerfM3-R", a = "PerfM3-R", ts = 100, sq = 1, d = { note = "a" }, u = 1 }
+    eq(G.recHash(copy), h1, "same signed fields (u is not signed): same hash")
+    eq(calls, 1, "a second copy of the same record: no sha512")
+    local forged = { k = "profile", id = "PerfM3-R", a = "PerfM3-R", ts = 100, sq = 1, d = { note = "b" } }
+    ok(G.recHash(forged) ~= h1, "same version, another body: another hash")
+    eq(calls, 2)
+    ok(type(G.HASH_MEMO) == "number" and G.HASH_MEMO >= 200, "bounded memo")
+  end)
+  E.sha512 = real
+  if not okR then error(err, 0) end
+end)
