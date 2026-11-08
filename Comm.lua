@@ -18,7 +18,8 @@ function Comm.OldPeerCount()
   for _ in pairs(Comm.oldPeers) do n = n + 1 end
   return n
 end
-Comm.stats = { sent = 0, recv = 0, failed = 0, badProto = 0 }
+Comm.stats = { sent = 0, recv = 0, failed = 0, badProto = 0, tooBig = 0 }
+Comm.MAX_PARTS = 64   -- Chunk.feed drops n > 64 on receive: never queue such a message (sec F7)
 
 local function now() return (GetTime and GetTime()) or 0 end
 
@@ -137,6 +138,11 @@ function Comm.Send(tag, payload, channel, target, onSent, urgent, skip)
     if i == 1 then it.stamp = m end
     m.items[i] = it
     parts[#parts + 1] = it
+  end
+  if #parts > Comm.MAX_PARTS then
+    Comm.stats.tooBig = (Comm.stats.tooBig or 0) + 1
+    if ns.debug then ns.debug("comm: " .. tostring(tag) .. " of " .. #parts .. " parts not sent (max " .. Comm.MAX_PARTS .. ")") end
+    return false
   end
   if onSent and #parts > 0 then parts[#parts].onSent = onSent end
   if skip and #parts > 0 then

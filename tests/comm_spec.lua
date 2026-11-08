@@ -59,3 +59,12 @@ test("comm: v1.2 speaks PROTO 2, drops v = 1 and counts the distinct old-version
   frame.scripts.OnEvent(frame, "CHAT_MSG_ADDON", "GSquads", "zw:1/1:" .. NS.Serialize.encode({ v = 3, t = "H" }), "GUILD", "New-Realm")
   eq(Comm.OldPeerCount(), 2)
 end)
+-- sec F7 / QA D6: the receiver drops any message of more than 64 parts (Chunk.lua), so the sender never queues one
+test("comm: a message of more than 64 parts is never queued, and counted (sec F7)", function()
+  local before = Comm.Pending()
+  local r = Comm.Send("D", { note = string.rep("y", 255 * 70) })
+  eq(r, false, "refused")
+  eq(Comm.Pending(), before, "nothing queued")
+  eq(Comm.stats.tooBig, 1, "counted")
+  ok(Comm.Send("D", { note = string.rep("z", 255 * 30) }) ~= false, "a 30-part message still goes")
+end)

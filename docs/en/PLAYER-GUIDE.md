@@ -96,7 +96,7 @@ It opens a window with the report to copy (Ctrl+A, Ctrl+C); the same copy is kep
 - `hall obs=<N> closed=<N> chatErr=<error> pvpRank=ok|unsupported`: Hall of Fame observations, closed races, the last guild-chat announcement error and whether the client exposes the PvP rank.
 - `prof path=<path> n=<N>`: which client API read your professions (`GetProfessions`, `C_SkillInfo`, `empty` or `none`) and how many it found.
 - `raid apis <API>=yes|no … rosters=<N>`: which group/raid APIs the client has and how many raid rosters exist.
-- `comm sent= recv= failed= pending=`: addon messages sent, received, failed and queued.
+- `comm sent= recv= failed= pending= badProto= tooBig=`: addon messages sent, received, failed and queued, old-version messages dropped, and messages too big to send (over 64 parts).
 - `sync bad= relayRefused= future= errors= quarantine= guild=`: refused records (malformed, unauthorised relay, future date), quarantined ones, and the loaded guild.
 - `[roster] me=<key> found=yes|no entries=<N> surnames=<N>`: whether your character was found in the guild roster (character surnames are supported).
 - `keys own= strong= weak= pend= contested= suspects= alerts=`: whether you have your own key, keys heard in person (strong), keys known only through others, disputed names, relayers that brought a losing key, and the last key alerts.

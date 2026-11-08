@@ -96,7 +96,7 @@ Abre una ventana con el informe para copiar (Ctrl+A, Ctrl+C); la misma copia que
 - `hall obs=<N> closed=<N> chatErr=<error> pvpRank=ok|unsupported`: observaciones del Salón de la fama, carreras cerradas, el último error al anunciar en el chat de la guild y si el cliente da el rango PvP.
 - `prof path=<vía> n=<N>`: qué API del cliente leyó tus profesiones (`GetProfessions`, `C_SkillInfo`, `empty` o `none`) y cuántas encontró.
 - `raid apis <API>=yes|no … rosters=<N>`: qué APIs de grupo y banda existen en el cliente y cuántos rosters de banda hay.
-- `comm sent= recv= failed= pending=`: mensajes de addon enviados, recibidos, fallidos y en cola.
+- `comm sent= recv= failed= pending= badProto= tooBig=`: mensajes de addon enviados, recibidos, fallidos y en cola, mensajes de versión vieja descartados, y mensajes demasiado grandes para enviarse (más de 64 partes).
 - `sync bad= relayRefused= future= errors= quarantine= guild=`: registros rechazados (mal formados, reenvío no autorizado, fecha futura), en cuarentena, y la guild cargada.
 - `[roster] me=<clave> found=yes|no entries=<N> surnames=<N>`: si tu personaje aparece en el roster de la guild (se admiten los apellidos de personaje).
 - `keys own= strong= weak= pend= contested= suspects= alerts=`: si tienes clave propia, claves oídas en persona (fuertes), claves conocidas solo por otros, nombres en disputa, reenviadores que trajeron una clave que perdió, y los últimos avisos de claves.

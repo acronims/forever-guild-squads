@@ -71,7 +71,7 @@ function G.Report()
   end
   if ns.Comm then
     local s = ns.Comm.stats
-    extra[#extra + 1] = ("comm sent=%d recv=%d failed=%d pending=%d badProto=%d"):format(s.sent, s.recv, s.failed, ns.Comm.Pending(), s.badProto or 0)
+    extra[#extra + 1] = ("comm sent=%d recv=%d failed=%d pending=%d badProto=%d tooBig=%d"):format(s.sent, s.recv, s.failed, ns.Comm.Pending(), s.badProto or 0, s.tooBig or 0)
   end
   if ns.Sync and ns.Sync.stats then -- refused / malformed records
     local y = ns.Sync.stats
