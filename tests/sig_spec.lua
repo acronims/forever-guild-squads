@@ -220,3 +220,35 @@ test("sig F7: a manifest signs the 180 most recent records of the author and fit
   local parts = NS.Chunk.split(wire, "zz")
   ok(#parts <= 64, "the capped manifest fits in 64 parts (" .. #parts .. ")")
 end)
+
+-- sec r5 S5-1 / S5-2: forced denials (repudiate) with long ids must not make the manifest unsendable, nor push the
+-- author's data records out of the signed set: data first, then presence, then repudiates, and a byte budget
+test("sig sec r5 S5-1/S5-2: long or many forced denials neither break the manifest nor evict the data records", function()
+  G.resetQueue()
+  local recs = { rec("A-R", { cls = "MAGE" }, 1795000000) }
+  recs[#recs + 1] = { k = "squad", id = "A-R:1795000001", ts = 1795000001, sq = 1, a = "A-R", d = { name = "S", captain = "A-R" } }
+  for i = 1, 60 do
+    recs[#recs + 1] = { k = "repudiate", id = "profile:" .. string.rep("x", 240) .. i .. "@1795.1.A-R#ab", ts = 1795100000 + i, sq = 1, a = "A-R", d = {} }
+  end
+  for i = 1, 200 do
+    recs[#recs + 1] = { k = "repudiate", id = "profile:B" .. i .. "-R@1795.1.A-R#ab", ts = 1795200000 + i, sq = 1, a = "A-R", d = {} }
+  end
+  local m = G.build("A-R", 1, recs, skA, pkA)
+  local wire = NS.Serialize.escape and NS.Serialize.escape(NS.Serialize.encode({ r = {}, m = { m } })) or NS.Serialize.encode({ r = {}, m = { m } })
+  local parts = NS.Chunk.split(wire, "zz")
+  ok(#parts <= 56, "the manifest stays within the 56-part budget (" .. #parts .. ")")
+  local db = G.st({})
+  G.offer(db, m, keys({ ["A-R"] = { pkA, "strong" } })); G.step(db)
+  eq(G.status(db, recs[1]), "strong", "the (older) profile is still signed")
+  eq(G.status(db, recs[2]), "strong", "the (older) squad is still signed")
+end)
+test("sig sec r5 S5-1: ids full of characters that the wire escapes still fit (byte budget counts escapes)", function()
+  G.resetQueue()
+  local recs = { rec("A-R", { cls = "MAGE" }, 1795000000) }
+  local bad = string.rep("|\1\2\255~", 50)
+  for i = 1, 120 do recs[#recs + 1] = { k = "repudiate", id = "profile:" .. bad .. i, ts = 1795100000 + i, sq = 1, a = "A-R", d = {} } end
+  local m = G.build("A-R", 1, recs, skA, pkA)
+  local wire = NS.Serialize.escape and NS.Serialize.escape(NS.Serialize.encode({ r = {}, m = { m } })) or NS.Serialize.encode({ r = {}, m = { m } })
+  ok(#NS.Chunk.split(wire, "zz") <= 64, "fits in 64 parts")
+  ok(m.h["profile:A-R"] ~= nil, "the profile is signed")
+end)

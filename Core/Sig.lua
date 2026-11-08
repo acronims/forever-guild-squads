@@ -55,18 +55,28 @@ end
 -- sec F7 / QA D6, decision 2 (BRO 8-nov): a manifest lists only the MAN_CAP most recent records of its author, so it
 -- always fits the 64 parts the receiver reassembles (Chunk.lua); older ones are seen "unverified". Signed pages: 1.2.1
 G.MAN_CAP = 180
+-- sec r5 S5-1/S5-2: a byte budget too (forced denials can have ids of ~300 chars), and the author's data records go
+-- first, then presence, then repudiates, so a flood of forced denials cannot push them out of the signed set
+G.MAN_BYTES = 13000            -- ~ 50-55 parts of 255 after encoding; the receiver takes 64
+local CLASS = { presence = 1, repudiate = 2 }
 function G.pick(name, records)
   local mine = {}
   for _, rec in ipairs(records) do if rec.a == name then mine[#mine + 1] = rec end end
-  if #mine <= G.MAN_CAP then return mine end
   local function kid(r) return tostring(r.k) .. ":" .. tostring(r.id) end
   table.sort(mine, function(x, y)
+    local cx, cy = CLASS[x.k] or 0, CLASS[y.k] or 0
+    if cx ~= cy then return cx < cy end
     local tx, ty = tonumber(x.ts) or 0, tonumber(y.ts) or 0
     if tx ~= ty then return tx > ty end
     return kid(x) < kid(y)
   end)
-  local out = {}
-  for i = 1, G.MAN_CAP do out[i] = mine[i] end
+  local out, bytes = {}, 0
+  for _, r in ipairs(mine) do
+    if #out >= G.MAN_CAP then break end
+    local k = kid(r)
+    local b = #((S and S.escape) and S.escape(S.encode(k)) or k) + G.HASH_LEN * 2 + 8   -- wire bytes, escapes included
+    if bytes + b <= G.MAN_BYTES then out[#out + 1] = r; bytes = bytes + b end
+  end
   return out
 end
 
