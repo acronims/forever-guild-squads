@@ -222,3 +222,38 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AF5: /gsq trust newkey in-session make
   for _, h in ipairs(hellos) do if h.pk == ns.Trust.hex(pk2) then said = true end end
   ok(said, "a hello carries the new key")
 end }
+
+-- full client: our records were published before our key existed (the entropy pool needs T.MIN_SAMPLES samples
+-- first, so the login profile/presence go out unsigned). When the key is made, our manifest is signed and sent
+-- by GUILD (MAN_DEBOUNCE s later) without waiting for a record change. Before: nobody held our manifest, and a
+-- client who logged in later never verified our records relayed by others (S2 never converged, 68e70d3..261f62a).
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AF1: a key made after our records were published signs and sends our manifest", function(c)
+  local ns = c.ns
+  for _ = 1, 100 do if ns.myPk() then break end; c.tick(1) end
+  local me = ns.me()
+  local mine = 0
+  for _, r in ipairs(ns.Model.allRecords(ns.state)) do if r.a == me then mine = mine + 1 end end
+  ok(mine > 0, "we have own records (" .. mine .. ")")
+  -- back to the login state: records, no key, no manifest (no old key either, so this is not a rotation)
+  GuildSquadsDB.ownKeys[me] = nil
+  if type(GuildSquadsDB.prevOwnKeys) == "table" then GuildSquadsDB.prevOwnKeys[me] = nil end
+  ok(ns.NewOwnKey(), "key dropped, fresh pool")
+  ns.sigDB.own[me] = nil
+  ns.Sync.MarkOwnDirty()
+  local mans, saved = {}, ns.Comm.Send
+  ns.Comm.Send = function(kind, msg, ...)
+    if kind == "D" and type(msg) == "table" and type(msg.m) == "table" then
+      for _, m in ipairs(msg.m) do if m.a == me then mans[#mans + 1] = m end end
+    end
+    return saved(kind, msg, ...)
+  end
+  local pk
+  for _ = 1, 200 do pk = ns.myPk(); if pk then break end; c.tick(1) end
+  ok(pk, "a new key made")
+  for _ = 1, ns.Sync.MAN_DEBOUNCE + 3 do c.tick(1) end
+  ns.Comm.Send = saved
+  local own = ns.sigDB.own[me]
+  ok(own and own.s, "our manifest signed after the key was made")
+  ok(#mans >= 1, "our manifest sent in a D (got " .. #mans .. ")")
+  ok(own and ns.Ed25519.verify(pk, ns.Sig.statement(own), ns.Trust.unhex(own.s)), "signed with the new key")
+end }

@@ -652,9 +652,13 @@ function ns.myPk()
   if not me then return nil end
   db.ownKeys = type(db.ownKeys) == "table" and db.ownKeys or {}
   local holder = type(db.ownKeys[me]) == "table" and db.ownKeys[me] or {}
+  local fresh = holder.me == nil
   local ok, _, pk = pcall(ns.Trust.ensureOwn, holder, pool)
   if ok and pk then
     db.ownKeys[me] = holder; ownPk = pk
+    -- a key made now: our records may already be out unsigned (published while the pool was still sampling). Sign
+    -- and send our manifest (MAN_DEBOUNCE s later) so the ones who log in after us can verify them when relayed.
+    if fresh and ns.Sync and ns.Sync.QueueOwnManifest then ns.Sync.QueueOwnManifest() end
     -- AF5: a key made after /gsq trust newkey is signed by the old one (Sync.OwnRotation), then the old one is gone
     local prev = type(db.prevOwnKeys) == "table" and db.prevOwnKeys[me]
     if prev then
