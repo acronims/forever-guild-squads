@@ -37,6 +37,9 @@ Sync.MAX_SAMPLE_CATCHUP = 120
 Sync.CATCHUP_COOLDOWN = 25
 Sync.CATCHUP_BUDGET = 20
 Sync.CATCHUP_WINDOW = 3600
+-- v1.2 AC3 tail (S8 exp-miss, 826a57a: 596/600 visible from 360 s): a catching-up requester whose diff here is at
+-- most CATCHUP_ALL records gets all of it, not 2 of 8 cubes (only newcomers send cu; members keep the sample, AC5)
+Sync.CATCHUP_ALL = 30
 local bigReply = {}           -- requester -> { last = GetTime() of the last catch-up reply, w = window start, n = count }
 Sync.SAMPLE_MIN_ONLINE = 8    -- v1.2 (AC1): the sample only with more online than this (p < 1); else MAX_REPLY + cursor
 -- v1.2: fine bucket hashes (h2) of the big kinds in a 1.2 hello; a 1.2 replier diffs on them, so it does not resend
@@ -835,6 +838,9 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
     -- needs a second / third copy of: twice the cubes for them, and they go first (the tail of S8g is pending)
     local cubes = pickCubes()
     local wide = pickCubes(cubes)
+    if payload.cu == 1 and #all <= Sync.CATCHUP_ALL then
+      for i = 0, Sync.CUBES - 1 do cubes[i] = true end
+    end
     local ph = type(payload.ph) == "table" and payload.ph or {}
     local prio, rest = {}, {}
     for _, e in ipairs(all) do

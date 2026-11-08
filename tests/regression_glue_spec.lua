@@ -411,6 +411,46 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) gets
   if not okAll then error(err, 0) end
 end }
 
+-- v1.2 AC3 tail (S8 exp-miss on 826a57a, 7303: 596/600 visible from 360 s, 599 at 600 s; the missing record was
+-- stored by 20 online peers and not pending): a catching-up requester (cu = 1) whose diff is small (<= CATCHUP_ALL)
+-- gets all of it, not the records of 2 of 8 cubes (each reply had a 1/4 chance of carrying a missing record)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) with a small diff gets all of it", function(c)
+  local ns = c.ns
+  local S, M = ns.Sync, ns.Model
+  local h = {}
+  for _, k in ipairs({ "settings", "squad", "profile", "reject", "boss", "annul" }) do h[k] = M.bucketHashes(ns.state, k) end
+  for _, k in ipairs(M.EXT_ORDER) do h[k] = M.bucketHashes(ns.state, k) end
+  local added = {}
+  for i = 1, 16 do
+    local id = ("Pt%03d-Realm"):format(i)
+    ns.state.profiles[id] = { k = "profile", id = id, a = id, ts = 1795000000, sq = 1, d = { role = "DAMAGER" } }
+    added[#added + 1] = id
+  end
+  local held = 0
+  for _ in pairs(ns.state.profiles) do held = held + 1 end
+  h.profile = {}
+  local oldOnline = ns.onlineCount
+  ns.onlineCount = function() return 40 end
+  local okAll, err = pcall(function()
+    ok(type(S.CATCHUP_ALL) == "number" and S.CATCHUP_ALL >= 16 and S.CATCHUP_ALL <= S.MAX_SAMPLE, "Sync.CATCHUP_ALL in [16, MAX_SAMPLE]")
+    if held <= S.CATCHUP_ALL then
+      local all = S.ReplyFor({ h = h, p2 = 2, nonce = 77, cu = 1 }, "Tail-Realm", nil, nil)
+      eq(#all, held, "the whole small diff to a catching-up requester")
+    end
+    local seen = {}
+    local cut = false
+    for n = 1, 6 do
+      local r = S.ReplyFor({ h = h, p2 = 2, nonce = 200 + n }, "Mem" .. n .. "-Realm", nil, nil)
+      if #r < held then cut = true end
+      for _, rec in ipairs(r) do seen[S.CubeOf(rec.id, 200 + n)] = true end
+    end
+    ok(cut, "no cu: still the 2-of-8-cube sample")
+  end)
+  ns.onlineCount = oldOnline
+  for _, id in ipairs(added) do ns.state.profiles[id] = nil end
+  if not okAll then error(err, 0) end
+end }
+
 -- v1.2 AC3 arreglo 3 (S8 c2: t95 320 / 310 s with 120-record samples; the replies wait in the replier's send queue,
 -- maxQueue 151 at 1 msg/s): the catch-up sized reply to a cu = 1 hello skips the queue (urgent, like Sync.Publish).
 -- Only that one (once per CATCHUP_COOLDOWN per requester): a normal or a repeated cu hello queues as before.
