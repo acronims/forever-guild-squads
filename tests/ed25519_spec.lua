@@ -79,3 +79,62 @@ test("ed25519: strict verify refuses malleable and small-order inputs", function
   ok(E.verify(pk, m, sig:sub(1, 63)) == false and E.verify(pk:sub(1, 31), m, sig) == false, "bad lengths refused")
   ok(E.verify(nil, m, sig) == false and E.verify(pk, nil, sig) == false, "non-string arguments refused")
 end)
+
+-- fix/perf (runtime review M5): the CI only ran the byte-table fallback of Core/Ed25519.lua (Fengari has no `bit`);
+-- WoW has LuaBitOp's `bit`, whose results are SIGNED 32-bit. A fresh copy of the module is loaded with a `bit` shim
+-- (signed like LuaBitOp, and unsigned like bit32) and must pass the RFC 8032 vectors and give the same multi-block
+-- sha512; every call must get integers in [0, 2^32). The shim uses Lua 5.3 operators inside a string (the test VM is
+-- Fengari, 5.3; the Lua 5.1 syntax gate never sees them). GSQ_BIT_SABOTAGE=1 breaks the shim (the test must go red).
+local function bitShim(signed, stats)
+  -- Fengari integers are 32-bit: map [0, 2^32) to int32 first (what LuaBitOp does), operate, then give the result
+  -- signed (LuaBitOp) or back in [0, 2^32) (bit32)
+  local mk = load([[
+    local signed, sabotage = ...
+    local T32 = 4294967296.0
+    local function i32(x) if x >= 2147483648.0 then x = x - T32 end return math.tointeger(x) end
+    local function norm(r)
+      if sabotage then r = r ~ 1 end
+      r = r + 0.0
+      if not signed and r < 0 then r = r + T32 end
+      return r
+    end
+    return function(a, b) return norm(i32(a) & i32(b)) end,
+           function(a, b) return norm(i32(a) | i32(b)) end,
+           function(a, b) return norm(i32(a) ~ i32(b)) end
+  ]])
+  local sab = rawget(_G, "GSQ_BIT_SABOTAGE") and true or false
+  local band, bor, bxor = mk(signed, sab)
+  local function chk(f)
+    return function(a, b)
+      stats.calls = stats.calls + 1
+      if not (type(a) == "number" and type(b) == "number" and a >= 0 and a < 4294967296 and a == math.floor(a)
+        and b >= 0 and b < 4294967296 and b == math.floor(b)) then stats.bad = stats.bad + 1 end
+      return f(a, b)
+    end
+  end
+  return { band = chk(band), bor = chk(bor), bxor = chk(bxor) }
+end
+
+test("ed25519 M5: the WoW `bit` path (signed and unsigned results) passes RFC 8032 7.1 and matches the sha512", function()
+  local long = string.rep("guild squads 1.2 ", 40)   -- 680 B: 6 blocks of sha512
+  for _, signed in ipairs({ true, false }) do
+    local stats, had = { calls = 0, bad = 0 }, rawget(_G, "bit")
+    bit = bitShim(signed, stats)
+    local fns = {}
+    local okL, errL = pcall(loadmod, "Core/Ed25519.lua", fns)
+    bit = had
+    ok(okL, "loaded with the shim: " .. tostring(errL))
+    local E2 = fns.Ed25519
+    local tag = signed and "signed" or "unsigned"
+    ok(E2 ~= nil and E2 ~= E, tag .. ": a fresh copy")
+    eq(hex(E2.sha512(long)), hex(E.sha512(long)), tag .. ": multi-block sha512 = the fallback's")
+    for i, v in ipairs(RFC) do
+      local sk, pk, m, sig = unhex(v[1]), unhex(v[2]), unhex(v[3]), unhex(v[4])
+      ok(E2.publicKey(sk) == pk, tag .. " TEST " .. i .. " public key")
+      ok(E2.sign(sk, pk, m) == sig, tag .. " TEST " .. i .. " signature")
+      ok(E2.verify(pk, m, sig) == true, tag .. " TEST " .. i .. " verifies")
+    end
+    ok(stats.calls > 1000, tag .. ": the bit path was used (" .. stats.calls .. " calls)")
+    eq(stats.bad, 0, tag .. ": every call got integers in [0, 2^32)")
+  end
+end)
