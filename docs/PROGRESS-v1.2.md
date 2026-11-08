@@ -424,3 +424,9 @@ Se mantiene la regla de **≥2 certificados de emisores fuertes**. **AF7 se reha
 - Mirado 12:21: BRO sigue sin responder a AF4 ni a F7. Reprogramado a las 12:36 (a partir de las 13:00 se adelanta la batería final).
 - Mirado 12:36: BRO sigue sin responder a AF4 ni a F7. Reprogramado a las 12:51 (a partir de las 13:00 se adelanta la batería final).
 - Mirado 12:51: BRO sigue sin responder a AF4 ni a F7. Reprogramado a las 13:06 (ya pasadas las 13:00: el siguiente turno adelanta la batería final sobre 972da53).
+
+### 8-nov 13:0x — batería final adelantada sobre 8a6d56d (BRO sin responder a AF4 ni a F7)
+- Mirado 13:06: BRO sin responder a AF4 ni a F7. Pasadas las 13:00 → batería final sobre **8a6d56d** (código = 1e007ac; unidad 337/337 ya corrida sobre ese código). Si BRO elige 1 o 2 en F7, se repite lo afectado.
+- Local: **S17 PASS** (seed 7303), `GATES: OK`, wow-secret-lint 0/0.
+- Lanzadas en el Mac mini (tags `fin-*`, logs `wt/gsq-logs/fin-*.log`): fin-s8-7303 (3e8c577f724c), fin-s8-7304 (cb9100ee91dd), fin-s2 (4582ee826317), fin-s5 (4b78efbe6279, 5 semillas), fin-s16k2 (8ac3d29e4055), fin-s18 (6b5e74d25842), fin-s15 (2fc61265f4f8), fin-s11 (425d8cd153a3), fin-s14 (1efdf4a6ea6e: S14 S12 S16b S16c).
+- QA y seguridad a ciegas r2 lanzadas (informes en `wt/review/qa-blind-2026-11-08-r2.md` y `wt/review/sec-blind-2026-11-08-r2.md`).
