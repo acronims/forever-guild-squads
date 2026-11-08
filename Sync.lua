@@ -300,6 +300,10 @@ function Sync.MarkOwnDirty() ownDirty = true end
 -- a new own key (/gsq trust newkey, BRO 8-nov 03:09): re-sign with it even if no record changed; n keeps growing
 local forceSign = false
 function Sync.ResignOwn() forceSign = true; ownDirty = true end
+-- fix/perf (runtime review A2): the hash of each own record, cached per kid with the version it was computed for (the
+-- record table and its ts / sq / a): an edit writes a new version, so it re-hashes only that record. Rebuilt on each
+-- pass with only the current records (no growth).
+local ownHash = {}
 function Sync.OwnManifest()
   local G, db = ns.Sig, ns.sigDB
   local me = ns.me and ns.me()
@@ -313,8 +317,16 @@ function Sync.OwnManifest()
   for _, r in ipairs(M.allRecords(ns.state)) do if r.a == me then mine[#mine + 1] = r end end
   if #mine == 0 then ownDirty = false; return cur end
   mine = G.pick(me, mine)   -- sec F7: the MAN_CAP most recent (the same set G.build signs)
-  local h = {}
-  for _, r in ipairs(mine) do h[r.k .. ":" .. r.id] = G.recHash(r) end
+  local h, hc = {}, {}
+  for _, r in ipairs(mine) do
+    local kid = r.k .. ":" .. r.id
+    local e = ownHash[kid]
+    if not (e and e.r == r and e.ts == r.ts and e.sq == r.sq and e.a == r.a) then
+      e = { r = r, ts = r.ts, sq = r.sq, a = r.a, h = G.recHash(r) }
+    end
+    hc[kid], h[kid] = e, e.h
+  end
+  ownHash = hc
   local same = not forceSign and cur and type(cur.h) == "table"
   if same then
     for kid, v in pairs(h) do if cur.h[kid] ~= v then same = false; break end end
@@ -323,7 +335,7 @@ function Sync.OwnManifest()
   ownDirty = false
   if same then return cur end
   local n = math.max((cur and tonumber(cur.n) or 0) + 1, math.floor(serverNow() or 0))
-  local okS, m = pcall(G.build, me, n, mine, sk, pk)
+  local okS, m = pcall(G.build, me, n, mine, sk, pk, h)
   if not okS or not m then return cur end
   forceSign = false
   db.own[me] = m

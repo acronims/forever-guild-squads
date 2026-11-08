@@ -359,3 +359,46 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "QA r3 Q3-3: rotations queued when the guild
   for _, fn in ipairs(ns.guildUnloadHooks or {}) do if fn == Sync.ResetRotations then hooked = true end end
   ok(hooked, "unloading the guild resets the rotation queue")
 end }
+
+-- fix/perf (runtime review A2): Sync.OwnManifest hashed every own record twice (once for the "same?" check, once in
+-- G.build) on EVERY edit, plus the sign: 180 records = 360 sha512 = 0.7-2.5 s with the frame frozen. Now the hash of
+-- each own record is cached by its version and passed to G.build: an edit costs one sha512. Counted with a wrapper
+-- on Ed25519.sha512 (sign / verify hash through a local, so they are not counted).
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "fix/perf A2: an edit re-hashes only the changed own record, not all of them twice", function(c)
+  local ns = c.ns
+  local me = ns.me()
+  local M, E, db = ns.Model, ns.Ed25519, ns.sigDB
+  db.own = type(db.own) == "table" and db.own or {}
+  local saved = db.own[me]
+  local realAll, realSha = M.allRecords, E.sha512
+  local recs, t = {}, GetServerTime()
+  for i = 1, 150 do recs[i] = { k = "perf", id = me .. "#a2-" .. i, a = me, ts = t - i, sq = 1, d = { x = i } } end
+  M.allRecords = function() return recs end
+  local calls = 0
+  E.sha512 = function(s) calls = calls + 1; return realSha(s) end
+  local okR, err = pcall(function()
+    ns.Sync.MarkOwnDirty()
+    local m1 = ns.Sync.OwnManifest()
+    ok(m1 and m1.h["perf:" .. recs[1].id], "built over the 150 records")
+    ok(calls <= 150, "the first build hashes each record once (was twice): " .. calls)
+    calls = 0
+    recs[3] = { k = "perf", id = recs[3].id, a = me, ts = t + 10, sq = 2, d = { x = "edited" } }
+    ns.Sync.MarkOwnDirty()
+    local m2 = ns.Sync.OwnManifest()
+    ok(m2 and m2.n > m1.n, "re-signed after the edit")
+    ok(calls <= 1, "one edit = one sha512 (was 2 x 150): " .. calls)
+    calls = 0
+    ns.Sync.MarkOwnDirty()
+    local m3 = ns.Sync.OwnManifest()
+    eq(m3.n, m2.n, "dirty with no change: not re-signed")
+    eq(calls, 0, "and no sha512 at all")
+    E.sha512 = realSha
+    eq(m2.h["perf:" .. recs[3].id], ns.Sig.recHash(recs[3]), "the edited record carries its fresh hash")
+    local pk = ns.myPk and ns.myPk()
+    if pk then ok(ns.Ed25519.verify(pk, ns.Sig.statement(m2), ns.Trust.unhex(m2.s)), "and the manifest verifies") end
+  end)
+  E.sha512, M.allRecords = realSha, realAll
+  db.own[me] = saved
+  ns.Sync.MarkOwnDirty()
+  if not okR then error(err, 0) end
+end }
