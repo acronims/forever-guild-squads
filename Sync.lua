@@ -291,6 +291,10 @@ function Sync.OnOwnerKey(name, res, old)
     local pk, s = ns.Trust.keyOf(ns.trustDB, name)
     if pk and s == "strong" then G.promote(db, name, pk) end
   end
+  -- S8 (4 / 16 members): a manifest relayed before its author's key reached us (the relayer's `ks` copy went out
+  -- earlier, KEY_EVERY per destination) waits parked; the key heard in person makes it verifiable now, not only a
+  -- certified one (annex G). A parked fake fails its verify like any other.
+  if G and G.unpark and (res == "new" or res == "replaced" or res == "same") then G.unpark(name) end
 end
 
 -- v1.2 annex F, manifests. Our own: rebuilt when one of our records changed (dirty), re-signed with n + 1 only if
