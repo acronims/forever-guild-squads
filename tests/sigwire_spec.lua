@@ -286,3 +286,15 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 sec F1: forged records with my name ma
   ok(made >= 1, "the first forged versions are still repudiated (" .. made .. ")")
   ok(made <= 5, "30 forged versions make at most 5 repudiates (" .. made .. ")")
 end }
+
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 sec F6: a GUILD copy with the real (a, n, s) and another body does not skip our manifest", function(c)
+  local ns = c.ns
+  local Sync = ns.Sync
+  local real = { a = "Zz-Realm", n = 7, s = string.rep("ab", 64), h = { ["profile:Zz-Realm"] = string.rep("cd", 16) } }
+  local fake = { a = real.a, n = real.n, s = real.s, h = {} }
+  Sync.HelloHeard("Req-Realm", GetTime() - 10)
+  Sync.NoteManHeard(fake)
+  ok(not Sync.ManHeardSince(real, "Req-Realm"), "a fake body does not count as our manifest heard")
+  Sync.NoteManHeard(real)
+  ok(Sync.ManHeardSince(real, "Req-Realm"), "the same manifest heard does")
+end }

@@ -167,6 +167,26 @@ local function pendCount(db)
   return n
 end
 
+-- sec F3: make room for one candidate: drop the oldest one brought by a single relayer, taken from the relayer who
+-- brought the most (a flood evicts itself first); if every candidate has several relayers, the oldest overall
+local function evictPend(db)
+  local load = {}
+  for _, byPk in pairs(db.pend) do for _, e in pairs(byPk) do for r in pairs(e.by) do load[r] = (load[r] or 0) + 1 end end end
+  local bn, bpk, bl, bt, on, opk, ot
+  for name, byPk in pairs(db.pend) do
+    for pk, e in pairs(byPk) do
+      local r = next(e.by)
+      if r and next(e.by, r) == nil then
+        local l, t = load[r], e.t or 0
+        if not bl or l > bl or (l == bl and t < bt) then bn, bpk, bl, bt = name, pk, l, t end
+      end
+      if not ot or (e.t or 0) < ot then on, opk, ot = name, pk, e.t or 0 end
+    end
+  end
+  local n, pk = bn or on, bpk or opk
+  if n then db.pend[n][pk] = nil; if next(db.pend[n]) == nil then db.pend[n] = nil end end
+end
+
 -- `relayer` (not the owner) says `name` has key `pk`. Returns "strong" (we already hold it strong: nothing to do),
 -- "pending" (a candidate for annex G certificates), the strength we already hold it with, "full" (caps) or "bad".
 function T.hearRelayed(db, name, pk, relayer, now)
@@ -187,7 +207,13 @@ function T.hearRelayed(db, name, pk, relayer, now)
   local byPk = db.pend[name] or {}
   local e = byPk[h]
   if not e then
-    if relayerLoad(db, relayer) >= T.MAX_PEND_RELAYER or pendCount(db) >= T.MAX_PEND_KEYS then return "full" end
+    if relayerLoad(db, relayer) >= T.MAX_PEND_RELAYER then return "full" end
+    -- sec F3: a relayer stands for one key per name (his newest); a full table evicts instead of refusing, so a flood
+    -- cannot keep the real key of a stranger from being a candidate
+    for opk, o in pairs(byPk) do
+      if o.by[relayer] then o.by[relayer] = nil; if next(o.by) == nil then byPk[opk] = nil end end
+    end
+    if pendCount(db) >= T.MAX_PEND_KEYS then evictPend(db) end
     e = { by = {}, t = now }
     byPk[h] = e
     db.pend[name] = byPk

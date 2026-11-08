@@ -109,3 +109,19 @@ test("sig: a parked fake manifest with a huge n does not displace the real one (
   for _ = 1, 4 do G.step(db2) end
   ok(G.status(db2, real) == "strong", "20 fakes from one sender still leave the real one parked")
 end)
+
+test("sig sec F6: a copy with the real (a, n, s) but another body does not push the real manifest out of the queue", function()
+  G.resetQueue()
+  local db = G.st({})
+  local r1 = rec("A-R")
+  local m = G.build("A-R", 1, { r1 }, skA, pkA)
+  local fake = { a = m.a, n = m.n, s = m.s, h = {} }
+  local K = keys({ ["A-R"] = { pkA, "strong" } })
+  eq(G.offer(db, fake, K), "queued", "the fake copy is queued")
+  eq(G.offer(db, m, K), "queued", "the real one too")
+  eq(G.offer(db, m, K), "queued", "a second real copy is deduplicated")
+  eq(G.pending(), 2, "fake + real, the repeated real one once")
+  G.step(db); G.step(db)
+  eq(G.status(db, r1), "strong", "the real manifest is verified")
+  ok(G.sameBody(m, m) and not G.sameBody(m, fake), "G.sameBody compares the listed hashes")
+end)

@@ -308,13 +308,14 @@ local manHeard, helloAt = {}, {}  -- author -> { n, s, t } heard on GUILD; reque
 function Sync.HelloHeard(from, t) helloAt[from] = t or (GetTime and GetTime() or 0) end
 local function noteManHeard(m)
   if type(m) == "table" and type(m.a) == "string" and type(m.s) == "string" then
-    manHeard[m.a] = { n = m.n, s = m.s, t = GetTime and GetTime() or 0 }
+    manHeard[m.a] = { n = m.n, s = m.s, m = m, t = GetTime and GetTime() or 0 }
   end
 end
 Sync.NoteManHeard = noteManHeard
 function Sync.ManHeardSince(m, req)
   local h, t0 = manHeard[m.a], helloAt[req]
-  return (h and t0 and h.n == m.n and h.s == m.s and h.t > t0) and true or false
+  -- sec F6: the same body too (a forged copy can reuse the real signature over another list)
+  return (h and t0 and h.n == m.n and h.s == m.s and h.t > t0 and (h.m == m or (ns.Sig and ns.Sig.sameBody(h.m, m)))) and true or false
 end
 local function sendManifestsApart(list, req)
   for _, m in ipairs(list) do
@@ -882,7 +883,10 @@ local function onRecords(payload, sender, channel)
   local from = (ns.fullName and ns.fullName(sender)) or sender
   local t = GetTime and GetTime() or 0
   if channel == "GUILD" and type(payload.m) == "table" then
-    for i = 1, math.min(#payload.m, 20) do noteManHeard(payload.m[i]) end
+    for i = 1, math.min(#payload.m, 20) do
+      local m = payload.m[i]
+      if type(m) == "table" and type(m.a) == "string" and (not ns.roster or ns.roster(m.a)) then noteManHeard(m) end
+    end
   end
   learnKeys(payload, from)
   Sync.OfferCert(payload.c, from)

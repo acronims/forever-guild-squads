@@ -71,3 +71,30 @@ test("trust: own key from the entropy pool; seeds do not repeat across 1000 simu
   end
   ok(dup == 0, "1000 distinct seeds")
 end)
+
+test("trust sec F3: flooding the candidate keys cannot keep the real key of Z out (one per relayer and name, evict)", function()
+  local db = T.st({})
+  local capK, capR = T.MAX_PEND_KEYS, T.MAX_PEND_RELAYER
+  T.MAX_PEND_KEYS, T.MAX_PEND_RELAYER = 50, 20          -- the same caps, smaller (Fengari is slow)
+  local function pk(tag) return (tag .. string.rep("#", 32)):sub(1, 32) end
+  for i = 1, T.MAX_PEND_RELAYER do
+    T.hearRelayed(db, "N" .. i .. "-R", pk("a1 " .. i), "Alt1-R", NOW)
+    T.hearRelayed(db, "M" .. i .. "-R", pk("a2 " .. i), "Alt2-R", NOW)
+  end
+  local i = 0
+  while true do
+    i = i + 1
+    local r = T.hearRelayed(db, "H" .. i .. "-R", pk("h " .. i), "Hon" .. i .. "-R", NOW)
+    if r ~= "pending" or i > T.MAX_PEND_KEYS then break end
+  end
+  local _, pkZ = key("Z real")
+  eq(T.hearRelayed(db, "Z-R", pkZ, "Hon-R", NOW + 1), "pending", "the real key of Z, brought by an honest relayer, is a candidate")
+  local found = false
+  for _, c in ipairs(T.candidates(db, "Z-R")) do if c == pkZ then found = true end end
+  ok(found, "listed among Z's candidates")
+  -- one relayer, many keys for the same name: only his last one stays a candidate
+  for j = 1, 10 do T.hearRelayed(db, "Z-R", pk("z fake " .. j), "Alt1-R", NOW + 2) end
+  local n = #T.candidates(db, "Z-R")
+  T.MAX_PEND_KEYS, T.MAX_PEND_RELAYER = capK, capR
+  ok(n <= 2, "Alt1's ten keys for Z make one candidate (" .. n .. " with the real one)")
+end)

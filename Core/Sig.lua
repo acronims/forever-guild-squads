@@ -22,6 +22,7 @@ G.TAG = "GSQ-MAN1"             -- domain separation of the manifest statement
 G.HASH_LEN = 16                -- bytes of sha512 kept per record
 G.MAX_ENTRIES = 400            -- records listed in one manifest
 G.MAX_QUEUE = 300              -- manifests waiting for a verify on one client
+G.TAG_ALT = 4                  -- different bodies queued for the same (author, n, signature) (sec F6)
 
 local function num(n) if type(n) == "number" and n == math.floor(n) and n > -1e15 and n < 1e15 then return string.format("%d", n) end return tostring(n) end
 local function hex(s) return (s:gsub(".", function(c) return string.format("%02x", c:byte()) end)) end
@@ -89,7 +90,7 @@ function G.unpark(name)
   local any = false
   for _, q in ipairs(list) do
     if not queued[q.tag] and #queue < G.MAX_QUEUE then
-      queued[q.tag] = true
+      queued[q.tag] = q
       queue[#queue + 1] = q
       any = true
     end
@@ -108,12 +109,32 @@ function G.offer(db, m, keyOf, from)
     -- the same seq with another body from a valid key would be the author signing twice: keep the first
     return "old"
   end
-  local tag = m.a .. "|" .. num(m.n) .. "|" .. m.s
-  if queued[tag] then return "queued" end
+  -- sec F6: (a, n, s) alone does not identify a manifest (a forged copy can reuse a real signature over another body):
+  -- a copy is deduplicated only against a queued one with the same body; up to G.TAG_ALT bodies per (a, n, s)
+  local base = m.a .. "|" .. num(m.n) .. "|" .. m.s
+  local tag
+  for i = 1, G.TAG_ALT do
+    local t = i == 1 and base or (base .. "|" .. i)
+    local q = queued[t]
+    if q then
+      if G.sameBody(q.m, m) then return "queued" end
+    elseif not tag then tag = t end
+  end
+  if not tag then return "full" end
   if #queue >= G.MAX_QUEUE then return "full" end
-  queued[tag] = true
-  queue[#queue + 1] = { m = m, tag = tag, keyOf = keyOf, from = type(from) == "string" and from or "?" }
+  local q = { m = m, tag = tag, keyOf = keyOf, from = type(from) == "string" and from or "?" }
+  queued[tag] = q
+  queue[#queue + 1] = q
   return "queued"
+end
+
+-- the same listed hashes (the signed body of two manifests with the same a, n)
+function G.sameBody(m1, m2)
+  if type(m1) ~= "table" or type(m2) ~= "table" or type(m1.h) ~= "table" or type(m2.h) ~= "table" then return false end
+  if m1.a ~= m2.a or m1.n ~= m2.n then return false end
+  for k, v in pairs(m1.h) do if m2.h[k] ~= v then return false end end
+  for k in pairs(m2.h) do if m1.h[k] == nil then return false end end
+  return true
 end
 
 -- one verification (call once per frame, not in combat). Returns the author whose manifest was accepted, or nil.
