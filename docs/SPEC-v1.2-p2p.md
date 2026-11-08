@@ -71,6 +71,13 @@ Rama `feat/v1.2-p2p-all` desde la 1.1 cerrada, en su propio worktree. Commits **
 - **Firma por lote:** el autor firma un manifiesto (sha512 de cada registro suyo y seq) y lo vuelve a firmar cuando cambia. El receptor hace 1 verificación por manifiesto y comprueba cada registro con su hash. Las verificaciones van **en cola, repartidas en frames** (≤1 por frame, con pausa en combate y en encuentros) y con caché de las ya verificadas.
 - **Reglas:** un registro authorial sin firma válida de su autor no se aplica nunca. Un `repudiate` solo vale si lo firma el autor o el dev; ya no hay quórum para borrar (H3 cerrado). Un perfil con `d.squad=A` solo cuenta si el roster de A, firmado por su capitán, incluye al autor (H2 cerrado). Squads y ajustes los firma su dueño (capitán o GM); el quórum queda solo para las claves.
 - **Clave de dev:** BRO la genera fuera del juego (script node en tools/dev-key.js; la privada no va al repo y se guarda en .secrets). La pública se fija en Core/Trust.lua. El cliente de dev se reconoce porque tiene la privada importada con `/gsq dev import`, que solo se guarda en sus SavedVariables.
+### ⚡ Cambio de BRO del 8-nov a las 01:02: «sin claves de dev, elimina mi parte». MANDA SOBRE EL ANEXO F
+- **No hay clave de dev** ni notario, ni `/gsq dev import`, ni tools/dev-key.js. No hay ninguna raíz de confianza central.
+- Aprender claves: (1) **directamente de su dueño** (TOFU, **fuerte**); (2) reenviada con quórum 2 → **débil**. Lo que firma una clave débil se muestra como «sin verificar» y nunca puede **borrar** ni **sustituir** datos firmados por una clave fuerte. Tampoco puede aplicar un `repudiate`, ni cambios de roster de squad o de ajustes: esos solo se aplican con una clave fuerte.
+- **Conflicto:** cuando se oye al dueño en persona con una clave distinta de la débil, gana la del dueño. La débil y todo lo que firmó se descartan, y los reenviadores que la trajeron cuentan como sospechosos en `diag` (el tope de 200 por reenviador sigue).
+- Rotación: solo con la clave vieja firmando la nueva. Si se pierde la clave (por ejemplo, se borran las SavedVariables), los demás tienen que hacer `/gsq trust reset <nombre>` a mano, y lo deja escrito en la guía del GM.
+- AF5 se adapta: sin dev. AF6 (revisión de seguridad) incluye el ataque de «clave débil falsa para un jugador que el recién llegado no ha visto nunca» y comprueba que no puede borrar ni sustituir nada fuerte.
+
 **Criterios de aceptación:**
 - **AF1:** vectores RFC 8032 (los §7.1 TEST 1-3), firma y verificación interoperables con node `crypto` y rechazo de firmas maleables. Unidad en Fengari y en Lua 5.1.
 - **AF2:** S16 rehecho: 2, 3 y 5 cómplices (alts) no consiguen aplicar un perfil, squad, ajuste ni repudiate falso de nadie. El legítimo llega.

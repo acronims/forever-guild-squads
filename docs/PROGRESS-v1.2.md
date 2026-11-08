@@ -131,3 +131,6 @@ Esto entra en la definición de «lista» de la 1.2, con la misma prioridad que 
 
 ## ⚡ BRO, 8-nov 00:46: «1. acepto, probamos · 2. firmas»
 AC5 aceptado con 4481 partes (sin más intentos). Firmas en la 1.2: ver el **Anexo F** del spec (AF1-AF6). Orden: (1) cerrar la batería de la candidata 3815a05 tal como está, como punto de control; (2) AF1 (librería + vectores); (3) claves y TOFU; (4) manifiestos y reglas (H2/H3); (5) AF2-AF5; (6) CHANGELOG, docs, CURSEFORGE, QA a ciegas + revisión de seguridad a ciegas (AF6); (7) publicar como release (sin beta) y avisar a BRO con el enlace. La clave de dev: tools/dev-key.js la genera; la privada va a /workspace/group/.secrets/gsq-dev-ed25519.key (600) y BRO la importa en el juego con `/gsq dev import` (dale el comando en el mensaje final).
+
+## ⚡ BRO, 8-nov 01:02: «sin claves de dev, elimina mi parte»
+Se quita la clave de dev de todo el diseño (ver el cambio al final del Anexo F del spec). Claves: del dueño en persona = fuerte; con quórum 2 = débil (no borra ni sustituye nada fuerte). Si ya hay código o docs con la clave de dev, se quitan.
