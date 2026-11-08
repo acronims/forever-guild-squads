@@ -348,3 +348,37 @@ test("keys: F4: a name flipping its key in person every few seconds triggers at 
   nsB.Sync.OnMessage("H", { h = {}, pk = T.hex(pk) }, "Eve-R")
   eq(guildCerts(), before + 1, "after FLIP_MIN: broadcast")
 end)
+
+test("keys: QA D4 / sec F8: rotations (kr) are verified one per frame, never inside the message handler; a bad one is not verified twice", function()
+  local nsB = wireNs("Bob-R", pkB, true)
+  local pending = {}
+  nsB.After = function(_, fn) pending[#pending + 1] = fn end
+  local rot = 0
+  local T2 = {}
+  for k, v in pairs(T) do T2[k] = v end
+  T2.rotate = function(...) rot = rot + 1; return T.rotate(...) end
+  nsB.Trust = T2
+  local names = { "Ali-R", "Cid-R", "Gm-R", "Eve-R" }
+  for _, n in ipairs(names) do local _, pk = key("old" .. n); T.hearOwner(nsB.trustDB, n, pk, T0) end
+  local r, ks, kr = {}, {}, {}
+  for _, n in ipairs(names) do
+    r[#r + 1] = prof(n, T0 + 1)
+    local _, pk = key("new" .. n)
+    ks[n] = T.hex(pk); kr[n] = ("ab"):rep(64)
+  end
+  local msg = { r = r, ks = ks, kr = kr }
+  nsB.Sync.OnMessage("D", msg, "Fox-R")
+  eq(rot, 0, "no rotation verified inside the handler")
+  local steps = 0
+  while #pending > 0 and steps < 50 do
+    local fn = table.remove(pending, 1)
+    local before = rot
+    fn()
+    ok(rot - before <= 1, "at most one rotation verify per frame")
+    steps = steps + 1
+  end
+  eq(rot, #names, "each rotation verified once")
+  nsB.Sync.OnMessage("D", msg, "Fox-R")
+  while #pending > 0 and steps < 100 do table.remove(pending, 1)(); steps = steps + 1 end
+  eq(rot, #names, "the same bad rotation is not verified again")
+end)

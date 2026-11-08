@@ -93,8 +93,11 @@ test("a fresh client converges after repeated hellos (100 squads)", function()
                After = function(_, fn) fn() end,
                Comm = { Send = function(tag, p) sent[#sent + 1] = { tag, p } end } }
   loadmod("Sync.lua", ns)
+  local tNow = T0
+  ns.serverTime = function() return tNow end   -- a client's hellos are >= 30 s apart (sec F5: HELLO_MIN)
   local B = M.newState()
   for _ = 1, 10 do
+    tNow = tNow + 35
     local h = {}
     for _, k in ipairs({ "settings", "squad", "profile", "reject" }) do h[k] = M.bucketHashes(B, k) end
     sent = {}

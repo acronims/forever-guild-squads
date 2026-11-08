@@ -186,6 +186,40 @@ function Sync.OwnRotation(oldSk, oldPk, newPk)
   db.ownRot = type(db.ownRot) == "table" and db.ownRot or {}
   db.ownRot[me] = { pk = T.hex(newPk), s = T.hex(sig) }
 end
+-- QA D4 / sec F8: a rotation costs one ed25519 verify; never inside the message handler (a D with 20 fake `kr`
+-- froze every receiver): queued (ROT_Q_MAX, deduped), one verify per frame, paused in combat. A rotation that
+-- failed is remembered (ROT_BAD_MAX tags) and not verified again.
+Sync.ROT_Q_MAX, Sync.ROT_BAD_MAX = 20, 200
+local rotQ, rotQueued, rotBad, rotBadN, rotRunning = {}, {}, {}, 0, false
+local function rotStep()
+  rotRunning = false
+  if #rotQ == 0 then return end
+  if InCombatLockdown and InCombatLockdown() then rotRunning = true; ns.After(1, rotStep); return end
+  local e = table.remove(rotQ, 1)
+  rotQueued[e.tag] = nil
+  local T, db = ns.Trust, ns.trustDB
+  local cur, cs = T.keyOf(db, e.a)
+  -- still the same strong key we held when it was queued (a hello in person may have changed it meanwhile)
+  if cur and cs == "strong" and cur ~= e.pk then
+    local now = (ns.serverTime and ns.serverTime()) or (GetServerTime and GetServerTime()) or 0
+    if T.rotate(db, e.a, e.pk, e.sig, now) then
+      if ns.Sig and ns.sigDB then ns.Sig.dropKey(ns.sigDB, e.a, cur) end
+      if ns.OnKeyReplaced then ns.OnKeyReplaced(e.a, cur) end
+    else
+      if rotBadN >= Sync.ROT_BAD_MAX then rotBad, rotBadN = {}, 0 end
+      rotBad[e.tag], rotBadN = true, rotBadN + 1
+    end
+  end
+  if #rotQ > 0 then rotRunning = true; ns.After(0, rotStep) end
+end
+function Sync.QueueRotation(a, pk, sig, from)
+  local tag = a .. "|" .. pk .. "|" .. sig
+  if rotBad[tag] or rotQueued[tag] then return end
+  if #rotQ >= Sync.ROT_Q_MAX then Sync.stats.rotDropped = (Sync.stats.rotDropped or 0) + 1; return end
+  rotQ[#rotQ + 1] = { a = a, pk = pk, sig = sig, tag = tag, from = from }
+  rotQueued[tag] = true
+  if not rotRunning and ns.After then rotRunning = true; ns.After(0, rotStep) end
+end
 -- `ks` of a D message: only for authors of records in it and roster members; the sender itself = in person
 local function learnKeys(payload, from)
   local T, db = ns.Trust, ns.trustDB
@@ -204,10 +238,7 @@ local function learnKeys(payload, from)
           local kr = type(payload.kr) == "table" and payload.kr[a]
           local sig = type(kr) == "string" and #kr == 128 and T.unhex(kr)
           if not sig then T.unsignedChange(db, a, from)
-          elseif T.rotate(db, a, pk, sig, now) then
-            if ns.Sig and ns.sigDB then ns.Sig.dropKey(ns.sigDB, a, cur) end
-            if ns.OnKeyReplaced then ns.OnKeyReplaced(a, cur) end
-          end
+          else Sync.QueueRotation(a, pk, sig, from) end
         elseif T.hearRelayed(db, a, pk, from, now) == "pending" then Sync.CertEval(a) end
       end
     end
