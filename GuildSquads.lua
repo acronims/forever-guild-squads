@@ -691,7 +691,12 @@ function ns.myPk()
       -- re-sign our records and say hello with the new key now (heard in person it is strong), not in the next one
       if ns.Sync and ns.Sync.ResignOwn then ns.Sync.ResignOwn() end
       if ns.Sync and ns.Sync.QueueOwnManifest then ns.Sync.QueueOwnManifest() end
-      if ns.Sync and ns.Sync.Hello and ns.rosterReady then pcall(ns.Sync.Hello) end
+      -- fix/perf M2: the hello re-signs our certificate (one more sign + a hash per key): not in the frame of the
+      -- publicKey and the rotation sign, and not in combat / an encounter
+      if ns.Sync and ns.Sync.Hello and ns.rosterReady then
+        local hello = function() pcall(ns.Sync.Hello) end
+        if ns.After and ns.Sync.WhenIdle then ns.After(1, function() ns.Sync.WhenIdle(hello) end) else hello() end
+      end
     end
   end
   return ownPk

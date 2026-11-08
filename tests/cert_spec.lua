@@ -119,3 +119,64 @@ test("cert: our own certificate lists the keys heard in person in the last 30 da
   local c3 = C.own(own, tdb, "Me-R", skMe, pkMe, NOW + 20)
   ok(c3.n > c1.n and #c3.e == 5, "H3 heard again: re-signed with a higher n")
 end)
+
+-- fix/perf (runtime review A1 / M1): C.hash is pure and memoized (name|pk -> hash12). Before, C.evalAll did one
+-- sha512 per candidate name after EVERY accepted certificate (100 names = 0.2-0.35 s in one frame), and C.own
+-- hashed every key heard in person twice on each recompute (inside the hello handler too). Counted with a wrapper
+-- on E.sha512 (E.sign / E.verify hash through their own local, so only the external calls are counted).
+local function countSha(fn)
+  local real, calls = E.sha512, 0
+  E.sha512 = function(s) calls = calls + 1; return real(s) end
+  local okR, err = pcall(fn)
+  E.sha512 = real
+  if not okR then error(err, 2) end
+  return calls
+end
+
+test("cert perf A1: evalAll after an accepted certificate does no sha512 for names already evaluated", function()
+  local tdb, cdb = world()
+  local heard = {}
+  for i = 1, 100 do
+    local nm, pk = ("PerfA%d-R"):format(i), E.sha512("perf A1 pk " .. i):sub(1, 32)
+    heard[nm] = pk
+    T.hearRelayed(tdb, nm, pk, "H1-R", NOW)
+  end
+  -- the relayed keys arrive first: Sync.CertEval(name) runs C.eval once per (name, key), in the D handler
+  local first = countSha(function() for nm in pairs(heard) do C.eval(cdb, tdb, nm, NOW) end end)
+  ok(first <= 100, "one sha512 per new (name, key) at most: " .. first)
+  give(cdb, tdb, C.build("H1-R", NOW, heard, skH1, pkH1))
+  local n1 = countSha(function() C.evalAll(cdb, tdb, NOW) end)
+  eq(n1, 0, "evalAll after the first certificate: no sha512 (all memoized)")
+  give(cdb, tdb, C.build("H2-R", NOW, heard, skH2, pkH2))
+  local certified = {}
+  local n2 = countSha(function() C.evalAll(cdb, tdb, NOW, nil, function(nm) certified[#certified + 1] = nm end) end)
+  eq(n2, 0, "evalAll after the second certificate: no sha512")
+  eq(#certified, 100, "and the 100 names are certified by H1 + H2")
+  local _, s = T.keyOf(tdb, "PerfA7-R")
+  eq(s, "cert")
+end)
+
+test("cert perf A1: the memo is exact and bounded (flushed whole past HASH_MEMO entries)", function()
+  ok(type(C.HASH_MEMO) == "number" and C.HASH_MEMO >= 1000, "C.HASH_MEMO cap")
+  local a = C.hash("PerfMemo-R", pkZ)
+  local cap = C.HASH_MEMO
+  C.HASH_MEMO = 3
+  for i = 1, 10 do C.hash("PerfMemo" .. i .. "-R", pkZ) end
+  local b = C.hash("PerfMemo-R", pkZ)
+  C.HASH_MEMO = cap
+  eq(a, b, "same hash after a flush")
+  ok(C.hash("PerfMemo-R", pkFake) ~= a, "the key is part of the memo key")
+end)
+
+test("cert perf M1: C.own re-hashes only the keys that are new, not every key heard in person", function()
+  local tdb = world()
+  for i = 1, 100 do T.hearOwner(tdb, ("PerfM%d-R"):format(i), E.sha512("perf M1 pk " .. i):sub(1, 32), NOW) end
+  local skMe, pkMe = key("Me-perf")
+  local own = {}
+  C.own(own, tdb, "Me-R", skMe, pkMe, NOW)
+  T.hearOwner(tdb, "PerfM101-R", E.sha512("perf M1 pk 101"):sub(1, 32), NOW + 5)
+  local c
+  local n = countSha(function() c = C.own(own, tdb, "Me-R", skMe, pkMe, NOW + 5) end)
+  ok(n <= 1, "one new key heard in person = at most one sha512 (was 2 x 106): " .. n)
+  eq(#c.e, 106, "5 issuers + 101 keys listed")
+end)
