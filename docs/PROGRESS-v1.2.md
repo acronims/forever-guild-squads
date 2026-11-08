@@ -188,3 +188,9 @@ Se quita la clave de dev de todo el diseño (ver el cambio al final del Anexo F 
 
 ## ⚡ BRO, 8-nov 03:15: GO a la certificación cruzada de claves («dale, investígalo»)
 Mira el **Anexo G** del spec. Sustituye a las claves débiles con quórum 2 de reenviadores en AF3. Orden: (1) investigar (DESIGN-certificados.md: tamaño, partes en S8, S11/S15) en ≤1 turno; (2) implementar, primero el test (AF7 y S16b); (3) seguir con S16/AF2, AF5 (la clave en persona siempre gana), diag y el aviso de borrado; (4) QA + revisión de seguridad a ciegas (en AF6 entra el ataque de los 2 alts que certifican); (5) publicar.
+
+### 8-nov 03:4x — Anexo G, paso (1) investigación: docs/DESIGN-certificados.md
+- Tamaño: 200 claves → ~3,3 KB base64 ≈ 14 partes; en S8 1 min (19 oídas) ≈ 2 partes. Va por GUILD con el hello y al cambiar n (por destino serían ~760 partes por ronda).
+- **Hallazgo: AF7 (50/50 y 10/10 en S11/S15) es incompatible con «≥2 certificados fuertes».** En la cadena de S11 cada cliente solo oye en persona a sus vecinos; tope teórico S11 26/50 (= lo medido hoy), S15 38/50, con o sin 2.º salto a 0,5. 50/50 exige fiarse de un solo vecino.
+- Preguntado a BRO (03:4x): 1) mantener ≥2 y AF7 = máximo del grafo + escenario denso a 50/50 (recomendada); 2) 1 certificado fuerte basta; 3) S11 con 3 online. **Esperando su respuesta; no se implementa la regla de umbral hasta entonces.**
+- Mientras: S16/AF2, AF5, diag `p2 proto=…`, H2, deuda «[1.1 quorum]». s8m1 sigue en el Mac mini (fase newcomer).
