@@ -25,6 +25,7 @@ function Q.new(opts)
   q.sent = 0
   q.dropped = 0
   q.deduped = 0
+  q.skipped = 0                  -- messages dropped at the head by their skip check (item.drop)
   q.keys = {}                    -- dedupe key -> parts still pending
   return q
 end
@@ -87,16 +88,23 @@ function Q:pump(now)
   local n = 0
   while self.tokens >= 1 and self.head <= self.tail do
     local item = self.items[self.head]
-    if self.send and self.send(item) == false then break end
+    -- AF4: a part whose message is no longer needed (item.drop() true, e.g. a manifest heard meanwhile) leaves the
+    -- queue without being sent and without a token
+    local skip = type(item) == "table" and item.drop and item.drop()
+    if skip then
+      if item.first then self.skipped = self.skipped + 1 end
+    elseif self.send and self.send(item) == false then break end
     self.items[self.head] = nil
     if type(item) == "table" and item.key ~= nil and self.keys[item.key] then
       self.keys[item.key] = self.keys[item.key] - 1
       if self.keys[item.key] <= 0 then self.keys[item.key] = nil end
     end
     self.head = self.head + 1
-    self.tokens = self.tokens - 1
-    self.sent = self.sent + 1
-    n = n + 1
+    if not skip then
+      self.tokens = self.tokens - 1
+      self.sent = self.sent + 1
+      n = n + 1
+    end
   end
   if self.head > self.tail then self.items = {}; self.head = 1; self.tail = 0 end
   return n

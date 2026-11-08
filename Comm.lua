@@ -114,8 +114,9 @@ restamp = function(item)
 end
 
 -- Send a message table. channel "GUILD" (default) or "WHISPER" with target. onSent (optional) runs when the last
--- part has really left (claims are timed from that moment).
-function Comm.Send(tag, payload, channel, target, onSent, urgent)
+-- part has really left (claims are timed from that moment). skip (optional, AF4) is asked when the message reaches
+-- the head of the queue, before its first part leaves: true drops the whole message (onSent does not run).
+function Comm.Send(tag, payload, channel, target, onSent, urgent, skip)
   -- an identical message still waiting in the queue (same payload, channel and target, e.g.
   -- the same record version published twice while comms are locked) is not queued again (the stamp is not part of
   -- the key)
@@ -138,6 +139,15 @@ function Comm.Send(tag, payload, channel, target, onSent, urgent)
     parts[#parts + 1] = it
   end
   if onSent and #parts > 0 then parts[#parts].onSent = onSent end
+  if skip and #parts > 0 then
+    local st = {}
+    for i, it in ipairs(parts) do
+      if i == 1 then
+        it.first = true
+        it.drop = function() if st.d == nil then local okS, r = pcall(skip); st.d = okS and r == true end return st.d end
+      else it.drop = function() return st.d == true end end
+    end
+  end
   local okP = true
   if urgent and Comm.queue.pushMessageFront then okP = Comm.queue:pushMessageFront(parts, key)
   elseif Comm.queue.pushMessage then okP = Comm.queue:pushMessage(parts, key)

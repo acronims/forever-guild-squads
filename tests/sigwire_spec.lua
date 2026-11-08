@@ -19,7 +19,7 @@ local function wireNs(me, sk, pk)
                roster = roster, rosterReady = true, onlineCount = function() return 1 end, me = function() return me end,
                fullName = function(n) return n end, After = function(_, fn) fn() end, serverTime = function() return T0 end,
                trustDB = T.st({}), sigDB = sigdb, myPk = function() return pk end, mySk = function() return sk end,
-               Comm = { Send = function(tag, p, ch, to) sent[#sent + 1] = { tag, p, ch, to } end } }
+               Comm = { Send = function(tag, p, ch, to, onSent, urgent, skip) sent[#sent + 1] = { tag, p, ch, to, onSent, urgent, skip } end } }
   loadmod("Sync.lua", ns)
   return ns, sent
 end
@@ -113,6 +113,78 @@ test("sigwire: a new own key (/gsq trust newkey) re-signs the same records with 
   ok(m2 and m2[1].n > m1.n, "a new n")
   ok(E.verify(pkN, G.statement(m2[1]), T.unhex(m2[1].s)), "signed with the new key")
   ok(not E.verify(pkA, G.statement(m2[1]), T.unhex(m2[1].s)), "not with the old one")
+end)
+
+-- AF4 (s8t2: 9642 parts, the `m` of hello replies ~4600): a GUILD hello reply carries no `m`; each manifest goes as
+-- its own message {r = {}, m = {one}} with a skip check run when it reaches the head of the send queue: dropped if
+-- that same manifest (author, n, signature) was heard on GUILD after the requester's hello (he got it already)
+test("sigwire AF4: GUILD hello replies send manifests apart and drop them once heard on GUILD after the hello", function()
+  G.resetQueue()
+  local savedGT, clk = GetTime, 100
+  GetTime = function() return clk end
+  local nsA, sentA = wireNs("Ali-R", skA, pkA)
+  ok(nsA.Sync.Publish(prof("Ali-R", T0 + 1, "a")))
+  local mA = nsA.sigDB.own["Ali-R"]
+  local r = M.stored(nsA.state, prof("Ali-R", T0 + 1))
+  local nsB, sentB = wireNs("Bob-R", skB, pkB)
+  T.hearOwner(nsB.trustDB, "Ali-R", pkA, T0)
+  for _, x in ipairs(sentA) do if x[1] == "D" then nsB.Sync.OnMessage("D", x[2], "Ali-R", "GUILD") end end
+  for _ = 1, 3 do nsB.Sync.SigStep() end
+  ok(nsB.sigDB.man["Ali-R"], "Bob holds Ali's manifest")
+  -- Eve says hello; Bob answers by GUILD with Ali's record
+  ok(nsB.Sync.HelloHeard ~= nil, "Sync.HelloHeard exists")
+  clk = 101
+  nsB.Sync.HelloHeard("Eve-R")
+  clk = 102
+  local before = #sentB
+  nsB.Sync.SendRecords({ r }, nil, nil, "Eve-R")
+  local recMsg, manMsg
+  for i = before + 1, #sentB do
+    local x = sentB[i]
+    if x[1] == "D" and #x[2].r > 0 then recMsg = x elseif x[1] == "D" and x[2].m then manMsg = x end
+  end
+  ok(recMsg and recMsg[3] == nil, "the records go by GUILD")
+  ok(recMsg and recMsg[2].m == nil, "without `m`")
+  ok(manMsg and manMsg[3] == nil and #manMsg[2].r == 0 and manMsg[2].m[1].a == "Ali-R", "the manifest goes apart by GUILD")
+  ok(type(manMsg[7]) == "function", "with a skip check")
+  eq(manMsg[7](), false, "not heard yet: it goes")
+  -- a forged copy (other signature) heard on GUILD does not stop it
+  local forged = { a = "Ali-R", n = mA.n, h = mA.h, s = string.rep("ab", 64) }
+  nsB.Sync.OnMessage("D", { r = { r }, m = { forged } }, "Cid-R", "GUILD")
+  eq(manMsg[7](), false, "a forged copy does not count")
+  -- the same manifest heard by WHISPER does not count (only Bob got it)
+  nsB.Sync.OnMessage("D", { r = { r }, m = { { a = mA.a, n = mA.n, h = mA.h, s = mA.s } } }, "Cid-R", "WHISPER")
+  eq(manMsg[7](), false, "a whisper does not count")
+  -- another replier sent it by GUILD after Eve's hello: Eve has it, ours is dropped
+  nsB.Sync.OnMessage("D", { r = { r }, m = { { a = mA.a, n = mA.n, h = mA.h, s = mA.s } } }, "Cid-R", "GUILD")
+  eq(manMsg[7](), true, "heard on GUILD after the hello: dropped")
+  -- a later hello from Eve (she may have lost it): heard before that hello does not count
+  nsB.Sync.HelloHeard("Eve-R", 1e9)
+  eq(manMsg[7](), false, "heard before the requester's hello: it goes")
+  -- receiver: a manifest-only message of a roster author is queued
+  G.resetQueue()
+  local nsE = wireNs("Eve-R", nil, nil)
+  T.hearOwner(nsE.trustDB, "Ali-R", pkA, T0)
+  nsE.Sync.OnMessage("D", manMsg[2], "Bob-R", "GUILD")
+  eq(G.pending(), 1, "manifest-only message queued")
+  GetTime = savedGT
+end)
+
+test("queue AF4: a message whose skip check says yes leaves the queue without spending tokens", function()
+  local Q = NS.Queue
+  local sent = {}
+  local q = Q.new({ rate = 1, burst = 2, max = 50, send = function(it) sent[#sent + 1] = it.msg; return true end })
+  local dropped = false
+  local m = {}
+  local p1 = { msg = "a1", first = true, drop = function() if not m.d then m.d = dropped and true or false end return m.d end }
+  local p2 = { msg = "a2", drop = function() return m.d end }
+  q:pushMessage({ p1, p2 }, "k1")
+  q:pushMessage({ { msg = "b1" } }, "k2")
+  dropped = true
+  q:pump(0)
+  eq(table.concat(sent, ","), "b1", "both parts of the skipped message dropped, the next one sent")
+  eq(q:size(), 0)
+  eq(q.skipped, 1, "counted")
 end)
 
 SMOKE_CHECKS = SMOKE_CHECKS or {}

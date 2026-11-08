@@ -244,7 +244,8 @@ function Sync.QueueOwnManifest()
     local m, me = Sync.OwnManifest(), ns.me and ns.me()
     if not (m and me) then return end
     manSent["*|" .. me] = { n = m.n, t = GetTime and GetTime() or 0 }
-    Comm.Send("D", { r = {}, m = { { a = m.a, n = m.n, h = m.h, s = m.s } } })
+    local w = { a = m.a, n = m.n, h = m.h, s = m.s }
+    Comm.Send("D", { r = {}, m = { w } }, nil, nil, function() Sync.NoteManHeard(w) end)
   end)
 end
 -- `m` of a D message: the manifests of the authors of its records (ours or the last verified one we hold), one per
@@ -271,7 +272,29 @@ function Sync.ManifestsFor(batch, to)
   end
   return out
 end
--- `m` of a received D: only for authors of records in it (first 20), roster members, not us; queued for 1 verify
+-- AF4 (s8t2: the `m` of hello replies were ~4600 of 9642 parts): a GUILD hello reply sends each manifest apart,
+-- with a skip check run at the head of the send queue: dropped if the same manifest (author, n, signature) was heard
+-- on GUILD (sent by us or by another replier) after the requester's hello, since he got it then too.
+local manHeard, helloAt = {}, {}  -- author -> { n, s, t } heard on GUILD; requester -> GetTime of his last hello
+function Sync.HelloHeard(from, t) helloAt[from] = t or (GetTime and GetTime() or 0) end
+local function noteManHeard(m)
+  if type(m) == "table" and type(m.a) == "string" and type(m.s) == "string" then
+    manHeard[m.a] = { n = m.n, s = m.s, t = GetTime and GetTime() or 0 }
+  end
+end
+Sync.NoteManHeard = noteManHeard
+function Sync.ManHeardSince(m, req)
+  local h, t0 = manHeard[m.a], helloAt[req]
+  return (h and t0 and h.n == m.n and h.s == m.s and h.t > t0) and true or false
+end
+local function sendManifestsApart(list, req)
+  for _, m in ipairs(list) do
+    Comm.Send("D", { r = {}, m = { m } }, nil, nil, function() noteManHeard(m) end, nil,
+      function() return Sync.ManHeardSince(m, req) end)
+  end
+end
+-- `m` of a received D: only for authors of records in it (first 20), roster members, not us; queued for 1 verify.
+-- A message with no records (a manifest sent apart, AF4) may carry any roster member's manifest.
 local function offerManifests(payload, from)
   local G, db, T = ns.Sig, ns.sigDB, ns.Trust
   if not (G and db and T and type(payload.m) == "table") then return end
@@ -280,7 +303,7 @@ local function offerManifests(payload, from)
   local keyOf = function(name) if ns.trustDB then return T.keyOf(ns.trustDB, name) end end
   for i = 1, math.min(#payload.m, 20) do
     local m = payload.m[i]
-    if type(m) == "table" and type(m.a) == "string" and (authors[m.a] or m.a == from) and m.a ~= me and (m.a == from or (ns.roster and ns.roster(m.a))) then
+    if type(m) == "table" and type(m.a) == "string" and (authors[m.a] or m.a == from or #payload.r == 0) and m.a ~= me and (m.a == from or (ns.roster and ns.roster(m.a))) then
       pcall(G.offer, db, m, keyOf)
     end
   end
@@ -369,7 +392,13 @@ local function sendRecords(list, to, urgent, req)
     for i, r in ipairs(batch) do ids[i] = { r.id, vkey(r) }; queued[r.id] = vkey(r) end
     local function done() for _, x in ipairs(ids) do if queued[x[1]] == x[2] then queued[x[1]] = nil end end end
     local msg = envelope(batch, req or to)
-    if Comm.Send("D", msg, to and "WHISPER" or nil, to, done, urgent) == false then done() end
+    -- AF4: a GUILD hello reply sends its manifests apart (each one skipped if heard on GUILD after the hello)
+    local apart = (req and not to) and msg.m or nil
+    if apart then msg.m = nil end
+    local guildM = (not to) and msg.m or nil
+    local function sent() done(); if guildM then for _, m in ipairs(guildM) do noteManHeard(m) end end end
+    if Comm.Send("D", msg, to and "WHISPER" or nil, to, sent, urgent) == false then done() end
+    if apart then sendManifestsApart(apart, req) end
     batch = {}
   end
   for _, b in ipairs(Sync.PackRecords(list)) do batch = b; flush() end
@@ -699,6 +728,7 @@ end
 local function onHello(payload, sender)
   if type(payload) ~= "table" or type(payload.h) ~= "table" then return end
   local from = (ns.fullName and ns.fullName(sender)) or sender
+  Sync.HelloHeard(from)
   if ns.ProgressGlue and type(payload.ec) == "table" then ns.ProgressGlue.OnHello(payload.ec, sender) end
   if ns.ProgressGlue and ns.ProgressGlue.OnSummaries and type(payload.ws) == "table" then
     ns.ProgressGlue.OnSummaries(payload.ws, sender)
@@ -753,10 +783,13 @@ end
 
 local function stored(rec) return M.stored(ns.state, rec) end
 
-local function onRecords(payload, sender)
+local function onRecords(payload, sender, channel)
   if type(payload) ~= "table" or type(payload.r) ~= "table" then return end
   local from = (ns.fullName and ns.fullName(sender)) or sender
   local t = GetTime and GetTime() or 0
+  if channel == "GUILD" and type(payload.m) == "table" then
+    for i = 1, math.min(#payload.m, 20) do noteManHeard(payload.m[i]) end
+  end
   learnKeys(payload, from)
   Sync.OfferCert(payload.c, from)
   offerManifests(payload, from)
@@ -795,8 +828,8 @@ local function onRecords(payload, sender)
   end
 end
 
-local function dispatch(tag, payload, sender, sentAt)
-  if tag == "D" then onRecords(payload, sender)
+local function dispatch(tag, payload, sender, sentAt, channel)
+  if tag == "D" then onRecords(payload, sender, channel)
   elseif tag == "H" then onHello(payload, sender)
   elseif tag == "C" and ns.OnCall then ns.OnCall(payload, sender)
   elseif tag == "E" and ns.ProgressGlue then ns.ProgressGlue.OnEvents(payload, sender)
@@ -809,9 +842,9 @@ end
 
 -- the CHAT_MSG_ADDON entry point: never raises (a broken peer cannot spam Lua errors on the whole guild)
 -- sentAt = server time stamped by the sender when the message left its queue (nil from older clients)
-function Sync.OnMessage(tag, payload, sender, _, sentAt)
+function Sync.OnMessage(tag, payload, sender, channel, sentAt)
   if type(sender) == "string" then heard[(ns.fullName and ns.fullName(sender)) or sender] = GetTime and GetTime() or 0 end
-  local ok, err = pcall(dispatch, tag, payload, sender, sentAt)
+  local ok, err = pcall(dispatch, tag, payload, sender, sentAt, channel)
   if not ok then
     Sync.stats.errors = Sync.stats.errors + 1
     if ns.debug then ns.debug("sync error: " .. tostring(err)) end
