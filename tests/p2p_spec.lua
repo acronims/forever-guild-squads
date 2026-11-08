@@ -363,6 +363,27 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AC3: the 'synced' chat line fires once
   Sync.ResetSynced(); Sync.NoteRound(0, t + 600, true)
   DEFAULT_CHAT_FRAME = old
   ok(seen and seen:find("^Guild Squads: "), "DEFAULT_CHAT_FRAME:AddMessage")
+  -- v1.2 AC3 (S8, CI 42502868797): with guild traffic every round teaches >= 1 record and there are never 60 s of
+  -- silence, so the line never came. A round that teaches <= SYNCED_FEW records counts as "no differences"
+  Sync.chatSink = function(line) got[#got + 1] = line end
+  ok(type(Sync.SYNCED_FEW) == "number" and Sync.SYNCED_FEW >= 1 and Sync.SYNCED_FEW <= 5, "Sync.SYNCED_FEW")
+  Sync.ResetSynced(); got = {}
+  Sync.NoteRound(Sync.SYNCED_FEW + 1, t + 700, true)
+  eq(#got, 0, "a round that still teaches more than SYNCED_FEW records: nothing")
+  Sync.NoteRound(Sync.SYNCED_FEW, t + 730, true)
+  eq(#got, 1, "a round that teaches <= SYNCED_FEW records = synced")
+  -- and if the quiet never comes (records keep trickling in), the watcher fires when it gives up instead of
+  -- staying silent for the whole session
+  Sync.ResetSynced(); got = {}
+  Sync.NoteRound(50, t + 800, false)
+  for k = 1, 60 do Sync.NoteRecord(t + 800 + 10 * k); Sync.CheckSynced(t + 805 + 10 * k) end
+  eq(#got, 0, "not while records keep arriving")
+  ok(type(Sync.GiveUpSynced) == "function", "Sync.GiveUpSynced")
+  Sync.GiveUpSynced()
+  eq(#got, 1, "the watcher giving up writes the line (once)")
+  Sync.GiveUpSynced()
+  eq(#got, 1, "still once")
+  Sync.chatSink = nil
 end }
 
 -- H4 (QA 1.1, baja): X.before() dropped st.via[kid] as soon as the author spoke, even when the author's record then

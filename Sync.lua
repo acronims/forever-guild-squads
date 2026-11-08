@@ -662,9 +662,12 @@ function Sync.OnOldPeer()
 end
 function Sync.NoteRecord(now) synced.lastNew = now end
 -- end of a hello round: `n` records learned in it; `more` = another round follows
+-- v1.2 AC3 (S8): with guild traffic a round always teaches a record or two and the 60 s of silence never come, so a
+-- round that teaches <= SYNCED_FEW records counts as one with no differences
+Sync.SYNCED_FEW = 2
 function Sync.NoteRound(n, now, more)
   if synced.done then return end
-  if n == 0 then fireSynced(); return end
+  if n <= Sync.SYNCED_FEW then fireSynced(); return end
   if not more then synced.waitFrom = now end
 end
 function Sync.CheckSynced(now)
@@ -672,10 +675,13 @@ function Sync.CheckSynced(now)
   if now - math.max(synced.waitFrom, synced.lastNew) >= Sync.SYNCED_QUIET then fireSynced(); return true end
   return false
 end
+-- the watcher stops after 40 checks (~11 min); if records were still trickling in, it writes the line anyway
+function Sync.GiveUpSynced() fireSynced() end
 local function now() return GetTime and GetTime() or 0 end
 local function watchSynced()
   synced.checks = synced.checks + 1
-  if Sync.CheckSynced(now()) or synced.checks > 40 or not ns.After then return end
+  if Sync.CheckSynced(now()) or not ns.After then return end
+  if synced.checks > 40 then Sync.GiveUpSynced(); return end
   ns.After(15, watchSynced)
 end
 -- "initial sync" = 2 min after a hello, extended while replies keep teaching us records

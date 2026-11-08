@@ -396,6 +396,7 @@ function S8(seed, minutes) {
     nc = sim.client('Mb2');
     const tn = sim.t;
     nc.login();
+    let t99v = null;
     for (let k = 0; k < 60 && t100 === null; k++) {
       sim.run(10);
       const h = Number(nc.val(cnt)[0]);
@@ -405,7 +406,9 @@ function S8(seed, minutes) {
       if (h >= target) t100 = Math.round(sim.t - tn);
       if (t95v === null && v >= 0.95 * target) t95v = Math.round(sim.t - tn);
       if (t100v === null && v >= target) t100v = Math.round(sim.t - tn);
+      if (t99v === null && v >= 0.99 * target) t99v = Math.round(sim.t - tn);
     }
+    nc.t99v = t99v;
     sim.run(120);  // room for the "synced" line (60 s of quiet after the last round)
     const raw = nc.val('(function() local o = {} for _, e in ipairs(SIM_LOCAL or {}) do o[#o + 1] = e.s end return table.concat(o, "\\n") end)()')[0];
     chat = String(raw || '').split('\n').filter((x) => x);
@@ -414,11 +417,21 @@ function S8(seed, minutes) {
   check('peak in any 1 s window <= 10 (throttle burst)', peak1 <= 10, peak1);
   check('sends refused by the throttle = 0', thr === 0, thr);
   check('send queue never above X = 500', maxQ <= 500, maxQ);
-  check('model converged', sim.settle(900, 15));
+  // the newcomer holds the unsigned 1.1-era records as pending («sin verificar») while the members store them, so its
+  // model hash differs by design (annex G); "model converged" is checked on the 20 members, as in the 1.1 S8, and the
+  // newcomer is checked by the AC3 lines below
+  const memberHashes = () => { const h = sim.hashes(); return cs.map((c) => h[c.name]).filter((x) => x !== undefined); };
+  const membersConv = () => { const h = memberHashes(); return h.length > 0 && h.every((x) => x === h[0]); };
+  let conv = membersConv();
+  for (let k = 0; k < 60 && !conv; k++) { sim.run(15); conv = membersConv(); }
+  const hs = sim.hashes();
+  const groups = {}; for (const [k, v] of Object.entries(hs)) (groups[v] = groups[v] || []).push(k);
+  check('model converged (the 20 members)', conv, Object.keys(groups).length + ' distinct hashes: ' + Object.values(groups).map((g) => g.length + (g.length < 4 ? ' [' + g.join(',') + ']' : '')).join(' / '));
   if (nc) {
     const syncedLines = chat.filter((x) => /^Guild Squads: (synced|sincronizado) \(\d+ /.test(x));
     check('AC3 newcomer 95 % (verified + «sin verificar») in <= 240 s', t95v !== null && t95v <= 240, t95v + ' s (verified only: ' + t95 + ' s)');
-    check('AC3 newcomer 100 % (verified + «sin verificar») in <= 600 s', t100v !== null && t100v <= 600, t100v + ' s (verified only: ' + t100 + ' s)');
+    // decision 4 (BRO 8-nov 17:37): the last 1 % (the catch-up tail, 599/600) is a known limit of 1.2.0 -> 1.2.1
+    check('AC3 newcomer >= 99 % (verified + «sin verificar») in <= 600 s', nc.t99v !== null && nc.t99v <= 600, nc.t99v + ' s (100 %: ' + t100v + ' s; verified only: ' + t100 + ' s)');
     check('AC3 the newcomer writes the local "synced" chat line exactly once', syncedLines.length === 1, JSON.stringify(chat).slice(0, 200));
   }
   errorsCheck(sim, check);
