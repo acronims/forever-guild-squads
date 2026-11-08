@@ -183,7 +183,12 @@ function X.offer(state, rec, ctx, settings, u)
   local now = ctx.now or rec.ts
   local sender = ctx.sender
   local kid, vk = kidOf(rec), X.vkey(rec)
-  if repudiatedBase(state, vk) then return false, "repudiated" end
+  -- sec r2 R1: a base match (another content hash) does not hide a version the author's verified manifest lists:
+  -- a forged copy with the real (ts, sq, a) gets repudiated, the signed real one must still come through
+  if repudiatedBase(state, vk) then
+    local G, db = ns.Sig, sigdb(state)
+    if (state.repudiates or {})[vk] or not (G and db and G.status(db, rec)) then return false, "repudiated" end
+  end
   local stored = M.stored(state, rec)
   if stored and M.same(rec, stored) then
     if X.vkey(stored) == vk then return false, "dup" end
