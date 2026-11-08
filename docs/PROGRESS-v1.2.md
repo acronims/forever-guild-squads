@@ -419,3 +419,4 @@ Se mantiene la regla de **≥2 certificados de emisores fuertes**. **AF7 se reha
 - **F7, parte común a las 3 opciones (tope duro de envío)** → comm_spec «a message of more than 64 parts is never queued, and counted (sec F7)» **ROJO** (Comm.Send encolaba 70 partes que el receptor descarta). Arreglo: `Comm.MAX_PARTS = 64` en Comm.Send (devuelve false, `stats.tooBig`, línea `comm … tooBig=` de diag, guías en/es). Verde (comm 5/5). Sigue pendiente la decisión de BRO sobre F7 (páginas / tope de registros / solo documentar); sin respuesta a las 11:29.
 - Unidad sobre el commit del tope de partes: **337/337** (EXIT 0), gates OK, lint 0/0.
 - Reprogramado para las 11:51 (solo espera la respuesta de BRO a F7/AF4; desde las 13:00 sin respuesta se adelanta la batería final).
+- Mirado 11:51: BRO sin responder a AF4 ni a F7. Reprogramado a las 12:06 (desde las 13:00 sin respuesta se adelanta la batería final).
