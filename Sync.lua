@@ -187,14 +187,14 @@ function Sync.OwnRotation(oldSk, oldPk, newPk)
   db.ownRot[me] = { pk = T.hex(newPk), s = T.hex(sig) }
 end
 -- QA D4 / sec F8: a rotation costs one ed25519 verify; never inside the message handler (a D with 20 fake `kr`
--- froze every receiver): queued (ROT_Q_MAX, deduped), one verify per frame, paused in combat. A rotation that
--- failed is remembered (ROT_BAD_MAX tags) and not verified again.
+-- froze every receiver): queued (ROT_Q_MAX, deduped) and verified by Sync.SigStep, the one-verify-per-frame step
+-- that pauses in combat and encounters (QA r2 N3: it used to run on its own After(0) timer, so a frame could hold
+-- two verifies and encounters did not pause it). A rotation that failed is remembered (ROT_BAD_MAX tags).
 Sync.ROT_Q_MAX, Sync.ROT_BAD_MAX = 20, 200
-local rotQ, rotQueued, rotBad, rotBadN, rotRunning = {}, {}, {}, 0, false
+local rotQ, rotQueued, rotBad, rotBadN = {}, {}, {}, 0
+function Sync.RotPending() return #rotQ end
 local function rotStep()
-  rotRunning = false
-  if #rotQ == 0 then return end
-  if InCombatLockdown and InCombatLockdown() then rotRunning = true; ns.After(1, rotStep); return end
+  if #rotQ == 0 then return nil end
   local e = table.remove(rotQ, 1)
   rotQueued[e.tag] = nil
   local T, db = ns.Trust, ns.trustDB
@@ -210,7 +210,7 @@ local function rotStep()
       rotBad[e.tag], rotBadN = true, rotBadN + 1
     end
   end
-  if #rotQ > 0 then rotRunning = true; ns.After(0, rotStep) end
+  return e.a
 end
 function Sync.QueueRotation(a, pk, sig, from)
   local tag = a .. "|" .. pk .. "|" .. sig
@@ -218,7 +218,6 @@ function Sync.QueueRotation(a, pk, sig, from)
   if #rotQ >= Sync.ROT_Q_MAX then Sync.stats.rotDropped = (Sync.stats.rotDropped or 0) + 1; return end
   rotQ[#rotQ + 1] = { a = a, pk = pk, sig = sig, tag = tag, from = from }
   rotQueued[tag] = true
-  if not rotRunning and ns.After then rotRunning = true; ns.After(0, rotStep) end
 end
 -- `ks` of a D message: only for authors of records in it and roster members; the sender itself = in person
 local function learnKeys(payload, from)
@@ -385,8 +384,12 @@ local function offerManifests(payload, from)
   end
 end
 -- one verification (call once per frame, never in combat): an accepted manifest re-applies that author's pending copies
+local rotTurn = false
 function Sync.SigStep()
   if ns.Cert and ns.certDB and ns.Cert.pending() > 0 then return Sync.CertStep() end
+  -- rotations and manifests take turns (a flood of fake `kr` cannot starve the manifests, nor the other way)
+  rotTurn = not rotTurn
+  if #rotQ > 0 and (rotTurn or not (ns.Sig and ns.sigDB and ns.Sig.pending() > 0)) then return rotStep() end
   local G, db = ns.Sig, ns.sigDB
   if not (G and db) or G.pending() == 0 then return nil end
   local okS, who = pcall(G.step, db, function(author)

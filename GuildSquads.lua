@@ -731,7 +731,8 @@ f:SetScript("OnUpdate", sampler)
 -- v1.2 annex F: at most one manifest verify per frame, never in combat nor during a boss encounter
 local sigFrame = CreateFrame("Frame")
 sigFrame:SetScript("OnUpdate", function()
-  if not (ns.sigDB and ns.Sig and (ns.Sig.pending() > 0 or (ns.Cert and ns.certDB and ns.Cert.pending() > 0))) then return end
+  if not ((ns.sigDB and ns.Sig and ns.Sig.pending() > 0) or (ns.Cert and ns.certDB and ns.Cert.pending() > 0)
+    or (Sync.RotPending and Sync.RotPending() > 0)) then return end
   if InCombatLockdown and InCombatLockdown() then return end
   if IsEncounterInProgress and IsEncounterInProgress() then return end
   Sync.SigStep()

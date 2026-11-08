@@ -261,11 +261,13 @@ test("keys AF5 end to end: a relayed new key without the old key's signature is 
   -- a bad rotation signature (signed by the new key): refused too
   nsC.Sync.OnMessage("D", { r = { prof("Ali-R", T0 + 2) }, ks = { ["Ali-R"] = T.hex(pkF) },
                             kr = { ["Ali-R"] = T.hex(T.signRotation(key("F"), pkF, "Ali-R", pkF)) } }, "Bob-R")
+  while nsC.Sync.RotPending() > 0 do nsC.Sync.SigStep() end   -- QA r2 N3: rotations verify in the frame step
   ok(T.keyOf(nsC.trustDB, "Ali-R") == pkA, "bad rotation refused")
   ok(has(nsC.trustDB, "badrotation Ali-R"), "bad rotation noted")
   -- signed by the old key: accepted, keeps its strength
   local rs = T.hex(T.signRotation(skA, pkA, "Ali-R", pkF))
   nsC.Sync.OnMessage("D", { r = { prof("Ali-R", T0 + 3) }, ks = { ["Ali-R"] = T.hex(pkF) }, kr = { ["Ali-R"] = rs } }, "Bob-R")
+  while nsC.Sync.RotPending() > 0 do nsC.Sync.SigStep() end
   k, s = T.keyOf(nsC.trustDB, "Ali-R")
   ok(k == pkF and s == "strong", "signed rotation accepted")
   ok(has(nsC.trustDB, "rotated Ali-R"), "rotation noted")
@@ -370,15 +372,44 @@ test("keys: QA D4 / sec F8: rotations (kr) are verified one per frame, never ins
   nsB.Sync.OnMessage("D", msg, "Fox-R")
   eq(rot, 0, "no rotation verified inside the handler")
   local steps = 0
-  while #pending > 0 and steps < 50 do
-    local fn = table.remove(pending, 1)
+  for _, fn in ipairs(pending) do fn() end
+  while nsB.Sync.RotPending() > 0 and steps < 50 do
     local before = rot
-    fn()
+    nsB.Sync.SigStep()
     ok(rot - before <= 1, "at most one rotation verify per frame")
     steps = steps + 1
   end
   eq(rot, #names, "each rotation verified once")
   nsB.Sync.OnMessage("D", msg, "Fox-R")
-  while #pending > 0 and steps < 100 do table.remove(pending, 1)(); steps = steps + 1 end
+  while nsB.Sync.RotPending() > 0 and steps < 100 do nsB.Sync.SigStep(); steps = steps + 1 end
   eq(rot, #names, "the same bad rotation is not verified again")
+end)
+
+test("keys: QA r2 N3: rotations go through Sync.SigStep (the one-per-frame step paused in combat/encounters), no timer of their own", function()
+  local nsB = wireNs("Bob-R", pkB, true)
+  local pending = {}
+  nsB.After = function(_, fn) pending[#pending + 1] = fn end
+  local rot = 0
+  local T2 = {}
+  for k, v in pairs(T) do T2[k] = v end
+  T2.rotate = function(...) rot = rot + 1; return T.rotate(...) end
+  nsB.Trust = T2
+  local names = { "Ali-R", "Cid-R", "Gm-R" }
+  for _, n in ipairs(names) do local _, pk = key("n3old" .. n); T.hearOwner(nsB.trustDB, n, pk, T0) end
+  local r, ks, kr = {}, {}, {}
+  for _, n in ipairs(names) do
+    r[#r + 1] = prof(n, T0 + 1)
+    local _, pk = key("n3new" .. n)
+    ks[n] = T.hex(pk); kr[n] = ("cd"):rep(64)
+  end
+  nsB.Sync.OnMessage("D", { r = r, ks = ks, kr = kr }, "Fox-R")
+  for _, fn in ipairs(pending) do fn() end
+  eq(rot, 0, "no rotation verified by a timer")
+  eq(nsB.Sync.RotPending and nsB.Sync.RotPending(), #names, "the rotations wait for the frame step")
+  for i = 1, #names do
+    local before = rot
+    nsB.Sync.SigStep()
+    eq(rot - before, 1, "one rotation verify per SigStep")
+  end
+  eq(nsB.Sync.RotPending(), 0)
 end)
