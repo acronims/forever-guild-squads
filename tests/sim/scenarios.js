@@ -852,7 +852,12 @@ function S16b(seed) {
   sim.run(60);
   for (const c of [gm, h1, h2, ...alts]) c.logout();
   // Z meets only Mb10 in person, saves his profile, leaves
-  z.login(); sim.run(10); z.run('return A.SaveProfile({ note = "realz" })'); sim.run(60); z.logout();
+  // the sim only runs frames when a client steps: give Z the frames of a real login (entropy for his key)
+  z.login(); for (let n = 0; n < 80; n++) { sim.run(0.2); z.step(); } sim.run(5);
+  const zpk0 = z.val('NS.myPk() ~= nil')[0];
+  z.run('return A.SaveProfile({ note = "realz" })'); sim.run(60);
+  const zpk1 = z.val('NS.myPk() ~= nil')[0];
+  z.logout();
   sim.run(30);
   for (const c of [h1, h2, ...alts]) { c.login(); sim.run(5); }
   sim.run(120);
@@ -891,7 +896,7 @@ function S16b(seed) {
   const fin = [h1, h2].map(keyView);
   check('Z in person: his key strong and his own profile applied, the fake dropped', fin.every((x) => x.startsWith('strong/') && /realz2:strong/.test(x)), fin.join(','));
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { before, after, fin, t: Math.round(sim.t), ...sim.stats } };
+  return { pass: pass(), checks, metrics: { zpk0, zpk1, before, after, fin, t: Math.round(sim.t), ...sim.stats } };
 }
 
 // S13 (AC8): channel load. 40 clients (GM, 2 officers, 37 members) with 200 profiles + 20 squads on disk, 15 min
