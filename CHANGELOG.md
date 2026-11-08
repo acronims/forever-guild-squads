@@ -16,7 +16,7 @@ Cada jugador con el addon es un nodo: perfiles, squads, ajustes, anulaciones, ro
 - **Comandos nuevos**: `/gsq trust newkey` (borra tu clave y crea otra; pide confirmación) y `/gsq trust reset <nombre>` (olvida la clave de un miembro). `/gsq diag`: líneas `keys`, `sig` y `cert`.
 - Límites conocidos (README): dos alts oídos en persona pueden certificar una clave falsa de alguien a quien nunca has oído, hasta que lo oyes; un solo alt puede dejarla disputada; WoW no tiene azar criptográfico (la semilla mezcla tiempos de frames e input); la clave privada va en claro en las SavedVariables. La lista negra de la 1.1 (3 desmentidos = 7 días) ya no hace nada con firmas: solo queda en `/gsq diag`.
 - Nadie puede tener más de 200 registros pendientes a la vez. Límites por remitente: un hello cada 20 s, 20 manifiestos aparcados y 4 rotaciones de clave en cola. Las colas de manifiestos y certificados por verificar tienen un tope total, no por remitente.
-- Seguridad: arreglos menores en el rastro de reenvío y en la comprobación del registro de reenviadores.
+- Seguridad: arreglos menores en el rastro de reenvío y en la comprobación del registro de reenviadores. Lo que queda bajo inundación de clientes modificados (turnos de la cola de verificación, desmentidos de copias sin firma, puesta al día una vez cada 10 min por nombre, reenvío de certificados) está en los límites del README.
 - `/gsq diag`: la línea `comm` cuenta los mensajes de versión vieja descartados (`badProto=`).
 
 ### EN
@@ -31,7 +31,7 @@ Every player with the addon is a node: profiles, squads, settings, annulments, r
 - **New commands**: `/gsq trust newkey` (delete your key and make a new one; asks first) and `/gsq trust reset <name>` (forget a member's key). `/gsq diag`: `keys`, `sig` and `cert` lines.
 - Known limits (README): two alts heard in person can certify a fake key for someone you never heard, until you hear them; a single alt can keep it disputed; WoW has no cryptographic RNG (the seed mixes frame and input timings); the private key is stored in plain text in SavedVariables. The 1.1 blacklist (3 denials = 7 days) does nothing with signatures: it only shows in `/gsq diag`.
 - Nobody can hold more than 200 pending records at once. Per-sender limits: one hello per 20 s, 20 parked manifests and 4 queued key rotations. The queues of manifests and certificates to verify have a total cap, not a per-sender one.
-- Security: minor fixes to the relay trail and the relayer ledger check.
+- Security: minor fixes to the relay trail and the relayer ledger check. What remains under a flood from modified clients (verify-queue turns, denials of unsigned copies, catch-up once every 10 min per name, certificate re-sends) is in the README limits.
 - `/gsq diag`: the `comm` line counts the dropped old-version messages (`badProto=`).
 
 ## 1.1.0 — no publicada, incluida en la 1.2.0 / never published, included in 1.2.0 — Sincronización P2P sin oficiales / P2P sync without officers

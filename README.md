@@ -81,6 +81,8 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
   - A single character you heard in person can keep a stranger's key *disputed* with a different certificate; it clears when you hear the stranger in person.
   - WoW has no cryptographic random source: the key seed mixes frame and input timings, clocks, the cursor and the GUID. It is enough against other players, not against someone who can replay your exact session timings.
   - The private key is kept in plain text in the addon's SavedVariables (`GuildSquadsDB.ownKeys`), readable by other addons you install. If you suspect it leaked, `/gsq trust newkey` makes a new one.
+  - A key certified by two alts also lets them replace that player's squad when you only have a copy heard live without their key; it ends, like the rest, when you hear the player in person.
+  - Under a flood from modified clients the addon stays usable but slower: certificate checks go before key rotations and manifests in the verify queue, forged unsigned copies of your records make your client sign up to 5 denials per hour (each one is a record of yours for 30 days), a denial that only matches a record's base is not retried when the author's manifest arrives later, the catch-up of one name is answered at most once every 10 minutes, and answers to hellos re-whisper certificates up to 10 times per minute.
   - Losing SavedVariables loses the key: a new one is made and others accept it when they hear you in person; until then your data looks unverified to them.
 - 1.2 does not talk to 1.0.x or 1.1: the whole guild has to update.
 - A full resync of a large guild takes minutes by design (throttle).
