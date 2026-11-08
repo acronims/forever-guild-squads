@@ -86,3 +86,32 @@ test("sig rules: a weak key never replaces nor deletes what is strong; repudiate
   eq(s2.profiles["W-R"].d.note, "real, en persona")
   eq(X.strengthOf(s2, s2.profiles["W-R"]), "strong")
 end)
+
+test("sig rules H2: a profile with d.squad=A only counts if A's roster, signed by its captain, lists the author", function()
+  local s = newState()
+  local sq1 = { k = "squad", id = "A", a = "Cap-R", ts = T0 + 1, sq = 1, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R" } } }
+  local p = prof("Au-R", T0 + 10, { squad = "A" })
+  eq(sign(s, "Cap-R", 1, { sq1 }), "Cap-R"); eq(sign(s, "Au-R", 1, { p }), "Au-R")
+  ok(ap(s, sq1, "Z-R")); ok(ap(s, p, "Z-R"))
+  eq(s.profiles["Au-R"].d.squad, "A", "the profile itself is applied (it is the author's own record)")
+  ok(not M.isMember(s, "A", "Au-R"), "but it does not make Au-R a member: the captain's roster does not list him")
+  ok(not NS.Permissions.contains(M.members(s, "A"), "Au-R"), "nor is he counted among the members")
+  eq(M.squadOf(s, "Au-R"), nil)
+  -- Y forges a roster of A that lists Au-R: as himself (not the captain) or as the captain with his own key
+  local fake = { k = "squad", id = "A", a = "Y-R", ts = T0 + 20, sq = 2, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R", "Au-R" } } }
+  eq(sign(s, "Y-R", 1, { fake }), "Y-R")
+  local okY = ap(s, fake, "Y-R")
+  ok(not okY, "a roster of A written by someone other than its captain is denied")
+  local fake2 = { k = "squad", id = "A", a = "Cap-R", ts = T0 + 21, sq = 2, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R", "Au-R" } } }
+  local m = G.build("Cap-R", 2, { fake2 }, KEYS["Y-R"].sk, KEYS["Y-R"].pk)
+  G.offer(s.sigdb, m, function(name) if name == "Cap-R" then return KEYS["Cap-R"].pk, "strong" end end)
+  G.step(s.sigdb)
+  eq(select(2, ap(s, fake2, "Y-R")), "pending", "a roster claiming the captain but signed with another key never applies")
+  ok(not M.isMember(s, "A", "Au-R"), "after both forgeries Au-R is still not a member")
+  -- the real captain lists him: now he counts
+  local sq2 = { k = "squad", id = "A", a = "Cap-R", ts = T0 + 30, sq = 3, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R", "Au-R" } } }
+  eq(sign(s, "Cap-R", 3, { sq2 }), "Cap-R")
+  ok(ap(s, sq2, "Z-R"))
+  ok(M.isMember(s, "A", "Au-R"), "listed by the captain's signed roster + own profile: member")
+  eq(M.squadOf(s, "Au-R"), "A")
+end)
