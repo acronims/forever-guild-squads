@@ -185,3 +185,6 @@ Se quita la clave de dev de todo el diseño (ver el cambio al final del Anexo F 
 - Unidad completa **309/309** (EXIT 0), gates OK.
 - Falta del punto 8: `p2 proto= sample= suppressed= auth-pend= seals=` (no existe aún en el código).
 - **Retoma por:** recoger s8m1 (hacia las 03:55; `gsq-logs/s8m1.log` con «EXIT n»; partes vs 5601; borrar el contenedor); la línea `p2 proto=…` del punto 8; S16 rehecho (AF2: 2, 3 y 5 alts sin perfil/squad/ajuste/repudiate falso; el legítimo llega; hoy S16 todavía mide el quórum de la 1.1); H2; deuda «[1.1 quorum]». AF3 sigue en espera de BRO.
+
+## ⚡ BRO, 8-nov 03:15: GO a la certificación cruzada de claves («dale, investígalo»)
+Mira el **Anexo G** del spec. Sustituye a las claves débiles con quórum 2 de reenviadores en AF3. Orden: (1) investigar (DESIGN-certificados.md: tamaño, partes en S8, S11/S15) en ≤1 turno; (2) implementar, primero el test (AF7 y S16b); (3) seguir con S16/AF2, AF5 (la clave en persona siempre gana), diag y el aviso de borrado; (4) QA + revisión de seguridad a ciegas (en AF6 entra el ataque de los 2 alts que certifican); (5) publicar.
