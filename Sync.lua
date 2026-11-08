@@ -358,6 +358,43 @@ function Sync.HelloCert()
   local c = Sync.OwnCert()
   if c then certSentN = c.n; return { i = c.i, n = c.n, e = c.e, s = c.s } end
 end
+-- a 1.2 hello lists the certificates the requester holds (`cn`): 8-char tokens = 24-bit hash of the issuer + n mod
+-- 2^24 (base64), newest first, at most CN_MAX. A replier re-sends its own only if its token is not there (missing or
+-- another n). A collision only skips one re-send (the next hello of a later certificate fixes it); a lying cn only
+-- hurts the liar. Malformed / oversized cn = empty.
+Sync.CN_MAX = 32
+local B64C = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local function b24(v)
+  v = math.floor(v) % 16777216
+  local o = {}
+  for j = 3, 0, -1 do local d = math.floor(v / 64 ^ j) % 64; o[#o + 1] = B64C:sub(d + 1, d + 1) end
+  return table.concat(o)
+end
+function Sync.CertTok(issuer, n)
+  local h = 5381
+  issuer = tostring(issuer)
+  for i = 1, #issuer do h = (h * 33 + issuer:byte(i)) % 16777216 end
+  return b24(h) .. b24(tonumber(n) or 0)
+end
+function Sync.HelloCn()
+  local db = ns.certDB
+  if not (db and type(db.crt) == "table") then return nil end
+  local l = {}
+  for i, c in pairs(db.crt) do if type(c) == "table" and type(c.n) == "number" then l[#l + 1] = { i, c.n } end end
+  if #l == 0 then return nil end
+  table.sort(l, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return tostring(a[1]) < tostring(b[1]) end)
+  local o = {}
+  for k = 1, math.min(#l, Sync.CN_MAX) do o[k] = Sync.CertTok(l[k][1], l[k][2]) end
+  return table.concat(o)
+end
+function Sync.CertKnownBy(cn)
+  if type(cn) ~= "string" or #cn > Sync.CN_MAX * 8 or #cn % 8 ~= 0 then return false end
+  local c = Sync.OwnCert()
+  if not c then return true end           -- nothing to re-send anyway
+  local t = Sync.CertTok(c.i, c.n)
+  for k = 1, #cn, 8 do if cn:sub(k, k + 7) == t then return true end end
+  return false
+end
 function Sync.RehelloCert()
   if not ns.certDB or certRehelloQ then return end
   local now = serverNow() or 0
@@ -565,6 +602,7 @@ function Sync.Hello(again)
       if next(M.kindTable(ns.state, k)) then h2 = h2 or {}; h2[k] = M.bucketHashes(ns.state, k, Sync.FINE_NB) end
     end
     msg.h2 = h2
+    msg.cn = Sync.HelloCn()                        -- v1.2 annex G: certificates we hold (Sync.CertKnownBy)
     if catchup and again then msg.cu = 1 end      -- AC3 arreglo 2: bigger samples while catching up
   end
   -- v1.2 annex F: our public key, learned strong by whoever hears it from us (WoW guarantees the sender)
@@ -775,7 +813,9 @@ local function onHello(payload, sender)
   local always = officer and not (X and X.protoOf(payload) >= 2)
   if not always and math.random() > p then return end
   Sync.stats.replied = Sync.stats.replied + 1
-  if X and (tonumber(payload.p2) or 0) >= 2 and from ~= (ns.me and ns.me()) then Sync.RehelloCert() end
+  if X and (tonumber(payload.p2) or 0) >= 2 and from ~= (ns.me and ns.me()) and not Sync.CertKnownBy(payload.cn) then
+    Sync.RehelloCert()
+  end
   local startedAt = GetTime and GetTime() or 0
   local onlyMe = (not officer) and ns.me and ns.me() or nil
   -- v1.1: while a GM/officer with the addon is online, their trusted relays already serve the requester: a member

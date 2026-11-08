@@ -160,3 +160,51 @@ test("keys: a 1.2 replier re-sends its certificate by GUILD (S16b: who was offli
   nsB.Sync.OnMessage("H", { h = {} }, "Cid-R")
   eq(#certsSent(), 2, "1.0/1.1 hello: nothing")
 end)
+
+test("keys: the 1.2 hello lists the certificates we hold (cn); a replier re-sends its own only if the requester lacks it or holds an older n", function()
+  NS.Cert.resetQueue()
+  local skB = key("B")
+  local now = T0
+  local nsB, sentB = wireNs("Bob-R", pkB, true)
+  nsB.After = function(_, fn) fn() end
+  nsB.serverTime = function() return now end
+  nsB.mySk = function() return skB end
+  local function certsSent()
+    local n = 0
+    for _, m in ipairs(sentB) do if m[1] == "D" and m[2].c then n = n + 1 end end
+    return n
+  end
+  T.hearOwner(nsB.trustDB, "Ali-R", pkA, now)
+  local own = nsB.Sync.OwnCert()
+  ok(own and own.n, "Bob has a certificate")
+  local tok = nsB.Sync.CertTok
+  ok(type(tok) == "function", "Sync.CertTok exists")
+  -- the requester already holds Bob's certificate with this n: nothing re-sent
+  nsB.Sync.OnMessage("H", { h = {}, p2 = 2, cn = tok("Cid-R", 5) .. tok("Bob-R", own.n) }, "Eve-R")
+  eq(certsSent(), 0, "requester has it: not re-sent")
+  -- an older n: re-sent
+  now = now + 2 * nsB.Sync.CERT_REHELLO
+  nsB.Sync.OnMessage("H", { h = {}, p2 = 2, cn = tok("Bob-R", own.n - 1) }, "Eve-R")
+  eq(certsSent(), 1, "older n: re-sent")
+  -- no cn at all: re-sent
+  now = now + 2 * nsB.Sync.CERT_REHELLO
+  nsB.Sync.OnMessage("H", { h = {}, p2 = 2 }, "Gm-R")
+  eq(certsSent(), 2, "no cn: re-sent")
+  -- a malformed / oversized cn is ignored (treated as empty)
+  now = now + 2 * nsB.Sync.CERT_REHELLO
+  nsB.Sync.OnMessage("H", { h = {}, p2 = 2, cn = { 1, 2 } }, "Cid-R")
+  eq(certsSent(), 3, "bad cn: re-sent")
+  -- our own hello carries the tokens of the certificates we hold (one per issuer, capped)
+  local db = nsB.certDB
+  db.crt = db.crt or {}
+  for i = 1, nsB.Sync.CN_MAX + 5 do db.crt["X" .. i .. "-R"] = { n = 1000 + i, e = {}, s = "" } end
+  sentB = {}
+  local sent2 = {}
+  nsB.Comm.Send = function(tag, p) sent2[#sent2 + 1] = { tag, p } end
+  nsB.Sync.Hello()
+  local h
+  for _, m in ipairs(sent2) do if m[1] == "H" then h = m[2] end end
+  ok(h and type(h.cn) == "string", "hello has cn")
+  eq(#h.cn, nsB.Sync.CN_MAX * #tok("A", 1), "capped at CN_MAX tokens")
+  ok(h.cn:find(tok("X" .. (nsB.Sync.CN_MAX + 5) .. "-R", 1000 + nsB.Sync.CN_MAX + 5), 1, true), "newest first")
+end)
