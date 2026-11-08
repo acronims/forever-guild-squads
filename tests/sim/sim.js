@@ -66,6 +66,7 @@ if E then
   local function ok32(x) return type(x) == "string" and #x == 32 end
   E.publicKey = function(sk) assert(ok32(sk), "secret key must be 32 bytes") return SIM_ed("pk", sk) end
   E.sign = function(sk, pk, msg) assert(ok32(sk) and ok32(pk) and type(msg) == "string") return SIM_ed("sign", sk, msg) end
+  E.sha512 = function(msg) assert(type(msg) == "string") return SIM_ed("sha", msg) end
   E.verify = function(pk, msg, sig)
     if not ok32(pk) or type(msg) ~= "string" or type(sig) ~= "string" or #sig ~= 64 then return false end
     return SIM_ed("verify", pk, msg, sig) == true
@@ -127,11 +128,13 @@ class Client {
     lua.lua_setglobal(L, to_luastring('SIM_canSend'));
     // v1.2 annex F: ed25519 in Fengari costs ~0.3 s per verify; with dozens of clients the simulation would take
     // hours. SIM_ed(op, a, b, c) does the same operation with node's crypto (real ed25519, RFC 8032; the Lua port is
-    // checked against node byte for byte in tests/ed25519_spec.lua). GSQ_SIM_LUASIG=1 keeps the Lua code.
+    // checked against node byte for byte in tests/ed25519_spec.lua); sha512 too (record hashes, certificates and the entropy
+    // pool: ~16x slower S2 per simulated second since the signatures). GSQ_SIM_LUASIG=1 keeps the Lua code.
     lua.lua_pushjsfunction(L, (Ls) => {
       const op = str(lua.lua_tolstring(Ls, 1));
       const a = Buffer.from(lua.lua_tolstring(Ls, 2)), b = Buffer.from(lua.lua_tolstring(Ls, 3) || []);
       try {
+        if (op === 'sha') { lua.lua_pushstring(Ls, new Uint8Array(crypto.createHash('sha512').update(a).digest())); return 1; }
         if (op === 'pk') { lua.lua_pushstring(Ls, edPub(a)); return 1; }
         if (op === 'sign') { lua.lua_pushstring(Ls, new Uint8Array(crypto.sign(null, b, edPriv(a)))); return 1; }
         const c = Buffer.from(lua.lua_tolstring(Ls, 4));
