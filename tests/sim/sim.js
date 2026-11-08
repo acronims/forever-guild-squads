@@ -56,6 +56,21 @@ function getVal(L, i) {
   if (t === lua.LUA_TSTRING) return lua.lua_tolstring(L, i);   // raw bytes (Uint8Array)
   return lua.lua_typename(L, t);
 }
+const crypto = require('crypto');
+const ED_PRIV = Buffer.from('302e020100300506032b657004220420', 'hex'), ED_PUB = Buffer.from('302a300506032b6570032100', 'hex');
+const edPriv = (seed) => crypto.createPrivateKey({ key: Buffer.concat([ED_PRIV, seed]), format: 'der', type: 'pkcs8' });
+const edPub = (seed) => new Uint8Array(crypto.createPublicKey(edPriv(seed)).export({ format: 'der', type: 'spki' }).subarray(12));
+const edPubKey = (pk) => crypto.createPublicKey({ key: Buffer.concat([ED_PUB, pk]), format: 'der', type: 'spki' });
+const SIM_ED_WRAP = `local E = SIM_ns and SIM_ns.Ed25519
+if E then
+  local function ok32(x) return type(x) == "string" and #x == 32 end
+  E.publicKey = function(sk) assert(ok32(sk), "secret key must be 32 bytes") return SIM_ed("pk", sk) end
+  E.sign = function(sk, pk, msg) assert(ok32(sk) and ok32(pk) and type(msg) == "string") return SIM_ed("sign", sk, msg) end
+  E.verify = function(pk, msg, sig)
+    if not ok32(pk) or type(msg) ~= "string" or type(sig) ~= "string" or #sig ~= 64 then return false end
+    return SIM_ed("verify", pk, msg, sig) == true
+  end
+end`;
 const str = (u8) => (u8 instanceof Uint8Array ? Buffer.from(u8).toString('utf8') : u8);
 function results(L, base) {
   const n = lua.lua_gettop(L) - base;
@@ -110,6 +125,21 @@ class Client {
       return 1;
     });
     lua.lua_setglobal(L, to_luastring('SIM_canSend'));
+    // v1.2 annex F: ed25519 in Fengari costs ~0.3 s per verify; with dozens of clients the simulation would take
+    // hours. SIM_ed(op, a, b, c) does the same operation with node's crypto (real ed25519, RFC 8032; the Lua port is
+    // checked against node byte for byte in tests/ed25519_spec.lua). GSQ_SIM_LUASIG=1 keeps the Lua code.
+    lua.lua_pushjsfunction(L, (Ls) => {
+      const op = str(lua.lua_tolstring(Ls, 1));
+      const a = Buffer.from(lua.lua_tolstring(Ls, 2)), b = Buffer.from(lua.lua_tolstring(Ls, 3) || []);
+      try {
+        if (op === 'pk') { lua.lua_pushstring(Ls, edPub(a)); return 1; }
+        if (op === 'sign') { lua.lua_pushstring(Ls, new Uint8Array(crypto.sign(null, b, edPriv(a)))); return 1; }
+        const c = Buffer.from(lua.lua_tolstring(Ls, 4));
+        lua.lua_pushboolean(Ls, crypto.verify(null, b, edPubKey(a), c));
+        return 1;
+      } catch (e) { lua.lua_pushnil(Ls); return 1; }
+    });
+    lua.lua_setglobal(L, to_luastring('SIM_ed'));
     loadRun(L, FAKE, 'tests/sim/fakewow.lua');
     this.setRoster();
     if (this.saved) loadRun(L, Buffer.concat([Buffer.from('GuildSquadsDB = (function() '), Buffer.from(this.saved), Buffer.from(' end)()')]), 'SavedVariables');
@@ -125,6 +155,7 @@ class Client {
       if (lua.lua_pcall(L, 2, 0, 0) !== lua.LUA_OK) throw new Error(f + ': ' + lua.lua_tojsstring(L, -1));
       lua.lua_settop(L, base);
     }
+    if (!process.env.GSQ_SIM_LUASIG) loadRun(L, SIM_ED_WRAP, 'sim-ed25519');
     loadRun(L, GLUE, 'tests/sim/client.lua');
     this.online = true;
     this.bucket = {};

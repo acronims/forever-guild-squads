@@ -45,6 +45,7 @@ const ORDER = [
   'keys_wire_spec.lua',
   'sig_spec.lua',
   'sigrules_spec.lua',
+  'sigwire_spec.lua',
   'counters_spec.lua',
   'observations_spec.lua',
   'races_spec.lua',

@@ -139,6 +139,13 @@ function G.dropKey(db, name, oldPk)
   return false
 end
 
+-- the author's key we verified a manifest with as weak is now his strong key (heard in person, same pk)
+function G.promote(db, name, pk)
+  local cur = db.man and db.man[name]
+  if cur and cur.strength ~= "strong" and cur.pk == hex(pk) then cur.strength = "strong"; return true end
+  return false
+end
+
 function G.counts(db)
   G.st(db)
   local strong, weak = 0, 0

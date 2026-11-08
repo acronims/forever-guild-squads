@@ -126,11 +126,18 @@ end
 -- hellos carry no announced hashes; an `an` list from a peer is ignored
 function Sync.OnAnnounce() end
 
+-- v1.2 annex F: defined below with the manifests
+local envelope
+local ownDirty = true
 -- local write: apply then broadcast
 function Sync.Publish(rec)
   local ok, why = M.apply(ns.state, rec, { roster = ns.roster })
   if not ok then return false, why end
-  Comm.Send("D", { r = { rec } }, nil, nil, nil, true)   -- own fresh records skip the reply backlog
+  ownDirty = true
+  -- signing costs one ed25519 sign + a hash per own record: not on every click. Peers that hear the record from us
+  -- need no signature; the manifest (for relays) follows MAN_DEBOUNCE s later, once for a burst of edits
+  Comm.Send("D", { r = { rec }, ks = Sync.KeysFor({ rec }, nil) }, nil, nil, nil, true)
+  Sync.QueueOwnManifest()   -- own fresh records skip the reply backlog
   if ns.UI and ns.UI.Dirty then ns.UI.Dirty() end
   return true
 end
@@ -176,9 +183,116 @@ local function learnKeys(payload, from)
     end
   end
 end
--- what hearOwner said; "replaced" will drop what the old weak key signed (manifests, annex F)
+-- what hearOwner said; "replaced" drops what the old weak key signed (manifests, annex F); a manifest verified with
+-- a weak key that is now the owner's strong key becomes strong
 function Sync.OnOwnerKey(name, res, old)
-  if res == "replaced" and ns.OnKeyReplaced then ns.OnKeyReplaced(name, old) end
+  local G, db = ns.Sig, ns.sigDB
+  if res == "replaced" then
+    if G and db then G.dropKey(db, name, old) end
+    if ns.OnKeyReplaced then ns.OnKeyReplaced(name, old) end
+  elseif G and db and ns.Trust and ns.trustDB then
+    local pk, s = ns.Trust.keyOf(ns.trustDB, name)
+    if pk and s == "strong" then G.promote(db, name, pk) end
+  end
+end
+
+-- v1.2 annex F, manifests. Our own: rebuilt when one of our records changed (dirty), re-signed with n + 1 only if
+-- the hashes differ; n = max(n + 1, server time) so a lost SavedVariables does not leave us below what others hold.
+-- Kept in the guild's sig db (sigDB.own[name]).
+function Sync.MarkOwnDirty() ownDirty = true end
+function Sync.OwnManifest()
+  local G, db = ns.Sig, ns.sigDB
+  local me = ns.me and ns.me()
+  if not (G and db and me and ns.mySk and ns.myPk) then return nil end
+  db.own = type(db.own) == "table" and db.own or {}
+  local cur = db.own[me]
+  if cur and not ownDirty then return cur end
+  local sk, pk = ns.mySk(), ns.myPk()
+  if not (sk and pk) then return cur end
+  local mine = {}
+  for _, r in ipairs(M.allRecords(ns.state)) do if r.a == me then mine[#mine + 1] = r end end
+  if #mine == 0 then ownDirty = false; return cur end
+  local h = {}
+  for _, r in ipairs(mine) do h[r.k .. ":" .. r.id] = G.recHash(r) end
+  local same = cur and type(cur.h) == "table"
+  if same then
+    for kid, v in pairs(h) do if cur.h[kid] ~= v then same = false; break end end
+    if same then for kid in pairs(cur.h) do if h[kid] == nil then same = false; break end end end
+  end
+  ownDirty = false
+  if same then return cur end
+  local n = math.max((cur and tonumber(cur.n) or 0) + 1, math.floor(serverNow() or 0))
+  local okS, m = pcall(G.build, me, n, mine, sk, pk)
+  if not okS or not m then return cur end
+  db.own[me] = m
+  return m
+end
+Sync.MAN_DEBOUNCE = 5
+local manSent = {}
+local manQueued = false
+function Sync.QueueOwnManifest()
+  if manQueued or not ns.After then return end
+  manQueued = true
+  ns.After(Sync.MAN_DEBOUNCE, function()
+    manQueued = false
+    local m, me = Sync.OwnManifest(), ns.me and ns.me()
+    if not (m and me) then return end
+    manSent["*|" .. me] = { n = m.n, t = GetTime and GetTime() or 0 }
+    Comm.Send("D", { r = {}, m = { { a = m.a, n = m.n, h = m.h, s = m.s } } })
+  end)
+end
+-- `m` of a D message: the manifests of the authors of its records (ours or the last verified one we hold), one per
+-- author and destination every MAN_EVERY s or when its n changes
+Sync.MAN_EVERY = 600
+function Sync.ManifestsFor(batch, to)
+  local G, db = ns.Sig, ns.sigDB
+  if not (G and db) then return nil end
+  local now, me, out, seen = GetTime and GetTime() or 0, ns.me and ns.me(), nil, {}
+  for _, r in ipairs(batch) do
+    local a = r.a
+    if type(a) == "string" and not seen[a] then
+      seen[a] = true
+      local m
+      if a == me then m = Sync.OwnManifest() else m = G.manifestOf(db, a) end
+      local tag = (to or "*") .. "|" .. a
+      local last = manSent[tag]
+      if m and (not last or last.n ~= m.n or now - last.t >= Sync.MAN_EVERY) then
+        manSent[tag] = { n = m.n, t = now }
+        out = out or {}
+        out[#out + 1] = { a = m.a, n = m.n, h = m.h, s = m.s }
+      end
+    end
+  end
+  return out
+end
+-- `m` of a received D: only for authors of records in it (first 20), roster members, not us; queued for 1 verify
+local function offerManifests(payload, from)
+  local G, db, T = ns.Sig, ns.sigDB, ns.Trust
+  if not (G and db and T and type(payload.m) == "table") then return end
+  local authors, me = {}, ns.me and ns.me()
+  for i = 1, math.min(#payload.r, 20) do local r = payload.r[i]; if type(r) == "table" and type(r.a) == "string" then authors[r.a] = true end end
+  local keyOf = function(name) if ns.trustDB then return T.keyOf(ns.trustDB, name) end end
+  for i = 1, math.min(#payload.m, 20) do
+    local m = payload.m[i]
+    if type(m) == "table" and type(m.a) == "string" and (authors[m.a] or m.a == from) and m.a ~= me and (m.a == from or (ns.roster and ns.roster(m.a))) then
+      pcall(G.offer, db, m, keyOf)
+    end
+  end
+end
+-- one verification (call once per frame, never in combat): an accepted manifest re-applies that author's pending copies
+function Sync.SigStep()
+  local G, db = ns.Sig, ns.sigDB
+  if not (G and db) or G.pending() == 0 then return nil end
+  local okS, who = pcall(G.step, db, function(author)
+    if X and X.retry then
+      local n = X.retry(ns.state, author, ctxFor(nil))
+      if n > 0 and ns.UI and ns.UI.Dirty then pcall(ns.UI.Dirty) end
+    end
+  end)
+  return okS and who or nil
+end
+function envelope(batch, to)
+  return { r = batch, ks = Sync.KeysFor(batch, to), m = Sync.ManifestsFor(batch, to) }
 end
 
 local function sendRecords(list, to, urgent)
@@ -188,7 +302,7 @@ local function sendRecords(list, to, urgent)
     local ids = {}
     for i, r in ipairs(batch) do ids[i] = { r.id, vkey(r) }; queued[r.id] = vkey(r) end
     local function done() for _, x in ipairs(ids) do if queued[x[1]] == x[2] then queued[x[1]] = nil end end end
-    local msg = { r = batch, ks = Sync.KeysFor(batch, to) }
+    local msg = envelope(batch, to)
     if Comm.Send("D", msg, to and "WHISPER" or nil, to, done, urgent) == false then done() end
     batch = {}
   end
@@ -217,6 +331,7 @@ function Sync.PublishMany(list)
     if M.apply(ns.state, rec, { roster = ns.roster }) then okList[#okList + 1] = rec else refused = refused + 1 end
   end
   if #okList > 0 then
+    ownDirty = true
     sendRecords(okList)
     if ns.UI and ns.UI.Dirty then pcall(ns.UI.Dirty) end
     if ns.HallGlue and ns.HallGlue.MarkDirty then pcall(ns.HallGlue.MarkDirty) end
@@ -575,6 +690,7 @@ local function onRecords(payload, sender)
   local from = (ns.fullName and ns.fullName(sender)) or sender
   local t = GetTime and GetTime() or 0
   learnKeys(payload, from)
+  offerManifests(payload, from)
   for i = 1, math.min(#payload.r, 20) do
     local rec = payload.r[i]
     if not M.validShape(rec) then

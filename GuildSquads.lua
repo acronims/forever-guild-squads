@@ -150,6 +150,12 @@ local function selectGuild()
     ns.trustDB = ns.Trust.st(g.trust)
     pcall(ns.Trust.expire, ns.trustDB, (GetServerTime and GetServerTime()) or 0)
   end
+  -- v1.2 annex F: the manifests verified for this guild's members and our own (Core/Sig.lua)
+  if ns.Sig then
+    g.sig = type(g.sig) == "table" and g.sig or {}
+    ns.sigDB = ns.Sig.st(g.sig)
+    ns.Sig.resetQueue()
+  end
   local saved = type(g.records) == "table" and g.records or {}
   -- v1.1: pending (unverified) versions, relay provenance and repudiation counts, before the records
   if ns.P2P then pcall(ns.P2P.import, ns.state, g.p2p) end
@@ -170,6 +176,8 @@ local function unloadGuild()
   ns.debug("guild partition " .. tostring(ns.guildKey) .. " unloaded")
   ns.gdb, ns.guildKey, ns.rosterReady = nil, nil, false
   ns.trustDB = nil
+  ns.sigDB = nil
+  if ns.Sig then ns.Sig.resetQueue() end
   ns.state = M.newState()
   for _, fn in ipairs(ns.guildUnloadHooks) do pcall(fn) end
   if ns.UI then ns.UI.Dirty() end
@@ -658,6 +666,14 @@ f:SetScript("OnUpdate", function()
   if ownPk or not pool then f:SetScript("OnUpdate", nil); return end
   sample("f")
   if pool.n >= ns.Trust.MIN_SAMPLES and db and ns.myPk() then f:SetScript("OnUpdate", nil) end
+end)
+-- v1.2 annex F: at most one manifest verify per frame, never in combat nor during a boss encounter
+local sigFrame = CreateFrame("Frame")
+sigFrame:SetScript("OnUpdate", function()
+  if not (ns.sigDB and ns.Sig and ns.Sig.pending() > 0) then return end
+  if InCombatLockdown and InCombatLockdown() then return end
+  if IsEncounterInProgress and IsEncounterInProgress() then return end
+  Sync.SigStep()
 end)
 f:SetScript("OnEvent", function(_, ev, arg1)
   sample(ev)
