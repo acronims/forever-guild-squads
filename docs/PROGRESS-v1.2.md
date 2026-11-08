@@ -573,5 +573,6 @@ Orden: (2) primero, porque es pequeño. Después, (1) con un S8 detached en el M
 - CI 42512683877 (eae0f6f): **los 9 jobs en verde** (test, static, S1/S3/S4/S5, S2/S6, S7, S8, S9×3). `verificado` con la API de GitHub Actions.
 - `feat/v1.2-p2p` → eae0f6f (push). `publish-curseforge.sh --dry-run` OK (41 ficheros, TOC 37/37, Interface 16001, gameVersion 17053 «1.60.1» WoW Forever, releaseType release). `--publish`: **HTTP 200, file id 9515287**.
 - Comprobación con la API pública (`/api/v1/mods/1760070/files`): a las 20:19 el 9515287 **todavía no aparece** (CurseForge lo tiene en revisión; la 1.0.1 tardó ~3 h en salir). La subida está `reportado hecho` (200 + id); el listado público lo sube a `verificado`.
+- 8-nov 21:05: **VERIFICADO**. La API pública lista el **9515287** (GuildSquads-1.2.0.zip) con `status 4`, `releaseType 1`, `gameVersions ["1.60.1"]`. La 1.2.0 ya es pública en CurseForge.
 - Tag `v1.2.0` (anotado, eae0f6f) **solo en local**: release.yml (environment `release`, RELEASE_ENABLED = true) subiría un 1.2.0 duplicado si BRO aprueba el despliegue. Se empuja junto con RELEASE_ENABLED=false, o se deja para la 1.2.1.
 - A mano (BRO): pegar CURSEFORGE.md en la descripción del proyecto.
