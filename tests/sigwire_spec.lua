@@ -85,6 +85,34 @@ test("sigwire: a relayed record waits for its author's manifest and is applied o
   eq(G.pending(), 0, "unrelated manifest not queued")
 end)
 
+-- S8 (CI 42505121559, 4 / 16 members): a member who logs in late gets an author's records and manifest relayed in a
+-- hello reply whose `ks` copy of that key went out earlier (KEY_EVERY per destination): no key yet, so Sig.step
+-- parks the manifest. The author's key then arrives in person (his hello / his own D), but only a certified key
+-- (annex G) used to unpark: the manifest stayed parked and his records pending until another copy came (>= MAN_EVERY)
+test("sigwire: a manifest parked for lack of its author's key is verified once the author is heard in person", function()
+  G.resetQueue()
+  local nsA, sentA = wireNs("Ali-R", skA, pkA)
+  ok(nsA.Sync.Publish(prof("Ali-R", T0 + 1, "a")))
+  local nsB, sentB = wireNs("Bob-R", skB, pkB)
+  T.hearOwner(nsB.trustDB, "Ali-R", pkA, T0)
+  for _, x in ipairs(sentA) do if x[1] == "D" then nsB.Sync.OnMessage("D", x[2], "Ali-R") end end
+  for _ = 1, 3 do nsB.Sync.SigStep() end
+  ok(nsB.sigDB.man["Ali-R"], "Bob verified Ali's manifest")
+  G.resetQueue()
+  nsB.Sync.SendRecords({ M.stored(nsB.state, prof("Ali-R", T0 + 1)) }, "Eve-R")
+  local dB = lastD(sentB)
+  ok(dB.m and dB.m[1] and dB.m[1].a == "Ali-R", "Bob relays Ali's manifest next to her record")
+  local nsE = wireNs("Eve-R", nil, nil)
+  nsE.Sync.OnMessage("D", { r = dB.r, m = dB.m }, "Bob-R")      -- without `ks`: Bob's copy of Ali's key went earlier
+  for _ = 1, 3 do nsE.Sync.SigStep() end
+  eq(nsE.sigDB.man["Ali-R"], nil, "no key yet: the manifest waits parked")
+  eq(nsE.state.profiles["Ali-R"], nil, "and her record waits pending")
+  nsE.Sync.OnOwnerKey("Ali-R", T.hearOwner(nsE.trustDB, "Ali-R", pkA, T0 + 5))   -- Ali's hello: her key in person
+  for _ = 1, 3 do nsE.Sync.SigStep() end
+  ok(nsE.sigDB.man["Ali-R"], "the parked manifest is verified with the key heard in person")
+  ok(nsE.state.profiles["Ali-R"] and nsE.state.profiles["Ali-R"].d.note == "a", "and Ali's record is applied")
+end)
+
 test("sigwire: an author's manifest goes once per MAN_EVERY per destination unless n changes", function()
   G.resetQueue()
   local nsA, sentA = wireNs("Ali-R", skA, pkA)
