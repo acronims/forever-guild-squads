@@ -366,3 +366,19 @@ Se mantiene la regla de **≥2 certificados de emisores fuertes**. **AF7 se reha
 - Batería reducida completa sobre el addon de 53ea104: unidad 324/324, gates, lint 0, S2, S5 ×5, S11, S14, S15, S16 k=2, S16b, S17, S18 → todo PASS. Solo falta la decisión de AF4.
 - Lanzadas (agentes nuevos, a ciegas, solo lectura): QA (spec + ⚡ + diff 636e545) → `wt/review/qa-blind-2026-11-08.md`; seguridad AF6 (spec + ⚡ + diff 406029a + modelo de amenazas) → `wt/review/sec-blind-2026-11-08.md`.
 - **Retoma por:** (1) respuesta de BRO a AF4. (2) Leer los dos informes; arreglar hallazgos altos/medios con test primero y repetir lo afectado. (3) Publicar.
+
+### 8-nov 10:1x-10:2x — resultados de la QA y la seguridad a ciegas: NO publicable todavía
+- Informes: `wt/review/qa-blind-2026-11-08.md` (QA, leídos 49/54 del diff, spec entero) y `wt/review/sec-blind-2026-11-08.md` (AF6, 149 líneas). Estado: `reportado` hasta verificar cada hallazgo con test rojo.
+- **Verificado por mí:** D1/F2 parte 2: `ns.OnKeyReplaced` se llama en Sync.lua:209, 223 y 449 pero no está definido en ningún sitio → lo que firmó una clave sustituida no se descarta (spec l.77 lo exige). S12 (scenarios.js:678) sigue esperando quórum (obsoleto con X.SIGNED).
+- **Altos/medios abiertos (orden de trabajo):**
+  1. D1/F2: definir `ns.OnKeyReplaced` (Sig.dropKey + descartar registros y diag de sospechosos); una clave «cert» NO aplica repudiate, ajustes, roster ni rangos (solo perfiles y squads, Anexo G). (QA D3 = mismo arreglo; además un repudiate no debe bloquear la versión que llega del autor en persona.)
+  2. F1 (alto): registros falsos con el nombre de la víctima → OnMine publica repudiates sin límite. Tope por sesión/autor y solo para registros con firma válida de otra clave.
+  3. F6: `noteManHeard` y la deduplicación de la cola de Sig confían en copias sin verificar (a,n,s) → incluir el hash del cuerpo y marcar oído solo tras verificar.
+  4. F3: la tabla de claves candidatas (500, 200 por reenviador) se puede llenar y tapar la clave real de Z → reservar hueco por dueño/no desalojar candidatos con certificado.
+  5. F4/F5: límite por remitente de hellos (y de flips «en persona») antes de responder/re-firmar.
+  6. F7/QA D6: manifiesto > 64 partes (≈190-230 registros) no se entrega → trocear el manifiesto o tope con aviso al crearlo.
+  7. QA D4/F8: verificación de `kr` síncrona → a la cola de 1 por frame.
+  8. QA D2: S12 al modelo de firmas; QA D5: README/CHANGELOG/guías/CURSEFORGE al diseño de firmas (+ riesgo de entropía, `/gsq trust newkey`).
+  9. Bajos (F9-F13, F16, tests vacíos de la QA): después; los info (F14, F15) al CHANGELOG/README.
+- Para BRO en el mensaje final (no ahora): QA D7/F10 (un solo alt conocido en persona puede dejar «disputada» la clave de un desconocido para siempre; es la regla del spec).
+- **Retoma por:** respuesta de BRO a AF4; luego el punto 1 (test rojo primero en cert_spec/keys_wire_spec), unidad + gates + lint, y seguir por la lista. Al acabar los arreglos: batería reducida otra vez, y QA + seguridad a ciegas NUEVAS sobre el código final.
