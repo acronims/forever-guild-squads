@@ -18,7 +18,8 @@ local G = {}
 ns.Sig = G
 local E, S = ns.Ed25519, ns.Serialize
 
-G.TAG = "GSQ-MAN1"             -- domain separation of the manifest statement
+G.TAG = "GSQ-MAN1"             -- domain separation of the record hash
+G.STMT_TAG = "GSQ-MAN2"        -- domain separation of the manifest statement (sec r3 S1: length-prefixed kids)
 G.HASH_LEN = 16                -- bytes of sha512 kept per record
 G.MAX_ENTRIES = 400            -- records listed in one manifest
 G.MAX_QUEUE = 300              -- manifests waiting for a verify on one client
@@ -37,13 +38,16 @@ function G.recHash(rec)
   return hex(E.sha512(G.TAG .. "|rec|" .. body):sub(1, G.HASH_LEN))
 end
 
--- the signed statement: canonical (sorted) so both ends build the same bytes
+-- the signed statement: canonical (sorted) so both ends build the same bytes. sec r3 S1: every kid goes with its
+-- byte length ("<len>:<kid>=<hash>"), so the statement is injective whatever characters the ids hold (no entries can
+-- be merged into one under the same signature, and no id chosen by someone else can make a manifest unsendable)
 function G.statement(m)
   local kids = {}
   for kid in pairs(m.h) do kids[#kids + 1] = kid end
   table.sort(kids)
-  local parts = { G.TAG, tostring(m.a), num(m.n) }
-  for _, kid in ipairs(kids) do parts[#parts + 1] = kid .. "=" .. m.h[kid] end
+  local a = tostring(m.a)
+  local parts = { G.STMT_TAG, #a .. ":" .. a, num(m.n) }
+  for _, kid in ipairs(kids) do parts[#parts + 1] = #kid .. ":" .. kid .. "=" .. tostring(m.h[kid]) end
   return table.concat(parts, "\n")
 end
 
@@ -62,8 +66,9 @@ function G.validShape(m)
   local c = 0
   for kid, h in pairs(m.h) do
     c = c + 1
-    -- sec r2 R2: no newline/control or "=" in a kid, or entries could be merged into one key under the same statement
-    if c > G.MAX_ENTRIES or type(kid) ~= "string" or kid:find("[%c=]") or type(h) ~= "string" or #h ~= G.HASH_LEN * 2 or h:find("[^0-9a-f]") then return false end
+    -- sec r2 R2 was closed by refusing "=" and controls in a kid; sec r3 S1: that let anyone make a victim sign an
+    -- unsendable manifest, so the statement is length-prefixed instead and any kid string is allowed
+    if c > G.MAX_ENTRIES or type(kid) ~= "string" or type(h) ~= "string" or #h ~= G.HASH_LEN * 2 or h:find("[^0-9a-f]") then return false end
   end
   return unhex(m.s) ~= nil
 end

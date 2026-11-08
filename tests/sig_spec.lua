@@ -158,12 +158,32 @@ test("sig sec r2 R2 (QA D9): merging the manifest entries into one key with the 
   for i = 1, #kids - 1 do parts[#parts + 1] = kids[i] .. "=" .. m.h[kids[i]] end
   parts[#parts + 1] = kids[#kids]
   local merged = { a = m.a, n = m.n, s = m.s, h = { [table.concat(parts, "\n")] = m.h[kids[#kids]] } }
-  eq(G.statement(merged), G.statement(m), "precondition: same signed bytes")
-  ok(not G.validShape(merged), "a kid with a newline or '=' is not a valid shape")
+  -- sec r3 S1: the statement is injective (length-prefixed kids), so the merged body signs other bytes
+  ok(G.statement(merged) ~= G.statement(m), "a merged body does not give the same signed bytes")
   ok(not G.validShape({ a = "A-R\n9", n = 1, h = {}, s = m.s }), "an author with a control character is not a valid shape")
   ok(G.validShape(m), "the real manifest is still valid")
   local K = keys({ ["A-R"] = { pkA, "strong" } })
   G.offer(db, merged, K); G.step(db)
+  eq(db.cnt.rejected, 1, "the merged copy fails its verify")
   G.offer(db, m, K); G.step(db)
   eq(G.status(db, r1), "strong", "the real manifest is verified, the merged one never stored")
+end)
+
+test("sig sec r3 S1: records whose id has '=' or a newline are signed and verified (the manifest stays valid)", function()
+  G.resetQueue()
+  local db = G.st({})
+  local rp = rec("x=1"); rp.a = "A-R"
+  local rs = { k = "squad", id = "a=b", ts = 100, sq = 1, a = "A-R", d = { name = "S", captain = "A-R" } }
+  local rr = { k = "repudiate", id = "profile:x=1@100.1.A-R#ab\nprofile:y=2", ts = 100, sq = 1, a = "A-R", d = {} }
+  local m = G.build("A-R", 1, { rec("A-R"), rp, rs, rr }, skA, pkA)
+  ok(G.validShape(m), "a manifest listing ids with '=' and a newline has a valid shape")
+  eq(G.offer(db, m, keys({ ["A-R"] = { pkA, "strong" } })), "queued", "queued, not bad")
+  G.step(db)
+  eq(G.status(db, rs), "strong", "the squad 'a=b' is verified")
+  eq(G.status(db, rr), "strong", "the repudiate of the forged 'x=1' is verified")
+  local m2 = G.build("A-R", 2, { rec("A-R") }, skA, pkA)
+  local s1 = G.statement({ a = "A-R", n = 1, h = { ["a=" .. string.rep("0", 32) .. "\n2:bb"] = string.rep("1", 32) } })
+  local s2 = G.statement({ a = "A-R", n = 1, h = { ["a"] = string.rep("0", 32), ["bb"] = string.rep("1", 32) } })
+  ok(s1 ~= s2, "two bodies never build the same statement")
+  ok(m2.s ~= m.s, "different manifests, different signatures")
 end)

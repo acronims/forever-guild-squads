@@ -273,6 +273,23 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 QA D1: ns.OnKeyReplaced is defined and
   eq(st.via["profile:Zz-Realm"], nil)
 end }
 
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 sec r3 S1: a forged record of mine with '=' in its id does not break my manifest for others", function(c)
+  local ns = c.ns
+  local me = ns.me()
+  local t = GetServerTime()
+  ns.OnMine({ k = "profile", id = "x=1", a = me, ts = t, sq = 1, d = { note = "falso" } })
+  local found = false
+  for vk, _ in pairs(ns.state.repudiates or {}) do if vk:find("x=1", 1, true) then found = true end end
+  ok(found, "the forged 'x=1' is repudiated")
+  local m = ns.Sync.OwnManifest()
+  ok(m and ns.Sig.validShape(m), "my next manifest still has a valid shape for any other client")
+  local any = false
+  for kid in pairs(m and m.h or {}) do if kid:find("x=1", 1, true) then any = true end end
+  ok(any, "and it lists the repudiate")
+  local pk = ns.myPk and ns.myPk()
+  if pk then ok(ns.Ed25519.verify(pk, ns.Sig.statement(m), ns.Trust.unhex(m.s)), "signed over the new statement") end
+end }
+
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 sec F1: forged records with my name make me sign at most a few repudiates per hour", function(c)
   local ns = c.ns
   local me = ns.me()
