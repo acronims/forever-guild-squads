@@ -208,3 +208,52 @@ test("keys: the 1.2 hello lists the certificates we hold (cn); a replier re-send
   eq(#h.cn, nsB.Sync.CN_MAX * #tok("A", 1), "capped at CN_MAX tokens")
   ok(h.cn:find(tok("X" .. (nsB.Sync.CN_MAX + 5) .. "-R", 1000 + nsB.Sync.CN_MAX + 5), 1, true), "newest first")
 end)
+
+test("keys AF5 end to end: a relayed new key without the old key's signature is refused and noted; with it (kr) it is accepted and relayed on; in person it wins and is noted", function()
+  NS.Cert.resetQueue()
+  local skA = key("A")
+  local nsC, sentC = wireNs("Cid-R", nil, true)
+  T.hearOwner(nsC.trustDB, "Ali-R", pkA, T0)
+  local function has(db, s) for _, a in ipairs(db.alerts) do if a == s then return true end end return false end
+  -- Bob relays Ali's profile with another key and no rotation signature: refused, in diag (alerts)
+  local rej0 = nsC.trustDB.n.rejected
+  nsC.Sync.OnMessage("D", { r = { prof("Ali-R", T0 + 1) }, ks = { ["Ali-R"] = T.hex(pkF) } }, "Bob-R")
+  local k, s = T.keyOf(nsC.trustDB, "Ali-R")
+  ok(k == pkA and s == "strong", "unsigned change refused")
+  ok(has(nsC.trustDB, "unsigned-keychange Ali-R"), "noted in alerts (diag)")
+  eq(nsC.trustDB.n.rejected, rej0 + 1, "counted as rejected")
+  -- a bad rotation signature (signed by the new key): refused too
+  nsC.Sync.OnMessage("D", { r = { prof("Ali-R", T0 + 2) }, ks = { ["Ali-R"] = T.hex(pkF) },
+                            kr = { ["Ali-R"] = T.hex(T.signRotation(key("F"), pkF, "Ali-R", pkF)) } }, "Bob-R")
+  ok(T.keyOf(nsC.trustDB, "Ali-R") == pkA, "bad rotation refused")
+  ok(has(nsC.trustDB, "badrotation Ali-R"), "bad rotation noted")
+  -- signed by the old key: accepted, keeps its strength
+  local rs = T.hex(T.signRotation(skA, pkA, "Ali-R", pkF))
+  nsC.Sync.OnMessage("D", { r = { prof("Ali-R", T0 + 3) }, ks = { ["Ali-R"] = T.hex(pkF) }, kr = { ["Ali-R"] = rs } }, "Bob-R")
+  k, s = T.keyOf(nsC.trustDB, "Ali-R")
+  ok(k == pkF and s == "strong", "signed rotation accepted")
+  ok(has(nsC.trustDB, "rotated Ali-R"), "rotation noted")
+  -- Cid relays Ali's records with the new key and its rotation signature
+  local ks, kr = nsC.Sync.KeysFor({ prof("Ali-R", T0 + 3) }, "Eve-R")
+  ok(ks and ks["Ali-R"] == T.hex(pkF), "relays the new key")
+  ok(kr and kr["Ali-R"] == rs, "and its rotation signature")
+  -- in person always wins, noted (BRO 8-nov 03:09)
+  local _, pkG = key("G")
+  nsC.Sync.OnMessage("H", { h = {}, pk = T.hex(pkG) }, "Ali-R")
+  ok(T.keyOf(nsC.trustDB, "Ali-R") == pkG, "in person wins")
+  ok(has(nsC.trustDB, "keychange Ali-R"), "in person change noted")
+end)
+
+test("keys AF5: /gsq trust newkey signs the new key with the old one; our relayed records carry it (kr)", function()
+  NS.Cert.resetQueue()
+  local skA = key("A")
+  local nsA = wireNs("Ali-R", pkA, true)
+  nsA.mySk = function() return skA end
+  ok(type(nsA.Sync.OwnRotation) == "function", "Sync.OwnRotation exists")
+  nsA.Sync.OwnRotation(skA, pkA, pkF)
+  nsA.myPk = function() return pkF end
+  local ks, kr = nsA.Sync.KeysFor({ prof("Ali-R", T0) }, "Bob-R")
+  ok(ks and ks["Ali-R"] == T.hex(pkF), "own new key")
+  ok(kr and T.rotate(T.st({ keys = { ["Ali-R"] = { pk = T.hex(pkA), s = "strong", t = T0 } } }), "Ali-R", pkF, T.unhex(kr["Ali-R"]), T0),
+     "own rotation verifies with the old key")
+end)

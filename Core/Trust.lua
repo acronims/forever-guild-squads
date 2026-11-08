@@ -250,9 +250,24 @@ function T.rotate(db, name, newPk, sig, now)
     alert(db, "badrotation " .. name)
     return false
   end
-  db.keys[name] = { pk = hex(newPk), s = s, t = now, by = db.keys[name].by }
+  db.keys[name] = { pk = hex(newPk), s = s, t = now, by = db.keys[name].by, rs = hex(sig), prev = hex(cur) }
   alert(db, "rotated " .. name)
   return true
+end
+-- the rotation signature (old key over the current one) we hold for `name`, so relayers can pass it on (AF5)
+function T.rotSig(db, name)
+  local k = db and db.keys and db.keys[name]
+  return k and type(k.rs) == "string" and k.rs or nil
+end
+-- a relayed key that differs from the strong one we hold, without a valid rotation signature (AF5): refused, noted
+-- once per name in alerts (diag) and counted; the relayer becomes a suspect
+function T.unsignedChange(db, name, relayer)
+  T.st(db)
+  db.n.rejected = db.n.rejected + 1
+  if type(relayer) == "string" then db.suspects[relayer] = (db.suspects[relayer] or 0) + 1 end
+  local msg = "unsigned-keychange " .. name
+  for _, a in ipairs(db.alerts) do if a == msg then return end end
+  alert(db, msg)
 end
 
 -- /gsq trust reset <name>: forget everything about the key of `name` (lost SavedVariables)

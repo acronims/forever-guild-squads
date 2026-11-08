@@ -137,7 +137,8 @@ function Sync.Publish(rec)
   ownDirty = true
   -- signing costs one ed25519 sign + a hash per own record: not on every click. Peers that hear the record from us
   -- need no signature; the manifest (for relays) follows MAN_DEBOUNCE s later, once for a burst of edits
-  Comm.Send("D", { r = { rec }, ks = Sync.KeysFor({ rec }, nil) }, nil, nil, nil, true)
+  local ks, kr = Sync.KeysFor({ rec }, nil)
+  Comm.Send("D", { r = { rec }, ks = ks, kr = kr }, nil, nil, nil, true)
   Sync.QueueOwnManifest()   -- own fresh records skip the reply backlog
   if ns.UI and ns.UI.Dirty then ns.UI.Dirty() end
   return true
@@ -153,20 +154,37 @@ local keySent = {}
 function Sync.KeysFor(batch, to)
   local T, db = ns.Trust, ns.trustDB
   if not (T and db) then return nil end
-  local now, me, ks = GetTime and GetTime() or 0, ns.me and ns.me(), nil
+  local now, me, ks, kr = GetTime and GetTime() or 0, ns.me and ns.me(), nil, nil
   for _, r in ipairs(batch) do
     local a = r.a
-    local pk
-    if a == me then pk = ns.myPk and ns.myPk()
-    else local k, s = T.keyOf(db, a); if s == "strong" or s == "cert" then pk = k end end
+    local pk, rs
+    if a == me then
+      pk = ns.myPk and ns.myPk()
+      local o = type(db.ownRot) == "table" and db.ownRot[me]
+      if pk and type(o) == "table" and o.pk == T.hex(pk) then rs = o.s end
+    else
+      local k, s = T.keyOf(db, a)
+      if s == "strong" or s == "cert" then pk = k; rs = T.rotSig and T.rotSig(db, a) end
+    end
     local tag = (to or "*") .. "|" .. tostring(a)
     if pk and not (ks and ks[a]) and (not keySent[tag] or now - keySent[tag] >= Sync.KEY_EVERY) then
       keySent[tag] = now
       ks = ks or {}
       ks[a] = T.hex(pk)
+      if rs then kr = kr or {}; kr[a] = rs end    -- AF5: the old key's signature over this one
     end
   end
-  return ks
+  return ks, kr
+end
+-- AF5: /gsq trust newkey signs the new key with the old one; our relayed records carry it (kr) so whoever holds the
+-- old key strong accepts the new one without meeting us
+function Sync.OwnRotation(oldSk, oldPk, newPk)
+  local T, db, me = ns.Trust, ns.trustDB, ns.me and ns.me()
+  if not (T and db and me and oldSk and oldPk and newPk) then return end
+  local okS, sig = pcall(T.signRotation, oldSk, oldPk, me, newPk)
+  if not okS or not sig then return end
+  db.ownRot = type(db.ownRot) == "table" and db.ownRot or {}
+  db.ownRot[me] = { pk = T.hex(newPk), s = T.hex(sig) }
 end
 -- `ks` of a D message: only for authors of records in it and roster members; the sender itself = in person
 local function learnKeys(payload, from)
@@ -179,7 +197,17 @@ local function learnKeys(payload, from)
     if type(a) == "string" and type(h) == "string" and a ~= (ns.me and ns.me()) and (a == from or (ns.roster and ns.roster(a))) then
       local pk = T.unhex(h)
       if pk then
+        local cur, cs = T.keyOf(db, a)
         if a == from then Sync.OnOwnerKey(a, T.hearOwner(db, a, pk, now))
+        elseif cur and cs == "strong" and cur ~= pk then
+          -- AF5: a strong key changes only with the old key's signature over the new one
+          local kr = type(payload.kr) == "table" and payload.kr[a]
+          local sig = type(kr) == "string" and #kr == 128 and T.unhex(kr)
+          if not sig then T.unsignedChange(db, a, from)
+          elseif T.rotate(db, a, pk, sig, now) then
+            if ns.Sig and ns.sigDB then ns.Sig.dropKey(ns.sigDB, a, cur) end
+            if ns.OnKeyReplaced then ns.OnKeyReplaced(a, cur) end
+          end
         elseif T.hearRelayed(db, a, pk, from, now) == "pending" then Sync.CertEval(a) end
       end
     end
@@ -436,7 +464,8 @@ function Sync.CertStep()
 end
 
 function envelope(batch, to)
-  return { r = batch, ks = Sync.KeysFor(batch, to), m = Sync.ManifestsFor(batch, to) }
+  local ks, kr = Sync.KeysFor(batch, to)
+  return { r = batch, ks = ks, kr = kr, m = Sync.ManifestsFor(batch, to) }
 end
 
 -- `req`: the hello requester a GUILD reply is for. The `ks` / `m` throttle counts per requester: a GUILD copy sent

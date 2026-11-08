@@ -652,7 +652,16 @@ function ns.myPk()
   db.ownKeys = type(db.ownKeys) == "table" and db.ownKeys or {}
   local holder = type(db.ownKeys[me]) == "table" and db.ownKeys[me] or {}
   local ok, _, pk = pcall(ns.Trust.ensureOwn, holder, pool)
-  if ok and pk then db.ownKeys[me] = holder; ownPk = pk end
+  if ok and pk then
+    db.ownKeys[me] = holder; ownPk = pk
+    -- AF5: a key made after /gsq trust newkey is signed by the old one (Sync.OwnRotation), then the old one is gone
+    local prev = type(db.prevOwnKeys) == "table" and db.prevOwnKeys[me]
+    if prev then
+      local osk, opk = ns.Trust.own(prev)
+      if osk and opk and ns.Sync and ns.Sync.OwnRotation then pcall(ns.Sync.OwnRotation, osk, opk, pk) end
+      db.prevOwnKeys[me] = nil
+    end
+  end
   return ownPk
 end
 -- /gsq trust newkey (BRO 8-nov 03:09): drop our key after a confirmation; a new one is made from fresh entropy,
@@ -660,6 +669,10 @@ end
 function ns.NewOwnKey()
   local me = ns.me and ns.me()
   if not (db and me and type(db.ownKeys) == "table") then return false end
+  if type(db.ownKeys[me]) == "table" and db.ownKeys[me].me then
+    db.prevOwnKeys = type(db.prevOwnKeys) == "table" and db.prevOwnKeys or {}
+    db.prevOwnKeys[me] = db.ownKeys[me]            -- kept only until the new key is made and signed (AF5)
+  end
   db.ownKeys[me] = nil
   ownPk = nil
   if ns.Sync and ns.Sync.ResignOwn then ns.Sync.ResignOwn() end
