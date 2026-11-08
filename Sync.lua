@@ -30,10 +30,14 @@ Sync.MAX_SAMPLE = 30          -- v1.2: records per reply to a 1.2 requester (ran
 Sync.CUBES, Sync.CUBES_PICK = 8, 2
 -- v1.2 AC3 arreglo 2: a requester catching up (cu = 1 in its hello) gets up to MAX_SAMPLE_CATCHUP records of its
 -- 2 cubes, at most once per CATCHUP_COOLDOWN s per requester (a modified client flooding cu hellos gets MAX_SAMPLE).
--- sec r3 M2: 10 min (it was 25 s: with HELLO_MIN 20 s one name got a 120-record urgent reply every ~40 s)
+-- sec r3 M2 (final form): plus at most CATCHUP_BUDGET of them per requester per CATCHUP_WINDOW s, the rounds an
+-- honest newcomer asks (MAX_CATCHUP_ROUNDS); a modified client re-sending cu hellos all hour gets the normal sample
+-- once it is spent (a 10 min cooldown starved the honest newcomer in S8 r4: 541/600 visible at 600 s)
 Sync.MAX_SAMPLE_CATCHUP = 120
-Sync.CATCHUP_COOLDOWN = 600
-local bigReply = {}           -- requester -> GetTime() of the last catch-up sized reply
+Sync.CATCHUP_COOLDOWN = 25
+Sync.CATCHUP_BUDGET = 20
+Sync.CATCHUP_WINDOW = 3600
+local bigReply = {}           -- requester -> { last = GetTime() of the last catch-up reply, w = window start, n = count }
 Sync.SAMPLE_MIN_ONLINE = 8    -- v1.2 (AC1): the sample only with more online than this (p < 1); else MAX_REPLY + cursor
 -- v1.2: fine bucket hashes (h2) of the big kinds in a 1.2 hello; a 1.2 replier diffs on them, so it does not resend
 -- a whole coarse bucket (~1/16 of the guild) the requester already holds (S8: members relay P2P now)
@@ -839,9 +843,10 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
     local cap, big = Sync.MAX_SAMPLE, nil
     if payload.cu == 1 then
       local t = GetTime and GetTime() or 0
-      local last = bigReply[sender]
-      if not last or t - last >= Sync.CATCHUP_COOLDOWN or t < last then
-        bigReply[sender] = t; cap = Sync.MAX_SAMPLE_CATCHUP; big = true
+      local b = bigReply[sender]
+      if not b or t < (b.last or b.w) or t - b.w >= Sync.CATCHUP_WINDOW then b = { last = nil, w = t, n = 0 }; bigReply[sender] = b end
+      if b.n < Sync.CATCHUP_BUDGET and (not b.last or t - b.last >= Sync.CATCHUP_COOLDOWN) then
+        b.last, b.n = t, b.n + 1; cap = Sync.MAX_SAMPLE_CATCHUP; big = true
       end
     end
     local out = {}

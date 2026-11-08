@@ -334,17 +334,34 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) gets
     ok(nc <= S.CUBES_PICK, nc .. " cubes in a catching-up reply")
     local again = S.ReplyFor({ h = h, p2 = 2, nonce = 100, cu = 1 }, "New-Realm", nil, nil)
     ok(#again <= S.MAX_SAMPLE, "a second cu hello inside the cooldown gets the normal sample (" .. #again .. ")")
-    -- sec r3 M2: the cooldown is 10 min per requester (a modified client re-sending cu every ~40 s used to get a
-    -- 120-record urgent reply each time)
-    local realGT = GetTime
+    -- sec r3 M2 (final form): cooldown CATCHUP_COOLDOWN (25 s) plus a budget of CATCHUP_BUDGET catch-up replies per
+    -- requester per CATCHUP_WINDOW (1 h): an honest newcomer asks <= MAX_CATCHUP_ROUNDS rounds; a modified client
+    -- re-sending cu hellos all hour gets the normal sample once the budget is spent (r4: a 10 min cooldown starved
+    -- the honest newcomer in S8, 541/600 visible at 600 s)
+    ok(S.CATCHUP_COOLDOWN <= 30, "cooldown " .. tostring(S.CATCHUP_COOLDOWN) .. " s (<= 30: one catch-up round)")
+    ok(type(S.CATCHUP_BUDGET) == "number" and S.CATCHUP_BUDGET >= 20, "budget " .. tostring(S.CATCHUP_BUDGET) .. " >= MAX_CATCHUP_ROUNDS")
+    eq(S.CATCHUP_WINDOW, 3600, "budget window")
+    local realGT, oldBudget = GetTime, S.CATCHUP_BUDGET
     local t0 = realGT()
-    GetTime = function() return t0 + 45 end
-    local okL, late = pcall(S.ReplyFor, { h = h, p2 = 2, nonce = 102, cu = 1 }, "New-Realm", nil, nil)
-    GetTime = function() return t0 + 601 end
-    local okL2, later = pcall(S.ReplyFor, { h = h, p2 = 2, nonce = 103, cu = 1 }, "New-Realm", nil, nil)
-    GetTime = realGT
-    ok(okL and #late <= S.MAX_SAMPLE, "a cu hello 45 s later still gets the normal sample (" .. tostring(okL and #late) .. ")")
-    ok(okL2 and #later > S.MAX_SAMPLE, "after 10 min it gets the catch-up sample again (" .. tostring(okL2 and #later) .. ")")
+    local okB, errB = pcall(function()
+      S.CATCHUP_BUDGET = 3
+      GetTime = function() return t0 + 45 end
+      local late = S.ReplyFor({ h = h, p2 = 2, nonce = 102, cu = 1 }, "New-Realm", nil, nil)
+      ok(#late > S.MAX_SAMPLE, "a cu hello 45 s later gets the catch-up sample again (" .. #late .. ")")
+      GetTime = function() return t0 + 90 end
+      local third = S.ReplyFor({ h = h, p2 = 2, nonce = 103, cu = 1 }, "New-Realm", nil, nil)
+      ok(#third > S.MAX_SAMPLE, "third catch-up reply inside the budget (" .. #third .. ")")
+      GetTime = function() return t0 + 135 end
+      local spent = S.ReplyFor({ h = h, p2 = 2, nonce = 104, cu = 1 }, "New-Realm", nil, nil)
+      ok(#spent <= S.MAX_SAMPLE, "budget spent: the normal sample (" .. #spent .. ")")
+      local otherCu = S.ReplyFor({ h = h, p2 = 2, nonce = 105, cu = 1 }, "Oth-Realm", nil, nil)
+      ok(#otherCu > S.MAX_SAMPLE, "the budget is per requester (" .. #otherCu .. ")")
+      GetTime = function() return t0 + 3601 end
+      local later = S.ReplyFor({ h = h, p2 = 2, nonce = 106, cu = 1 }, "New-Realm", nil, nil)
+      ok(#later > S.MAX_SAMPLE, "a new window: the catch-up sample again (" .. #later .. ")")
+    end)
+    GetTime, S.CATCHUP_BUDGET = realGT, oldBudget
+    if not okB then error(errB, 0) end
     local other = S.ReplyFor({ h = h, p2 = 2, nonce = 101 }, "Zed-Realm", nil, nil)
     ok(#other <= S.MAX_SAMPLE, "no cu: the normal sample")
   end)
@@ -374,7 +391,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: the catch-up reply to a cu = 1 hello 
   math.random = function(x, y) if x == nil then return 0 end return origRand(x, y) end   -- this one replies
   local sent = {}
   Comm.Send = function(tag, msg, ch, to, onSent, urgent)
-    if tag == "D" then sent[#sent + 1] = { urgent = urgent and true or false, n = #(msg.r or {}) } end
+    if tag == "D" then sent[#sent + 1] = { urgent = urgent and true or false, n = #(msg.r or {}), c = msg.c and true or false, m = msg.m and #msg.m or 0, ch = ch } end
     if onSent then onSent() end
     return true
   end
@@ -383,13 +400,17 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: the catch-up reply to a cu = 1 hello 
     S.OnMessage("H", { h = h, p2 = 2, nonce = nonce, cu = cu }, from)
     runTimers(c, 10)
     local u, q, n = 0, 0, 0
-    for _, x in ipairs(sent) do n = n + x.n; if x.urgent then u = u + 1 else q = q + 1 end end
+    -- only messages with records: a manifest sent apart (AF4, r = {}) is queued with its skip by design, and
+    -- whether the random sample holds a record whose author has a manifest varies between runs
+    for _, x in ipairs(sent) do if x.n > 0 then n = n + x.n; if x.urgent then u = u + 1 else q = q + 1 end end end
     return u, q, n
   end
   local okAll, err = pcall(function()
     local u, q, n = hello("Cu1-Realm", 201, 1)
     ok(n > S.MAX_SAMPLE, n .. " records in the catch-up reply")
-    ok(u > 0 and q == 0, ("catch-up reply: %d urgent, %d queued D messages"):format(u, q))
+    local qd = {}
+    for _, x in ipairs(sent) do if not x.urgent then qd[#qd + 1] = ("n=%d c=%s m=%d ch=%s"):format(x.n, tostring(x.c), x.m, tostring(x.ch)) end end
+    ok(u > 0 and q == 0, ("catch-up reply: %d urgent, %d queued D messages (%s)"):format(u, q, table.concat(qd, "; ")))
     u, q = hello("Cu1-Realm", 202, 1)
     eq(u, 0, "a second cu hello inside the cooldown is queued as usual")
     u, q = hello("Cu2-Realm", 203, nil)
