@@ -672,9 +672,10 @@ function s11core(seed, withGm) {
 function S11(seed) { return s11core(seed, false); }
 function S15(seed) { return s11core(seed, true); }
 
-// S12 (AC2 + AC4): a forged profile of an offline author. One malicious relayer -> unverified on every client and never
-// verified; a second colluder -> verified by quorum. The author logs in: its version wins, its client repudiates the
-// fake, the fake disappears from every client and both relayers are listed in /gsq diag.
+// S12 (AC2 + AC4, annex F model, QA D2): a forged profile of an offline author. One malicious relayer -> unverified on
+// every client and never verified; a second colluder changes nothing (no quorum: no author signature, never applied).
+// The author logs in: its version on every client, the fake gone (stored and pending). No repudiate is needed: the
+// fake was never applied anywhere (a repudiate is only signed for a record that carries a valid signature).
 function S12(seed) {
   const sim = new Sim({ seed });
   const { check, checks, pass } = checker();
@@ -702,7 +703,7 @@ function S12(seed) {
   z.run(forge);
   sim.run(60);
   const v2 = honest.map(view);
-  check('a second colluder: verified by quorum', v2.every((x) => x.startsWith('falso/')), v2.join(','));
+  check('a second colluder: still unverified (no quorum with signatures)', v2.every((x) => x === 'real/falso'), v2.join(','));
   au.login();
   sim.run(300);
   const all = [au, y, z, c1, c2];
@@ -710,9 +711,8 @@ function S12(seed) {
   check('the author logs in: the real version on every client, the fake gone (stored and pending)', v3.every((x) => x === 'real/nil'), v3.join(','));
   const rep = c1.val('NS.DiagGlue.Report()')[0];
   const line = (rep.match(/p2p pend=[^\n|]*/) || [''])[0];
-  check('/gsq diag lists both relayers with a repudiation', line.includes('Mb2-Realm:1') && line.includes('Mb3-Realm:1'), line);
   const nRep = all.map((c) => c.val('(function() local n = 0 for _ in pairs(NS.state.repudiates or {}) do n = n + 1 end return n end)()')[0]);
-  check('the repudiate reached every client', nRep.every((n) => Number(n) >= 1), nRep.join(','));
+  check('no repudiate needed (the unsigned fake was never applied)', nRep.every((n) => Number(n) === 0), nRep.join(','));
   errorsCheck(sim, check);
   return { pass: pass(), checks, metrics: { diag: line, t: Math.round(sim.t), ...sim.stats } };
 }
