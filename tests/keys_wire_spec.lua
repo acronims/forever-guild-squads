@@ -120,13 +120,11 @@ test("keys: the owner in person with a new key replaces the pinned one; /gsq tru
   ok(sk and pk and holder.me and holder.keys == nil, "ensureOwn only writes `me`")
 end)
 
-test("keys: a 1.2 replier re-sends its certificate by GUILD (S16b: who was offline when it changed), once per CERT_REHELLO, coalesced", function()
+test("keys: a 1.2 replier re-sends its certificate by WHISPER to the requester (S16b: offline when it changed), once per requester per CERT_REHELLO, capped", function()
   NS.Cert.resetQueue()
   local skB = key("B")
   local now = T0
   local nsB, sentB = wireNs("Bob-R", pkB, true)
-  local later = {}
-  nsB.After = function(d, fn) later[#later + 1] = { d, fn } end
   nsB.serverTime = function() return now end
   nsB.mySk = function() return skB end
   local function certsSent()
@@ -134,31 +132,35 @@ test("keys: a 1.2 replier re-sends its certificate by GUILD (S16b: who was offli
     for _, m in ipairs(sentB) do if m[1] == "D" and m[2].c then out[#out + 1] = { c = m[2].c, ch = m[3], to = m[4] } end end
     return out
   end
-  local H = { h = {}, p2 = 2 }
-  local function hello(from, pk) local h = { h = H.h, p2 = 2, pk = pk }; nsB.Sync.OnMessage("H", h, from) end
+  local function hello(from, pk) nsB.Sync.OnMessage("H", { h = {}, p2 = 2, pk = pk }, from) end
   -- nobody heard in person yet: an empty certificate is not re-sent
   hello("Cid-R")
   eq(#certsSent(), 0, "empty: not re-sent")
-  -- Bob meets Ali in person; Eve (offline when it changed) says hello: Bob re-sends it by GUILD
+  -- Bob meets Ali in person; Eve (offline when it changed) says hello: Bob whispers it to Eve
   T.hearOwner(nsB.trustDB, "Ali-R", pkA, now)
   now = now + 5
   hello("Eve-R")
   local cs = certsSent()
   eq(#cs, 1, "re-sent on a 1.2 hello")
   ok(cs[1].c.i == "Bob-R" and #cs[1].c.e == 1 and cs[1].c.e[1] == NS.Cert.hash("Ali-R", pkA), "lists Ali")
-  ok(cs[1].ch == nil and cs[1].to == nil, "by GUILD")
-  -- two more hellos inside the window: one coalesced send at its end, not two
+  ok(cs[1].ch == "WHISPER" and cs[1].to == "Eve-R", "by WHISPER to the requester, not by GUILD")
+  -- Eve again inside the window: nothing; Gm (another requester): his own whisper
+  now = now + 10; hello("Eve-R")
+  eq(#certsSent(), 1, "same requester inside the window: not again")
   now = now + 10; hello("Gm-R")
-  now = now + 10; hello("Cid-R")
-  eq(#certsSent(), 1, "not right away")
-  local n = 0
-  for _, l in ipairs(later) do if l[1] == nsB.Sync.CERT_REHELLO - 10 then n = n + 1; now = now + 40; l[2]() end end
-  eq(n, 1, "one coalesced send scheduled")
-  eq(#certsSent(), 2, "sent at the end of the window")
+  cs = certsSent()
+  ok(#cs == 2 and cs[2].to == "Gm-R", "another requester gets his own")
+  -- a flood of hellos from many names inside one window: at most CERT_REHELLO_MAX whispers
+  for i = 1, 3 * nsB.Sync.CERT_REHELLO_MAX do hello("F" .. i .. "-R") end
+  eq(#certsSent(), nsB.Sync.CERT_REHELLO_MAX, "capped per window")
+  -- the next window: Eve can get it again
+  now = now + 2 * nsB.Sync.CERT_REHELLO
+  hello("Eve-R")
+  eq(#certsSent(), nsB.Sync.CERT_REHELLO_MAX + 1, "next window: re-sent")
   -- a 1.0 / 1.1 hello (no p2) does not trigger it
   now = now + 2 * nsB.Sync.CERT_REHELLO
   nsB.Sync.OnMessage("H", { h = {} }, "Cid-R")
-  eq(#certsSent(), 2, "1.0/1.1 hello: nothing")
+  eq(#certsSent(), nsB.Sync.CERT_REHELLO_MAX + 1, "1.0/1.1 hello: nothing")
 end)
 
 test("keys: the 1.2 hello lists the certificates we hold (cn); a replier re-sends its own only if the requester lacks it or holds an older n", function()

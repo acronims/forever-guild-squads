@@ -355,11 +355,13 @@ end
 -- taken (c.i == sender): an issuer counts only if we heard him in person, so relaying certificates adds nothing.
 Sync.CERT_DEBOUNCE = 30
 -- a certificate that changed reached only who was online then (S16b): when we answer a 1.2 hello (we are one of
--- the <=8 repliers) we also send it by GUILD, at most once per CERT_REHELLO s; hellos heard inside that window get
--- one coalesced send at its end. Cost: <= 1 D {r = {}, c} (1-4 parts) per replier per CERT_REHELLO, only while
--- hellos are heard; an empty certificate is not re-sent.
+-- the <=8 repliers) we also WHISPER it to the requester (not by GUILD: s8t6/s8t7, the GUILD copy re-verified keys
+-- and unparked records on every client and nearly doubled the S8 cable), at most once per requester per
+-- CERT_REHELLO s and at most CERT_REHELLO_MAX per window (a flood of hellos from many names costs <= 10 D per minute);
+-- an empty certificate is not re-sent.
 Sync.CERT_REHELLO = 60
-local certQueued, certSentN, certRehelloAt, certRehelloQ = false, nil, nil, false
+Sync.CERT_REHELLO_MAX = 10
+local certQueued, certSentN, certRehelloAt, certRehelloTo, certRehelloN = false, nil, nil, {}, 0
 function Sync.OwnCert()
   local C, db, T = ns.Cert, ns.certDB, ns.Trust
   local me = ns.me and ns.me()
@@ -423,19 +425,15 @@ function Sync.CertKnownBy(cn)
   for k = 1, #cn, 8 do if cn:sub(k, k + 7) == t then return true end end
   return false
 end
-function Sync.RehelloCert()
-  if not ns.certDB or certRehelloQ then return end
+function Sync.RehelloCert(to)
+  if not ns.certDB or type(to) ~= "string" then return end
   local now = serverNow() or 0
-  local function send()
-    local c = Sync.OwnCert()
-    if not c or #c.e == 0 then return end
-    certRehelloAt, certSentN = serverNow() or now, c.n
-    Comm.Send("D", { r = {}, c = { i = c.i, n = c.n, e = c.e, s = c.s } })
-  end
-  if not certRehelloAt or now - certRehelloAt >= Sync.CERT_REHELLO then return send() end
-  if not ns.After then return end
-  certRehelloQ = true
-  ns.After(Sync.CERT_REHELLO - (now - certRehelloAt), function() certRehelloQ = false; send() end)
+  if not certRehelloAt or now - certRehelloAt >= Sync.CERT_REHELLO then certRehelloAt, certRehelloTo, certRehelloN = now, {}, 0 end
+  if certRehelloTo[to] or certRehelloN >= Sync.CERT_REHELLO_MAX then return end
+  local c = Sync.OwnCert()
+  if not c or #c.e == 0 then return end
+  certRehelloTo[to], certRehelloN = true, certRehelloN + 1
+  Comm.Send("D", { r = {}, c = { i = c.i, n = c.n, e = c.e, s = c.s } }, "WHISPER", to)
 end
 function Sync.OfferCert(c, from)
   local C, db = ns.Cert, ns.certDB
@@ -843,7 +841,7 @@ local function onHello(payload, sender)
   if not always and math.random() > p then return end
   Sync.stats.replied = Sync.stats.replied + 1
   if X and (tonumber(payload.p2) or 0) >= 2 and from ~= (ns.me and ns.me()) and not Sync.CertKnownBy(payload.cn) then
-    Sync.RehelloCert()
+    Sync.RehelloCert(from)
   end
   local startedAt = GetTime and GetTime() or 0
   local onlyMe = (not officer) and ns.me and ns.me() or nil
