@@ -308,8 +308,12 @@ function A.P2PHousekeeping()
   pcall(X.prunePresence, ns.state, rosterCache, t)
   A.PublishPresence()
 end
--- a relayed version with my name that I never wrote (Sync: "mine"): sign a repudiate once and resend my version
+-- a relayed version with my name that I never wrote (Sync: "mine"): sign a repudiate once and resend my version.
+-- sec F1: anyone can forge unsigned versions with my name, so at most MINE_MAX repudiates per MINE_WINDOW seconds
+-- (each one is a record of mine, re-signed into my manifest and stored by the whole guild for 30 days)
 local denied = {}
+local MINE_MAX, MINE_WINDOW = 5, 3600
+local mineAt = {}
 function ns.OnMine(rec)
   local X = ns.P2P
   if not X or type(rec) ~= "table" then return end
@@ -317,9 +321,22 @@ function ns.OnMine(rec)
   if clean.a ~= ns.me() then return end
   local vk = X.vkey(clean)
   if denied[vk] or (ns.state.repudiates and ns.state.repudiates[vk]) then return end
+  local now = GetTime and GetTime() or 0
+  while mineAt[1] and now - mineAt[1] >= MINE_WINDOW do table.remove(mineAt, 1) end
+  if #mineAt >= MINE_MAX then Sync.stats.mineCapped = (Sync.stats.mineCapped or 0) + 1; return end
+  mineAt[#mineAt + 1] = now
   denied[vk] = true
   write("repudiate", vk, { t = X.kid(clean), v = vk })
   Sync.Resend(M.stored(ns.state, clean))
+end
+
+-- a key of `name` was replaced (owner heard in person, signed rotation, disputed / re-certified): drop what the old
+-- key signed and we applied by relay (annex F/G, QA D1); the author's own copy comes back with his new manifest
+function ns.OnKeyReplaced(name, oldPk)
+  local X = ns.P2P
+  if not (X and X.dropSignedBy) then return end
+  local okD, n = pcall(X.dropSignedBy, ns.state, name, oldPk)
+  if okD and n and n > 0 and ns.UI and ns.UI.Dirty then pcall(ns.UI.Dirty) end
 end
 
 -- generic signed record (boss catalog, GM annulments); validated by Model like every other record

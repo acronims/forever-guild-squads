@@ -257,3 +257,32 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AF1: a key made after our records were
   ok(#mans >= 1, "our manifest sent in a D (got " .. #mans .. ")")
   ok(own and ns.Ed25519.verify(pk, ns.Sig.statement(own), ns.Trust.unhex(own.s)), "signed with the new key")
 end }
+
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 QA D1: ns.OnKeyReplaced is defined and drops what the replaced key signed", function(c)
+  local ns = c.ns
+  ok(type(ns.OnKeyReplaced) == "function", "ns.OnKeyReplaced is defined (Sync calls it on every key replacement)")
+  local X = ns.P2P
+  local st = X.st(ns.state)
+  local pk = string.rep("\7", 32)
+  local h = (pk:gsub(".", function(ch) return string.format("%02x", ch:byte()) end))
+  local rec = { k = "profile", id = "Zz-Realm", a = "Zz-Realm", ts = 1795000000, sq = 1, d = { note = "falso" } }
+  ns.state.profiles["Zz-Realm"] = rec
+  st.via["profile:Zz-Realm"] = { v = X.vkey(rec), by = { "Y-Realm" }, t = 1795000000, sig = "cert", pk = h }
+  ns.OnKeyReplaced("Zz-Realm", pk)
+  eq(ns.state.profiles["Zz-Realm"], nil, "the profile the replaced key signed is dropped")
+  eq(st.via["profile:Zz-Realm"], nil)
+end }
+
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 sec F1: forged records with my name make me sign at most a few repudiates per hour", function(c)
+  local ns = c.ns
+  local me = ns.me()
+  local function nrep() local n = 0 for _ in pairs(ns.state.repudiates or {}) do n = n + 1 end return n end
+  local before = nrep()
+  local t = GetServerTime()
+  for i = 1, 30 do
+    ns.OnMine({ k = "profile", id = me, a = me, ts = t + i, sq = 50000 + i, d = { note = "falso " .. i } })
+  end
+  local made = nrep() - before
+  ok(made >= 1, "the first forged versions are still repudiated (" .. made .. ")")
+  ok(made <= 5, "30 forged versions make at most 5 repudiates (" .. made .. ")")
+end }

@@ -115,3 +115,39 @@ test("sig rules H2: a profile with d.squad=A only counts if A's roster, signed b
   ok(M.isMember(s, "A", "Au-R"), "listed by the captain's signed roster + own profile: member")
   eq(M.squadOf(s, "Au-R"), "A")
 end)
+
+test("sig rules D1: what a replaced key signed is dropped (X.dropSignedBy); what the author said in person stays", function()
+  local s = newState()
+  local skF, pkF = key("fake Au-R")
+  local p = prof("Au-R", T0 + 10, { note = "falso" })
+  local m = G.build("Au-R", 1, { p }, skF, pkF)
+  G.offer(s.sigdb, m, function(name) if name == "Au-R" then return pkF, "cert" end end); G.step(s.sigdb)
+  ok(ap(s, p, "Z-R"), "a cert-signed profile is applied")
+  eq(s.profiles["Au-R"].d.note, "falso")
+  ok(G.dropKey(s.sigdb, "Au-R", pkF), "the manifest of the replaced key is forgotten")
+  eq(X.dropSignedBy(s, "Au-R", pkF), 1, "one record signed by the replaced key")
+  eq(s.profiles["Au-R"], nil, "the record it signed is dropped")
+  eq(s.p2p.via["profile:Au-R"], nil, "and its relay trail")
+  -- a record heard from its author in person is not touched
+  local s2 = newState()
+  ok(ap(s2, prof("Au-R", T0 + 10, { note = "en persona" }), "Au-R"))
+  eq(X.dropSignedBy(s2, "Au-R", pkF), 0)
+  eq(s2.profiles["Au-R"].d.note, "en persona", "a record heard in person stays")
+end)
+
+test("sig rules D3: a cert key applies profiles and squads, never a repudiate nor an authority record", function()
+  local s = newState()
+  local k = KEYS["Au-R"]
+  local p = prof("Au-R", T0 + 10, { note = "x" })
+  ok(ap(s, p, "Au-R"), "the author's profile, in person")
+  local rep = { k = "repudiate", id = X.vkey(p), a = "Au-R", ts = T0 + 20, sq = 2, d = { t = X.kid(p), v = X.vkey(p) } }
+  G.offer(s.sigdb, G.build("Au-R", 1, { rep }, k.sk, k.pk), function() return k.pk, "cert" end); G.step(s.sigdb)
+  local okR = ap(s, rep, "Z-R")
+  ok(not okR, "a repudiate signed by a cert key is not applied")
+  eq(s.profiles["Au-R"].d.note, "x", "the profile stays")
+  local set = { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 30, sq = 2, d = { squadsEnabled = false, officerRanks = { 1 } } }
+  local kg = KEYS["Gm-R"]
+  G.offer(s.sigdb, G.build("Gm-R", 1, { set }, kg.sk, kg.pk), function() return kg.pk, "cert" end); G.step(s.sigdb)
+  ok(not ap(s, set, "Z-R"), "settings signed by a cert key are not applied")
+  eq(s.settings.d.squadsEnabled, true)
+end)

@@ -158,6 +158,24 @@ local function commit(state, rec, ctx, vk, kid, voters)
   return true, "verified"
 end
 
+-- the key `pk` of `name` was replaced (annex F/G): drop every stored record of his that was applied by relay on that
+-- key's signature (records heard from him in person have no relay trail and stay). pk raw (32 bytes) or hex. -> count
+function X.dropSignedBy(state, name, pk)
+  local st = state.p2p
+  if not (st and type(st.via) == "table" and type(name) == "string" and type(pk) == "string") then return 0 end
+  local h = #pk == 32 and (pk:gsub(".", function(c) return string.format("%02x", c:byte()) end)) or pk:lower()
+  local drop = {}
+  for kid, via in pairs(st.via) do
+    if type(via) == "table" and via.pk == h then
+      local kind, id = kid:match("^([^:]+):(.*)$")
+      local cur = kind and getStored(state, kind, id)
+      if cur and cur.a == name then drop[#drop + 1] = { kid, kind, id } end
+    end
+  end
+  for _, d in ipairs(drop) do setStored(state, d[2], d[3], nil); st.via[d[1]] = nil end
+  return #drop
+end
+
 -- Model.apply hands over an authorial record relayed by a non-officer (or forwarded unverified, u = 1).
 -- rec is already sanitized. -> ok, why ("verified" | "pending" | "conflict" | "mine" | "repudiated" | ...)
 function X.offer(state, rec, ctx, settings, u)
@@ -184,12 +202,16 @@ function X.offer(state, rec, ctx, settings, u)
     local G, db = ns.Sig, sigdb(state)
     local status = G and db and G.status(db, rec)
     if status then
-      -- a weak key: never a repudiate nor an authority record, never over a strong copy (it neither replaces nor deletes)
+      -- a weak key: never a repudiate nor an authority record, never over a strong copy (it neither replaces nor deletes).
+      -- annex G: a cert key counts as strong for profiles and squads, but a repudiate needs the author's own key and
+      -- an authority record (settings, roster, ranks) a key heard in person (QA D3)
       if status == "weak" and (rec.k == "repudiate" or not M.isP2P(rec) or (stored and X.strengthOf(state, stored) == "strong")) then
         return false, "weak"
       end
+      if status == "cert" and (rec.k == "repudiate" or not M.isP2P(rec)) then return false, "weak" end
       local okC, whyC = commit(state, rec, ctx, vk, kid, { type(sender) == "string" and sender or "?" })
-      if okC and st.via[kid] then st.via[kid].sig = status end
+      -- the key that signed it (hex): if that key is later replaced, X.dropSignedBy drops this record (QA D1)
+      if okC and st.via[kid] then st.via[kid].sig = status; st.via[kid].pk = db.man[rec.a] and db.man[rec.a].pk end
       return okC, whyC
     end
   end
