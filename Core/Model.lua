@@ -505,6 +505,17 @@ function M.kindOrder(k)
 end
 
 -- cheap structural check before anything else touches the record (never raises)
+-- sec r3 M1: would applying this squad record evict another squad (maxSquads, name race)? Dry run on a copy of d.
+function M.squadEvicts(state, rec, roster, settings)
+  if type(rec) ~= "table" or rec.k ~= "squad" or type(rec.d) ~= "table" then return false end
+  local d = {}
+  for k, v in pairs(rec.d) do d[k] = v end
+  local evict = {}
+  local okV = pcall(validateSquad, state, { k = rec.k, id = rec.id, a = rec.a, ts = rec.ts, sq = rec.sq, d = d },
+    roster, settings or M.settingsOf(state), evict)
+  return okV and #evict > 0
+end
+
 function M.validShape(rec)
   if type(rec) ~= "table" then return false, "shape" end
   if type(rec.k) ~= "string" or not KIND[rec.k] then return false, "kind" end

@@ -215,6 +215,15 @@ function X.offer(state, rec, ctx, settings, u)
       end
       -- squads count as data for a cert key (QA r2 N1); settings, roster and ranks stay authority
       if status == "cert" and (rec.k == "repudiate" or (rec.k ~= "squad" and not M.isP2P(rec))) then return false, "weak" end
+      -- sec r3 M1: a cert key signs squads as their captain only: never moderation of someone else's squad (disband,
+      -- edit, approval by the GM or an officer) and never one that would evict another squad
+      if status == "cert" and rec.k == "squad" then
+        local d = type(rec.d) == "table" and rec.d or {}
+        if d.captain ~= rec.a or (stored and type(stored.d) == "table" and stored.d.captain ~= rec.a)
+          or M.squadEvicts(state, rec, ctx.roster, settings) then
+          return false, "weak"
+        end
+      end
       local okC, whyC = commit(state, rec, ctx, vk, kid, { type(sender) == "string" and sender or "?" })
       -- the key that signed it (hex): if that key is later replaced, X.dropSignedBy drops this record (QA D1)
       if okC and st.via[kid] then st.via[kid].sig = status; st.via[kid].pk = db.man[rec.a] and db.man[rec.a].pk end

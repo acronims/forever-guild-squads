@@ -163,6 +163,35 @@ test("sig rules QA r2 N1: a squad relayed under a cert key is applied (annex G: 
   ok(ap(s, pc, "Z-R"), "and the profile too")
 end)
 
+test("sig sec r3 M1: a cert key of the GM cannot disband, edit or evict a squad he does not captain", function()
+  local s = newState()
+  local sq = { k = "squad", id = "A", a = "Cap-R", ts = T0 + 40, sq = 1, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R" } } }
+  ok(ap(s, sq, "Cap-R"), "the captain's squad, heard in person")
+  local dis = copy(sq); dis.a = "Gm-R"; dis.ts = T0 + 50; dis.sq = 2; dis.d.disbanded = true
+  local ren = copy(sq); ren.a = "Gm-R"; ren.ts = T0 + 51; ren.sq = 3; ren.d.name = "Pwned"
+  sign(s, "Gm-R", 1, { dis }, "cert")
+  local okD, whyD = ap(s, dis, "Z-R")
+  ok(not okD, "a disband by a cert key of the GM is not applied (" .. tostring(whyD) .. ")")
+  sign(s, "Gm-R", 2, { ren }, "cert")
+  local okE, whyE = ap(s, ren, "Z-R")
+  ok(not okE, "an edit by a cert key of the GM is not applied (" .. tostring(whyE) .. ")")
+  eq(s.squads["A"].d.name, "Alfa", "the squad stays as its captain wrote it")
+  ok(not s.squads["A"].d.disbanded, "and alive")
+  -- eviction by the name race: an older creation with the same name under a cert key would push the real squad out
+  local old = { k = "squad", id = "B", a = "Gm-R", ts = T0 + 1, sq = 4, d = { name = "Alfa", captain = "Gm-R", members = { "Gm-R" }, ct = T0 + 1 } }
+  sign(s, "Gm-R", 3, { old }, "cert")
+  local okV, whyV = ap(s, old, "Z-R")
+  ok(not okV, "a cert-key squad that would evict another is not applied (" .. tostring(whyV) .. ")")
+  ok(s.squads["A"] ~= nil, "the real squad is not evicted")
+  -- his own squad, as its captain, under a cert key still goes through (annex G, QA r2 N1)
+  local own = { k = "squad", id = "C", a = "Y-R", ts = T0 + 70, sq = 1, d = { name = "Gamma", captain = "Y-R", members = { "Y-R" } } }
+  ok(ap(s, { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 61, sq = 10,
+             d = { squadsEnabled = true, officerRanks = { 1 }, rlList = { "Cap-R", "Y-R" } } }, "Gm-R"))
+  sign(s, "Y-R", 1, { own }, "cert")
+  local okO, whyO = ap(s, own, "Z-R")
+  ok(okO, "a captain's own squad under a cert key is applied (" .. tostring(whyO) .. ")")
+end)
+
 test("sig sec r2 R1: a repudiate of a forged copy with the real (ts, sq, a) does not hide the author's signed version", function()
   local s = newState()
   local real = prof("Au-R", T0 + 10, { note = "real" })
