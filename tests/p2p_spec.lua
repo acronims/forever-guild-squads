@@ -311,17 +311,18 @@ test("v1.2: a repudiate removes pending copies of the same signed version with a
   eq(s.settings.d.squadsEnabled, true)
 end)
 
-test("v1.2: one relayer holds at most MAX_PEND_RELAYER pending versions; others are not evicted", function()
+-- AC4 (QA r3): the flood of 5.000 fake records from one relayer does not evict the legit pending versions
+test("v1.2 AC4: one relayer flooding 5.000 fake records holds at most MAX_PEND_RELAYER pending; others are not evicted", function()
   local s = newState()
   eq(select(2, ap(s, prof("V-R", T0 + 5, { note = "legit" }), "Z-R")), "pending")
   local capped = 0
-  for i = 1, 1000 do
+  for i = 1, 5000 do
     local _, why = ap(s, { k = "squad", id = "Cap-R:" .. i, a = "Cap-R", ts = T0 + 10, sq = i,
       d = { name = "F" .. i, captain = "Cap-R", members = { "Cap-R" } } }, "Y-R")
     if why == "cap" then capped = capped + 1 end
   end
   eq(X.pendBy(s, "Y-R"), X.MAX_PEND_RELAYER)
-  eq(capped, 1000 - X.MAX_PEND_RELAYER)
+  eq(capped, 5000 - X.MAX_PEND_RELAYER)
   eq(X.unverified(s, "profile", "V-R").r.d.note, "legit", "the legit pending version survives")
 end)
 
