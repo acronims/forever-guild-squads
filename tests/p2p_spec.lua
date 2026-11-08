@@ -386,6 +386,54 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AC3: the 'synced' chat line fires once
   Sync.chatSink = nil
 end }
 
+-- v1.2 AC3 (S8, CI 42505121559: "synced line exactly once -> []"): a newcomer catching up keeps its hello rounds
+-- going while it holds pending copies (S8's unsigned records stay pending for good), up to MAX_CATCHUP_ROUNDS x 30 s,
+-- and every round teaches > SYNCED_FEW records (second copies), so neither NoteRound nor the watcher (armed only
+-- after the last round) wrote the line before S8 read the chat (+720 s). The first hello of the session arms a
+-- deadline: SYNCED_MAX s later the line is written anyway, still once per session
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AC3: the first hello arms a SYNCED_MAX deadline for the 'synced' line (catch-up that never goes quiet)", function(c)
+  local ns = c.ns
+  local Sync, Comm = ns.Sync, ns.Comm
+  ok(type(Sync.SYNCED_MAX) == "number" and Sync.SYNCED_MAX > 0 and Sync.SYNCED_MAX <= 600, "Sync.SYNCED_MAX (<= 600 s; S8 reads the chat at +720 s)")
+  ok(type(Sync.ArmSyncedDeadline) == "function", "Sync.ArmSyncedDeadline")
+  local got, timers = {}, {}
+  local origAfter, origSend = ns.After, Comm.Send
+  local function deadlines()
+    local o = {}
+    for _, tm in ipairs(timers) do if tm.d == Sync.SYNCED_MAX then o[#o + 1] = tm end end
+    return o
+  end
+  local okAll, err = pcall(function()
+    Sync.chatSink = function(line) got[#got + 1] = line end
+    ns.After = function(d, fn) timers[#timers + 1] = { d = d, fn = fn } end
+    Comm.Send = function() end
+    Sync.ResetSynced()
+    Sync.Hello()                                     -- first hello of the session
+    eq(#deadlines(), 1, "the first hello arms one SYNCED_MAX deadline")
+    Sync.Hello(true); Sync.Hello()                   -- next rounds and anti-entropy hellos
+    eq(#deadlines(), 1, "armed once per session")
+    -- S8: 20 catch-up rounds teaching > SYNCED_FEW records each, more rounds to come
+    for k = 1, 20 do Sync.NoteRound(Sync.SYNCED_FEW + 5, 1000 + 30 * k, true) end
+    eq(#got, 0, "not while the catch-up rounds teach > SYNCED_FEW records")
+    deadlines()[1].fn()
+    eq(#got, 1, "the deadline writes the line")
+    eq(got[1], ns.L.SYNCED:format(Sync.SyncedCounts()))
+    Sync.NoteRound(0, 2000, true); Sync.GiveUpSynced(); deadlines()[1].fn()
+    eq(#got, 1, "still once per session")
+    -- a new session (ResetSynced): the old deadline writes nothing, a new one can be armed
+    local old = deadlines()[1]
+    Sync.ResetSynced(); timers = {}; got = {}
+    old.fn()
+    eq(#got, 0, "a deadline from the previous session writes nothing")
+    Sync.ArmSyncedDeadline()
+    eq(#deadlines(), 1, "armed again after ResetSynced")
+    deadlines()[1].fn()
+    eq(#got, 1, "and it writes the line of the new session")
+  end)
+  ns.After, Comm.Send, Sync.chatSink = origAfter, origSend, nil
+  if not okAll then error(err, 0) end
+end }
+
 -- H4 (QA 1.1, baja): X.before() dropped st.via[kid] as soon as the author spoke, even when the author's record then
 -- failed to apply (dup); the relayed version lost its relayers (a later repudiate of it counts them)
 test("H4: a failed apply of the author's own record keeps the relay trail (st.via) of the relayed version", function()
