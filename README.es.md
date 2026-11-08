@@ -48,6 +48,8 @@ Diagramas (PNG; HTML interactivo e índice en [docs/es/diagrams](docs/es/diagram
 | `/gsq welcome` (`bienvenida`) · `/gsq news` (`novedades`) | Guía de bienvenida · novedades |
 | `/gsq ui` | Qué plantillas/atlas tiene este cliente (informe de alternativas) |
 | `/gsq debug` | Contadores + log detallado |
+| `/gsq trust newkey` | Borra tu clave de firma y crea una nueva (pide confirmación) |
+| `/gsq trust reset <nombre>` | Olvida la clave de un miembro; se vuelve a aprender de él en persona |
 
 ## Ajustes del GM
 Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secciones: **Squads** (rango mínimo para crear, aprobación por oficiales, suplentes 0–2, rangos de oficial, días hasta inactivo, máximo de squads), **Compet.** (activar, peso 0–3 y tope por categoría, objetivo semanal), **Temporada**, **Integrac.** (Overlord), **Moderación** (palabras prohibidas, disolver/restablecer squads, exportar/importar/sync), **Celebrac.**, **Contenido** (jefe final de cada mazmorra/banda), **Bandas** (lista de RL, permisos, clases útiles) y **Logros** (solo la ve el GM: catálogo de logros y carreras, logros propios, insignias otorgadas). Detalle: [GM-GUIDE.md](docs/es/GM-GUIDE.md).
@@ -71,10 +73,15 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
 ## Problemas
 - `/gsq diag` → Ctrl+A, Ctrl+C y pégalo en la incidencia.
 - Fichero de datos: `WTF\Account\<CUENTA>\SavedVariables\GuildSquads.lua` (en la carpeta del cliente Forever).
-- Lo gris está sin verificar hasta que lo confirma un segundo jugador, un GM u oficial o el autor. La 1.2 no se habla con la 1.0.x ni con la 1.1. Más en [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md).
+- Lo gris está sin verificar: aún no tiene una firma verificada de su autor. Cuenta cuando oyes al autor en persona, o cuando dos jugadores que has oído en persona certifican la clave del autor. La 1.2 no se habla con la 1.0.x ni con la 1.1. Más en [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md).
 
 ## Limitaciones conocidas
-- Sin firmas criptográficas: un GM u oficial con un cliente modificado puede falsificar reenvíos, y un jugador con dos personajes puede hacer pasar por verificado un registro falso hasta que su autor lo desmiente.
+- Cada registro va firmado (Ed25519) con la clave de su autor; un reenvío sin firma válida nunca se aplica, así que ni un cliente modificado ni un jugador con alts pueden falsificar, alterar ni borrar los datos de nadie. Las claves se aprenden de su dueño en persona (confianza en el primer uso), o de los certificados firmados de 2 jugadores que has oído en persona. Límites de ese modelo:
+  - La clave de un desconocido (alguien a quien nunca has oído en persona) vale lo que los certificados de los que conoces: dos personajes de un mismo jugador que has oído en persona pueden certificar una clave falsa de ese desconocido. Sus datos se ven entonces como verificados hasta que el desconocido se conecta cerca de ti (en persona siempre gana). Un certificado honesto con otra clave la deja *disputada*: no se aplica nada nuevo suyo.
+  - Un solo personaje que has oído en persona puede dejar *disputada* la clave de un desconocido con un certificado distinto; se resuelve cuando oyes al desconocido en persona.
+  - WoW no tiene una fuente de azar criptográfica: la semilla de la clave mezcla tiempos de frames y de input, relojes, el cursor y el GUID. Basta frente a otros jugadores, no frente a alguien que pueda reproducir los tiempos exactos de tu sesión.
+  - La clave privada se guarda en claro en las SavedVariables del addon (`GuildSquadsDB.ownKeys`), que otros addons instalados pueden leer. Si sospechas que se ha filtrado, `/gsq trust newkey` crea una nueva.
+  - Si pierdes las SavedVariables, pierdes la clave: se crea una nueva y los demás la aceptan cuando te oyen en persona; hasta entonces ven tus datos sin verificar.
 - La 1.2 no se habla con la 1.0.x ni con la 1.1: tiene que actualizar toda la guild.
 - Una resincronización completa de una guild grande tarda minutos (throttle, por diseño).
 - Los IDs de encuentros/instancias de Forever no se conocen: las instancias se reconocen por nombre y aprenden el ID al verlo.

@@ -48,7 +48,7 @@ It is tested outside the game with a mocked client and a multi-client simulator;
 
 ## How sync and trust work
 
-Everything travels over the guild addon channel; there is no server. Every player with the addon is a node: a few online players answer each newcomer with a random slice of what is missing, so nobody (officers included) acts as a central relay. Each client checks every record against the guild roster: only the guild master changes the settings, only you change your profile, only the captain (or the guild master) edits a squad. A relayed copy stays *unverified* (grey) until two different players relay the same version, the GM or an officer relays it, or its author sends it live; the author can deny a forged copy and it disappears from every client. Catching up runs in the background and the chat tells you when you are synced. A boss kill or a battleground counts for the rankings only when at least two squad members with the addon report it. Scores are computed on each client from these events; totals are never sent. Nothing is sent during boss encounters or PvP matches. **Everyone in the guild needs 1.2:** 1.2 does not talk to 1.0.x or 1.1, and tells you how many guildmates are still on an old version.
+Everything travels over the guild addon channel; there is no server. Every player with the addon is a node: a few online players answer each newcomer with a random slice of what is missing, so nobody (officers included) acts as a central relay. Each client checks every record against the guild roster: only the guild master changes the settings, only you change your profile, only the captain (or the guild master) edits a squad. Every record is signed (Ed25519) with its author's key, so relays cannot forge, alter or delete anyone's data. You learn a guildmate's key when you hear them in person (the game guarantees who sent an addon message), or from the signed certificates of two players you heard in person; the key heard from its owner in person always wins. A copy without a verified signature stays *unverified* (grey) and counts for nothing. Catching up runs in the background and the chat tells you when you are synced. A boss kill or a battleground counts for the rankings only when at least two squad members with the addon report it. Scores are computed on each client from these events; totals are never sent. Nothing is sent during boss encounters or PvP matches. **Everyone in the guild needs 1.2:** 1.2 does not talk to 1.0.x or 1.1, and tells you how many guildmates are still on an old version.
 
 ## Privacy
 
@@ -60,6 +60,7 @@ Your data stays inside your guild. The addon only talks to guildmates over the g
 - `/gsq sync` asks guildmates for the latest data.
 - `/gsq export` and `/gsq import` save and restore a text backup.
 - `/gsq diag` shows the diagnostics report.
+- `/gsq trust newkey` makes a new signing key (asks first); `/gsq trust reset <name>` forgets a guildmate's key.
 - `/gsq minimap` shows the minimap button again.
 - `/gsq welcome` shows the welcome guide again.
 

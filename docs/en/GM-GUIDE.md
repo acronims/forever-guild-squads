@@ -53,7 +53,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 ## Moderating the Hall of Fame
 
 - Right-click an entry: **Annul** with a reason (GM only). The next one moves up and the history is kept. *Revert* puts it back.
-- Relayed data is kept *unverified* until two different players relay the same version, a GM or officer relays it, or its author sends it live.
+- Every record is signed by its author. A relayed copy is applied only with its author's verified signature; otherwise it is kept *unverified*. Nobody, officers or a modified client included, can forge or delete another player's data or your settings.
 - A full Top is frozen; a closed race does not reopen.
 
 ## Raids: the RL workflow
@@ -82,7 +82,9 @@ A player's attendance % counts the last 8 raids with recorded attendance where t
 
 ## Troubleshooting
 
-**Something stays grey (unverified).** Since 1.2 every player with the addon relays data, and a relayed copy needs two different relayers (or a GM/officer, or its author live) before it counts. With very few players online it can stay grey until someone else logs in. Two characters of the same player count as two relayers: if a forged squad or setting shows up, its author (or you, for settings) denies it automatically on login. **Players on 1.0.x or 1.1 receive nothing**: ask them to update.
+**Something stays grey (unverified).** Since 1.2 every record is signed by its author and every player with the addon relays it. A copy counts once its author's key is known: heard from the author in person, or certified by two players you heard in person (squads and settings need the key of their captain or GM; a denial needs the author's own). With very few players online, a stranger's data can stay grey until you meet them online. If a key is *disputed* (two players list different keys for the same name), nothing new from it is applied until that player logs in near you; `/gsq diag` shows it in `keys … contested=` and `cert … disputed=`. **Players on 1.0.x or 1.1 receive nothing**: ask them to update.
+
+**A member lost their SavedVariables (or reinstalled).** Their key is gone and a new one is made. Nothing to do: the key heard from its owner in person always wins, so it is accepted when they log in. If someone's key stays stuck, `/gsq trust reset <name>` forgets it and it is learned again in person.
 
 **Data seems lost after a restart.** The Forever client has been seen not reading SavedVariables back. Run `/gsq export` after changing settings or closing raids and keep the text; the others get it back from any online GM/officer.
 

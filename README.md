@@ -48,6 +48,8 @@ Diagrams (PNG; interactive HTML and index in [docs/en/diagrams](docs/en/diagrams
 | `/gsq welcome` · `/gsq news` | Welcome guide · what's new |
 | `/gsq ui` | Which templates/atlases this client has (fallback report) |
 | `/gsq debug` | Counters + verbose log |
+| `/gsq trust newkey` | Delete your signing key and make a new one (asks for confirmation) |
+| `/gsq trust reset <name>` | Forget a member's key; it is learned again from them in person |
 
 ## GM settings
 Only the GM (rank 0) writes settings; everyone else sees them read-only. Sections: **Squads**, **Compet.** (on/off, weight 0–3 and cap per category, weekly goal), **Season**, **Integr.** (Overlord), **Moderation**, **Celebrate**, **Content** (final boss per dungeon/raid), **Raids** (RL list, permissions, useful classes) and **Achiev.** (GM only: catalog of achievements and races, custom achievements, granted badges). Details: [GM-GUIDE.md](docs/en/GM-GUIDE.md).
@@ -71,10 +73,15 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
 ## Troubleshooting
 - `/gsq diag` → Ctrl+A, Ctrl+C and paste it in the issue.
 - Data file: `WTF\Account\<ACCOUNT>\SavedVariables\GuildSquads.lua` (in the Forever client folder).
-- Grey entries are unverified until a second player, a GM/officer or the author confirms them. 1.2 does not talk to 1.0.x or 1.1. See [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md).
+- Grey entries are unverified: no verified signature from their author yet. They count once you hear the author in person, or once two players you heard in person certify the author's key. 1.2 does not talk to 1.0.x or 1.1. See [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md).
 
 ## Known limitations
-- No cryptographic signatures: a GM/officer running a modified client can still forge relays, and a player with two characters can make a forged record look verified until its author denies it.
+- Every record is signed (Ed25519) by its author's key; a relay without a valid signature is never applied, so a modified client or a player with alts cannot forge, alter or delete anyone's data. Keys are learned from their owner in person (trust on first use), or from the signed certificates of 2 players you heard in person. Limits of that model:
+  - A stranger's key (a player you never heard in person) is only as good as the certificates of the players you know: two characters you heard in person that belong to one player can certify a fake key for that stranger. Their data then shows as verified until the stranger logs in near you (in person always wins). One honest certificate with another key makes it *disputed*: nothing new from it is applied.
+  - A single character you heard in person can keep a stranger's key *disputed* with a different certificate; it clears when you hear the stranger in person.
+  - WoW has no cryptographic random source: the key seed mixes frame and input timings, clocks, the cursor and the GUID. It is enough against other players, not against someone who can replay your exact session timings.
+  - The private key is kept in plain text in the addon's SavedVariables (`GuildSquadsDB.ownKeys`), readable by other addons you install. If you suspect it leaked, `/gsq trust newkey` makes a new one.
+  - Losing SavedVariables loses the key: a new one is made and others accept it when they hear you in person; until then your data looks unverified to them.
 - 1.2 does not talk to 1.0.x or 1.1: the whole guild has to update.
 - A full resync of a large guild takes minutes by design (throttle).
 - Forever encounter/instance IDs are unknown: instances match by name and learn the ID when seen.

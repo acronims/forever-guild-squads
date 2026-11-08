@@ -53,7 +53,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 ## Moderar el Salón de la fama
 
 - Clic derecho en un puesto: **Anular** con motivo (solo GM). El siguiente sube y queda historial. *Revertir* lo devuelve a su sitio.
-- Los datos reenviados quedan *no verificados* hasta que dos jugadores distintos reenvían la misma versión, un GM u oficial la reenvía o su autor la manda en directo.
+- Cada registro va firmado por su autor. Una copia reenviada solo se aplica con la firma verificada de su autor; si no, queda *sin verificar*. Nadie, ni un oficial ni un cliente modificado, puede falsificar ni borrar los datos de otro jugador ni tus ajustes.
 - Un Top lleno se congela; una carrera cerrada no se reabre.
 
 ## Bandas: flujo del RL
@@ -82,7 +82,9 @@ El % de asistencia de cada jugador cuenta las 8 últimas bandas con asistencia r
 
 ## Problemas
 
-**Algo se queda en gris (sin verificar).** Desde la 1.2 todos los que tienen el addon reenvían datos, y una copia reenviada necesita dos reenviadores distintos (o un GM/oficial, o su autor en directo) para contar. Con muy pocos conectados puede quedarse en gris hasta que entre alguien más. Dos personajes del mismo jugador cuentan como dos reenviadores: si aparece un squad o un ajuste falso, su autor (o tú, si son ajustes) lo desmiente solo al conectarse. **Los que van con la 1.0.x o la 1.1 no reciben nada**: pídeles que actualicen.
+**Algo se queda en gris (sin verificar).** Desde la 1.2 cada registro va firmado por su autor y todos los que tienen el addon lo reenvían. Una copia cuenta cuando se conoce la clave de su autor: oída del propio autor en persona, o certificada por dos jugadores que has oído en persona (squads y ajustes necesitan la clave de su capitán o del GM; un desmentido, la del propio autor). Con muy pocos conectados, los datos de un desconocido pueden quedarse en gris hasta que coincidáis conectados. Si una clave está *disputada* (dos jugadores dan claves distintas para el mismo nombre), no se aplica nada nuevo suyo hasta que ese jugador se conecta cerca de ti; `/gsq diag` lo muestra en `keys … contested=` y `cert … disputed=`. **Los que van con la 1.0.x o la 1.1 no reciben nada**: pídeles que actualicen.
+
+**Un miembro perdió sus SavedVariables (o reinstaló).** Su clave se pierde y se crea una nueva. No hay que hacer nada: la clave oída de su dueño en persona siempre gana, así que se acepta cuando se conecta. Si la clave de alguien se queda atascada, `/gsq trust reset <nombre>` la olvida y se vuelve a aprender en persona.
 
 **Los datos parecen perderse al reiniciar.** Se ha visto que el cliente de Forever a veces no relee las SavedVariables. Haz `/gsq export` después de cambiar ajustes o cerrar bandas y guarda el texto; los demás los recuperan de cualquier GM/oficial conectado.
 
