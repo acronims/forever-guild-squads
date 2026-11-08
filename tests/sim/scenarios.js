@@ -753,10 +753,20 @@ function s16run(seed, k) {
   honest[1].logout();
   vic.login(); sim.run(10); vic.run('return A.SaveProfile({ note = "legit" })'); sim.run(40); vic.logout();
   sim.run(10);
-  honest[1].login(); sim.run(120);
-  for (let n = 0; n < 200; n++) honest[1].step();
+  honest[1].login();
+  if (process.env.GSQ_TRACE) honest[1].val(`(function() SIMDBG = {} local o = NS.debug; NS.debug = function(m) if tostring(m):find(${luaStr(VIC)}, 1, true) then SIMDBG[#SIMDBG + 1] = tostring(m) end if o then return o(m) end end
+    local of = NS.Sig.offer; NS.Sig.offer = function(db, m, k) local r = of(db, m, k); if m.a == ${luaStr(VIC)} then SIMDBG[#SIMDBG + 1] = "offer n=" .. tostring(m.n) .. " " .. tostring(r) end return r end return true end)()`);
+  sim.run(120);
   sim.run(60);
+  // the sim only runs OnUpdate (1 verify per frame) when a client steps: drain Mb9's verify queue before reading
+  for (let n = 0; n < 200; n++) honest[1].step();
   const legit = honest[1].val(`(function() local p = NS.state.profiles[${luaStr(VIC)}]; return (p and p.d.note or "nil") .. ":" .. tostring(p and NS.P2P.strengthOf(NS.state, p)) end)()`)[0];
+  if (process.env.GSQ_TRACE) console.error('S16dbg Mb9 log', honest[1].val('table.concat(SIMDBG, " ## ")')[0]);
+  if (process.env.GSQ_TRACE) for (const c of honest) console.error('S16dbg', c.name || '?', c.val(`(function() local G = NS.Sig; local db = NS.sigDB
+    local m = db and db.man and db.man[${luaStr(VIC)}]; local own = db and db.own and db.own[${luaStr(VIC)}]
+    local p = NS.state.profiles[${luaStr(VIC)}]; local c = G.counts(db)
+    local np = 0 for _, byId in pairs(NS.state.p2p and NS.state.p2p.pend or {}) do for _ in pairs(byId) do np = np + 1 end end
+    return "man.n=" .. tostring(m and m.n) .. " own.n=" .. tostring(own and own.n) .. " p=" .. tostring(p and p.d.note) .. " st=" .. tostring(p and G.status(db, p)) .. " q=" .. G.pending() .. " pend=" .. np .. " ver=" .. tostring(c.verified) .. " rej=" .. tostring(c.rejected) .. " pk=" .. table.concat((function() local o = {} for kid, byId in pairs(NS.state.p2p and NS.state.p2p.pend or {}) do for _, e in pairs(byId) do o[#o + 1] = kid .. "@" .. tostring(e.r.a) .. "=" .. tostring(e.r.d and e.r.d.note) end end return o end)(), ",") end)()`)[0]);
   check('the legitimate relayed version arrives verified (Mb9 from Mb8)', legit.startsWith('legit:') && !/weak/.test(legit), legit);
   // flood: 600 fake pending squads from one alt do not pass 200 by him nor evict a legitimate pending copy
   tr('legit'); const Y = full(sim, 'Mb2'), PUB = VIC;

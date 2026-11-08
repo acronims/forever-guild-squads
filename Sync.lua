@@ -299,14 +299,16 @@ function envelope(batch, to)
   return { r = batch, ks = Sync.KeysFor(batch, to), m = Sync.ManifestsFor(batch, to) }
 end
 
-local function sendRecords(list, to, urgent)
+-- `req`: the hello requester a GUILD reply is for. The `ks` / `m` throttle counts per requester: a GUILD copy sent
+-- before he logged in never reached him (S16: Mb9 got Mb7's new profile without its manifest and kept it pending)
+local function sendRecords(list, to, urgent, req)
   -- group a few records per message; Comm chunks large payloads
   local batch = {}
   local function flush()
     local ids = {}
     for i, r in ipairs(batch) do ids[i] = { r.id, vkey(r) }; queued[r.id] = vkey(r) end
     local function done() for _, x in ipairs(ids) do if queued[x[1]] == x[2] then queued[x[1]] = nil end end end
-    local msg = envelope(batch, to)
+    local msg = envelope(batch, req or to)
     if Comm.Send("D", msg, to and "WHISPER" or nil, to, done, urgent) == false then done() end
     batch = {}
   end
@@ -678,7 +680,7 @@ local function onHello(payload, sender)
         if r.a == onlyMe or M.isP2P(r) then pub[#pub + 1] = r else priv[#priv + 1] = r end
       end
     end
-    sendRecords(pub, nil, urgent)
+    sendRecords(pub, nil, urgent, from)
     if priv and #priv > 0 then sendRecords(priv, from, urgent) end
     if p2pOff then return end
     -- unverified versions only go to the requester (a 1.0 client would trust them from an officer)
