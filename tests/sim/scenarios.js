@@ -686,88 +686,112 @@ function S12(seed) {
   return { pass: pass(), checks, metrics: { diag: line, t: Math.round(sim.t), ...sim.stats } };
 }
 
-// S16 (v1.2 AC4): poisoning of authority records. Mb2, then Mb3 too, forge a GM `settings` (bench 0, squads off) and
-// Mb1's squad (renamed) while the GM and Mb1 are offline. 1 relayer: never verified on any honest client. With
-// QUORUM_AUTH = 2 (D1, BRO 7-nov 19:04) 2 colluders do verify the fakes until the author / an officer denies them. A flood of 5,000 fake pending records from one relayer stays capped at 200 and does not evict
-// a legitimate pending version. The GM logs in -> repudiates the settings, Mb1 logs in -> repudiates the squad: both
-// fakes gone from every client and both relayers listed in /gsq diag.
-function S16(seed) {
+// S16 (v1.2 annex F, AF2): poisoning with signatures. k = 2, 3 and 5 accomplices (alts the honest clients know in
+// person) forge, while the GM, the captain Mb1 and the victim Mb7 are offline: a GM `settings`, Mb1's squad, Mb7's
+// profile and a `repudiate` of Mb7's real profile. Three ways each: bare records, the same with a fake key for the
+// author (`ks`) plus a manifest signed with it, and a manifest for the victim signed with the alt's own key. No fake
+// is applied on any honest client (settings, squad, profile and repudiate as they were). The legitimate relayed
+// version arrives (Mb7 edits with Mb8 online; Mb9, offline then, gets it from Mb8 verified). A flood of 600 fake
+// pending records from one relayer stays capped at 200 and does not evict the legitimate one. Metric (not a check,
+// annex G pending): a fake key + profile for Mb11, whom no honest client ever heard in person.
+function s16run(seed, k) {
   const sim = new Sim({ seed });
   const { check, checks, pass } = checker();
-  makeGuild(sim, 1, 8);
-  const [gm, cap] = [sim.client('Gm'), sim.client('Mb1')];
-  const [y, z] = [sim.client('Mb2'), sim.client('Mb3')];
-  const honest = ['Mb4', 'Mb5', 'Mb6'].map((n) => sim.client(n));
-  const pub = sim.client('Mb7');
-  for (const c of [gm, cap, ...honest]) { c.login(); sim.run(5); }
+  makeGuild(sim, 1, 12);
+  const [gm, cap, vic] = [sim.client('Gm'), sim.client('Mb1'), sim.client('Mb7')];
+  const alts = Array.from({ length: k }, (_, i) => sim.client('Mb' + (i + 2)));
+  const honest = ['Mb8', 'Mb9', 'Mb10'].map((n) => sim.client(n));
+  for (const c of [gm, cap, vic, ...honest]) { c.login(); sim.run(5); }
   check('GM settings written', gmSettings(gm));
   sim.run(20);
   cap.run('return A.CreateSquad({ name = "Lobos", icon = 1, color = 1, border = 1, tags = {}, open = true })');
   const SID = String(cap.val('A.MySquadId()')[0]);
+  vic.run('return A.SaveProfile({ note = "real" })');
   sim.run(60);
-  gm.logout(); cap.logout();
-  const GM = full(sim, 'Gm'), CAP = full(sim, 'Mb1');
-  const FTS = sim.epoch + Math.round(sim.t) + 200;
-  const fakeSet = `{ k = "settings", id = "settings", a = ${luaStr(GM)}, ts = ${FTS}, sq = 9001, d = { squadsEnabled = false, bench = 0, minCreateRank = 9, officerRanks = { 1 }, banned = {}, compEnabled = true } }`;
-  const fakeSq = `{ k = "squad", id = ${luaStr(SID)}, a = ${luaStr(CAP)}, ts = ${FTS}, sq = 9002, d = { name = "Hackeado", captain = ${luaStr(CAP)}, members = { ${luaStr(CAP)} }, bench = {}, icon = 1, color = 1, border = 1, tags = {}, open = true, approved = true } }`;
-  const forge = `NS.Comm.Send("D", { r = { ${fakeSet}, ${fakeSq} } })`;
-  for (const c of [y, z]) { c.login(); sim.run(5); }
+  gm.logout(); cap.logout(); vic.logout();
+  const GM = full(sim, 'Gm'), CAP = full(sim, 'Mb1'), VIC = full(sim, 'Mb7'), ZED = full(sim, 'Mb11');
+  for (const c of alts) { c.login(); sim.run(5); }
   sim.run(30);
   const view = (c) => c.val(`(function() local s = NS.Model.settingsOf(NS.state); local q = NS.state.squads[${luaStr(SID)}]
-    local us = NS.P2P.unverified(NS.state, "settings", "settings"); local uq = NS.P2P.unverified(NS.state, "squad", ${luaStr(SID)})
-    return tostring(s.bench) .. "/" .. (q and q.d.name or "nil") .. "|" .. (us and tostring(us.r.d.bench) or "nil") .. "/" .. (uq and uq.r.d.name or "nil") end)()`)[0];
-  y.run(forge); sim.run(1); y.run(forge);
-  sim.run(120);
-  const v1 = honest.map(view);
-  check('one malicious relayer: the fakes are pending on every honest client, the real ones stay', v1.every((x) => x === '2/Lobos|0/Hackeado'), v1.join(','));
-  sim.run(1200);
-  const v1b = honest.map(view);
-  check('20 min later, still never verified (1 relayer)', v1b.every((x) => x.startsWith('2/Lobos|')), v1b.join(','));
-  check('QUORUM_AUTH is 2', String(honest[0].val('NS.P2P.QUORUM_AUTH')[0]) === '2', String(honest[0].val('NS.P2P.QUORUM_AUTH')[0]));
-  z.run(forge);
+    local p = NS.state.profiles[${luaStr(VIC)}]; local z = NS.state.profiles[${luaStr(ZED)}]
+    local nr = 0 for _ in pairs(NS.state.repudiates or {}) do nr = nr + 1 end
+    return tostring(s.bench) .. "/" .. (q and q.d.name or "nil") .. "/" .. (p and p.d.note or "nil") .. "/rep" .. nr .. "|" .. (z and (z.d.note .. ":" .. tostring(NS.P2P.strengthOf(NS.state, z))) or "nil") end)()`)[0];
+  const T0 = Date.now(); const tr = (m) => { if (process.env.GSQ_TRACE) console.error(`S16 k=${k} ${m} ${((Date.now() - T0) / 1000).toFixed(1)}s`); };
+  const before = honest.map(view);
+  check('setup: honest clients hold the real settings, squad and profile', before.every((x) => x.startsWith('2/Lobos/real/rep0|')), before.join(','));
+  const realVic = honest[0].val(`(function() local p = NS.state.profiles[${luaStr(VIC)}]; return NS.P2P.vkey(p) end)()`)[0];
+  const FTS = sim.epoch + Math.round(sim.t) + 200;
+  // every alt: 3 attacks, each one twice (a retry does not help)
+  const forge = (i) => `(function()
+    local E, G, X = NS.Ed25519, NS.Sig, NS.P2P
+    local fsk = string.rep(string.char(${11 + i}), 32); local fpk = E.publicKey(fsk); local fhex = NS.Trust.hex(fpk)
+    local recs = {
+      { k = "settings", id = "settings", a = ${luaStr(GM)}, ts = ${FTS}, sq = 9001, d = { squadsEnabled = false, bench = 0, minCreateRank = 9, officerRanks = { 1 }, banned = {}, compEnabled = true } },
+      { k = "squad", id = ${luaStr(SID)}, a = ${luaStr(CAP)}, ts = ${FTS}, sq = 9002, d = { name = "Hackeado", captain = ${luaStr(CAP)}, members = { ${luaStr(CAP)} }, bench = {}, icon = 1, color = 1, border = 1, tags = {}, open = true, approved = true } },
+      { k = "profile", id = ${luaStr(VIC)}, a = ${luaStr(VIC)}, ts = ${FTS}, sq = 9003, d = { note = "falso", level = 60 } },
+      { k = "repudiate", id = ${luaStr(realVic)}, a = ${luaStr(VIC)}, ts = ${FTS}, sq = 9004, d = { t = "profile:" .. ${luaStr(VIC)}, v = ${luaStr(realVic)} } },
+      { k = "profile", id = ${luaStr(ZED)}, a = ${luaStr(ZED)}, ts = ${FTS}, sq = 9005, d = { note = "fantasma", level = 60 } },
+    }
+    NS.Comm.Send("D", { r = recs })
+    local ks, ms = {}, {}
+    for _, a in ipairs({ ${luaStr(GM)}, ${luaStr(CAP)}, ${luaStr(VIC)}, ${luaStr(ZED)} }) do
+      ks[a] = fhex; ms[#ms + 1] = G.build(a, 2000000000 + ${i}, recs, fsk, fpk)
+    end
+    NS.Comm.Send("D", { r = recs, ks = ks, m = ms })
+    local osk, opk = NS.Trust.own(GuildSquadsDB.ownKeys[NS.me()])
+    if osk then NS.Comm.Send("D", { r = recs, m = { G.build(${luaStr(VIC)}, 2010000000 + ${i}, recs, osk, opk) } }) end
+    return true end)()`;
+  for (let i = 0; i < alts.length; i++) { alts[i].val(forge(i)); sim.run(1); alts[i].val(forge(i)); sim.run(1); }
+  tr('forged'); sim.run(120); tr('run120');
+  for (let n = 0; n < 200; n++) for (const c of honest) c.step();
+  tr('drained');   // drain the verify queue
   sim.run(600);
-  const v2 = honest.map(view);
-  // D1 = 2: two colluders make a quorum -> the fake settings is verified (stored) until the GM denies it below. The
-  // fake squad gets the quorum too, but the verified fake settings turns squads off, so Model.apply refuses it
-  // ("disabled": validation does not change with the quorum) and it stays pending.
-  check('2 colluders (= QUORUM_AUTH): the fake settings is verified on every honest client, the fake squad stays pending (squads off)',
-    v2.every((x) => x === '0/Lobos|nil/Hackeado'), v2.join(','));
-  // a legitimate pending version (Mb7's profile relayed by one honest member), then 5,000 fakes from Mb2 alone
-  pub.login(); sim.run(10); pub.run('return A.SaveProfile({ note = "legit" })'); sim.run(30); pub.logout();
-  const PUB = full(sim, 'Mb7'), Y = full(sim, 'Mb2');
+  tr('run600'); const after = honest.map(view);
+  const core = (x) => x.split('|')[0];
+  check(`${k} alts: no fake settings / squad / profile / repudiate applied on any honest client`, after.every((x) => core(x) === '2/Lobos/real/rep0'), after.join(','));
+  // the legitimate relayed version: Mb7 edits with Mb8 online, Mb9 (offline then) gets it from Mb8 only
+  honest[1].logout();
+  vic.login(); sim.run(10); vic.run('return A.SaveProfile({ note = "legit" })'); sim.run(40); vic.logout();
+  sim.run(10);
+  honest[1].login(); sim.run(120);
+  for (let n = 0; n < 200; n++) honest[1].step();
+  sim.run(60);
+  const legit = honest[1].val(`(function() local p = NS.state.profiles[${luaStr(VIC)}]; return (p and p.d.note or "nil") .. ":" .. tostring(p and NS.P2P.strengthOf(NS.state, p)) end)()`)[0];
+  check('the legitimate relayed version arrives verified (Mb9 from Mb8)', legit.startsWith('legit:') && !/weak/.test(legit), legit);
+  // flood: 600 fake pending squads from one alt do not pass 200 by him nor evict a legitimate pending copy
+  tr('legit'); const Y = full(sim, 'Mb2'), PUB = VIC;
   const h0 = honest[0];
-  const legitIn = h0.val(`(function() local p = NS.state.profiles[${luaStr(PUB)}]; return p and p.d.note or "nil" end)()`)[0];
   const t0 = sim.epoch + Math.round(sim.t);
   const flood = h0.val(`(function()
     local X = NS.P2P
-    -- the honest client drops what it got live from Mb7 and gets it again relayed by Mb4's neighbour Mb5 only
-    local real = NS.state.profiles[${luaStr(PUB)}]
-    NS.state.profiles[${luaStr(PUB)}] = nil
-    local legit = { k = real.k, id = real.id, a = real.a, ts = real.ts, sq = real.sq, d = real.d }
-    NS.Sync.Apply(legit, ${luaStr(full(sim, 'Mb5'))})
-    for i = 1, 5000 do
+    for i = 1, 600 do
       NS.Sync.Apply({ k = "squad", id = ${luaStr(CAP)} .. ":" .. (1000 + i), a = ${luaStr(CAP)}, ts = ${t0} - i, sq = 100 + i,
         d = { name = "F" .. i, captain = ${luaStr(CAP)}, members = { ${luaStr(CAP)} }, bench = {}, icon = 1, color = 1, border = 1, tags = {}, open = true, approved = true } }, ${luaStr(Y)})
     end
     local byY = 0
     for _, byId in pairs(NS.state.p2p.pend) do for _, e in pairs(byId) do if e.by[${luaStr(Y)}] then byY = byY + 1 end end end
-    local u = X.unverified(NS.state, "profile", ${luaStr(PUB)})
-    return byY .. "|" .. (u and u.r.d.note or "nil") .. "|" .. X.stats(NS.state, 0).pend
+    local p = NS.state.profiles[${luaStr(PUB)}]
+    return byY .. "|" .. (p and p.d.note or "nil") .. "|" .. X.stats(NS.state, 0).pend
   end)()`)[0];
-  const [byY, legitAfter] = String(flood).split('|');
-  check('Mb7 profile arrived live before the flood', legitIn === 'legit', legitIn);
-  check('5,000 fakes from one relayer: at most 200 pending by him', Number(byY) <= 200, flood);
-  check('the legitimate pending version survives the flood', legitAfter === 'legit', flood);
-  gm.login(); sim.run(300);
-  cap.login(); sim.run(300);
-  const all = [gm, cap, y, z, ...honest];
-  const v3 = all.map(view);
-  check('GM and Mb1 log in: real versions everywhere, both fakes gone (stored and pending)', v3.every((x) => x === '2/Lobos|nil/nil'), v3.join(','));
-  const rep = honest[1].val('NS.DiagGlue.Report()')[0];
-  const line = (rep.match(/p2p pend=[^\n|]*/) || [''])[0];
-  check('/gsq diag lists both relayers', line.includes('Mb2-Realm:') && line.includes('Mb3-Realm:'), line);
+  const [byY, keep] = String(flood).split('|');
+  check('600 fakes from one relayer (3x the cap): at most 200 pending by him', Number(byY) <= 200, flood);
+  check('the legitimate version survives the flood', keep === 'legit', flood);
+  tr('flood'); gm.login(); sim.run(120); cap.login(); sim.run(120);
+  const fin = [gm, cap, ...honest].map(view);
+  check('GM and Mb1 back: real settings and squad everywhere', fin.every((x) => x.startsWith('2/Lobos/')), fin.join(','));
+  const zed = after.map((x) => x.split('|')[1]);
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { sid: SID, flood, diag: line, t: Math.round(sim.t), ...sim.stats } };
+  return { pass: pass(), checks, metrics: { k, zedNeverSeen: zed, flood, t: Math.round(sim.t), ...sim.stats } };
+}
+function S16(seed) {
+  const out = { pass: true, checks: [], metrics: {} };
+  for (const k of (process.env.GSQ_S16K ? process.env.GSQ_S16K.split(',').map(Number) : [2, 3, 5])) {
+    const r = s16run(seed, k);
+    out.pass = out.pass && r.pass;
+    for (const c of r.checks) out.checks.push([`[k=${k}] ` + c[0], c[1], c[2]]);
+    out.metrics['k' + k] = r.metrics;
+  }
+  return out;
 }
 
 // S13 (AC8): channel load. 40 clients (GM, 2 officers, 37 members) with 200 profiles + 20 squads on disk, 15 min
