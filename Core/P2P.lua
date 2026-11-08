@@ -169,7 +169,7 @@ function X.strengthOf(state, rec)
   local st = state.p2p
   local via = st and st.via and st.via[kidOf(rec)]
   if not via then return "strong" end
-  return via.sig == "strong" and "strong" or "weak"
+  return (via.sig == "strong" or via.sig == "cert") and "strong" or "weak"
 end
 
 local function commit(state, rec, ctx, vk, kid, voters)

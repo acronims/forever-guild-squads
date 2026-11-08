@@ -156,6 +156,12 @@ local function selectGuild()
     ns.sigDB = ns.Sig.st(g.sig)
     ns.Sig.resetQueue()
   end
+  -- v1.2 annex G: the certificates of the members we heard in person, and our own (Core/Cert.lua)
+  if ns.Cert then
+    g.cert = type(g.cert) == "table" and g.cert or {}
+    ns.certDB = ns.Cert.st(g.cert)
+    ns.Cert.resetQueue()
+  end
   local saved = type(g.records) == "table" and g.records or {}
   -- v1.1: pending (unverified) versions, relay provenance and repudiation counts, before the records
   if ns.P2P then pcall(ns.P2P.import, ns.state, g.p2p) end
@@ -177,7 +183,9 @@ local function unloadGuild()
   ns.gdb, ns.guildKey, ns.rosterReady = nil, nil, false
   ns.trustDB = nil
   ns.sigDB = nil
+  ns.certDB = nil
   if ns.Sig then ns.Sig.resetQueue() end
+  if ns.Cert then ns.Cert.resetQueue() end
   ns.state = M.newState()
   for _, fn in ipairs(ns.guildUnloadHooks) do pcall(fn) end
   if ns.UI then ns.UI.Dirty() end
@@ -681,7 +689,7 @@ end)
 -- v1.2 annex F: at most one manifest verify per frame, never in combat nor during a boss encounter
 local sigFrame = CreateFrame("Frame")
 sigFrame:SetScript("OnUpdate", function()
-  if not (ns.sigDB and ns.Sig and ns.Sig.pending() > 0) then return end
+  if not (ns.sigDB and ns.Sig and (ns.Sig.pending() > 0 or (ns.Cert and ns.certDB and ns.Cert.pending() > 0))) then return end
   if InCombatLockdown and InCombatLockdown() then return end
   if IsEncounterInProgress and IsEncounterInProgress() then return end
   Sync.SigStep()

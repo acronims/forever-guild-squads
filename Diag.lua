@@ -97,6 +97,11 @@ function G.Report()
     extra[#extra + 1] = ("sig verified=%d pending=%d rejected=%d keys(strong/weak)=%d/%d replaced=%d"):format(
       c.verified or 0, c.pending or 0, c.rejected or 0, st, wk, rep)
   end
+  if ns.Cert and ns.certDB then -- v1.2 annex G: certificates held, keys certified, disputed names
+    local c = ns.Cert.counts(ns.certDB, ns.trustDB)
+    extra[#extra + 1] = ("cert held=%d cert=%d disputed=%d pending=%d rejected=%d"):format(
+      c.held, c.cert, c.disputed, c.pending, c.rejected)
+  end
   if ns.Catalog and ns.Catalog.debugLine then extra[#extra + 1] = ns.Catalog.debugLine() end -- GM catalog
   if ns.RosterDiag then extra[#extra + 1] = ns.RosterDiag() end -- am I in the roster cache (surnames)
   return D.report(db, extra)

@@ -35,6 +35,7 @@ Core\Celebrate.lua
 Core\Ed25519.lua
 Core\Trust.lua
 Core\Sig.lua
+Core\Cert.lua
 Core\P2P.lua
 Core\Diag.lua
 Comm.lua

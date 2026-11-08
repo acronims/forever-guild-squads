@@ -20,7 +20,10 @@ local T = {}
 ns.Trust = T
 local E = ns.Ed25519
 
-T.QUORUM_KEY = 2
+T.QUORUM_KEY = 2               -- 1.1 / early 1.2 only (T.CERTS = false)
+-- v1.2 annex G (BRO 8-nov 04:13, option 1): relayed keys are only candidates; a stranger's key is accepted when >= 2
+-- certificates of issuers heard in person by us list it (Core/Cert.lua -> T.certify, strength "cert")
+T.CERTS = true
 T.MAX_PEND_KEYS = 500          -- relayed keys waiting for quorum on one client
 T.MAX_PEND_RELAYER = 200       -- of those, brought by one relayer (same cap as the P2P pending records)
 T.PEND_TTL = 7 * 86400
@@ -95,13 +98,18 @@ end
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- learning keys
--- returns pk, "strong" | "weak" | nil
+-- returns pk, "strong" | "cert" | "weak" | nil ("cert" = annex G, counts as strong to apply data; "weak" = 1.1 quorum)
 function T.keyOf(db, name)
   local k = db.keys and db.keys[name]
   if not k or (db.contested and db.contested[name]) then return nil end
   return T.unhex(k.pk), k.s
 end
 function T.isStrong(db, name, pk)
+  local k, s = T.keyOf(db, name)
+  return (s == "strong" or s == "cert") and (pk == nil or k == pk)
+end
+-- heard from its owner in person (the only keys that may issue certificates for us, annex G)
+function T.inPerson(db, name, pk)
   local k, s = T.keyOf(db, name)
   return s == "strong" and (pk == nil or k == pk)
 end
@@ -123,10 +131,10 @@ function T.hearOwner(db, name, pk, now)
   local k = db.keys[name]
   local h = hex(pk)
   if k and k.s == "strong" then
-    if k.pk == h then return "same" end
+    if k.pk == h then k.seen = now; return "same" end
     db.n.replaced = (db.n.replaced or 0) + 1
     alert(db, "keychange " .. name)
-    db.keys[name] = { pk = h, s = "strong", t = now, prev = k.pk }
+    db.keys[name] = { pk = h, s = "strong", t = now, seen = now, prev = k.pk }
     db.contested[name] = nil
     dropPend(db, name)
     return "replaced", T.unhex(k.pk)
@@ -143,7 +151,7 @@ function T.hearOwner(db, name, pk, now)
     end
   end
   local wasWeak = k ~= nil and not old
-  db.keys[name] = { pk = h, s = "strong", t = now }
+  db.keys[name] = { pk = h, s = "strong", t = now, seen = now }
   db.contested[name] = nil
   dropPend(db, name)
   if old then return "replaced", old end
@@ -176,7 +184,7 @@ function T.hearRelayed(db, name, pk, relayer, now)
   if k and k.pk == h and not db.contested[name] then
     k.by = k.by or {}
     k.by[relayer] = true
-    return "weak"
+    return k.s
   end
   local byPk = db.pend[name] or {}
   local e = byPk[h]
@@ -187,6 +195,7 @@ function T.hearRelayed(db, name, pk, relayer, now)
     db.pend[name] = byPk
   end
   e.by[relayer] = now
+  if T.CERTS then return "pending" end
   local n = 0
   for _ in pairs(e.by) do n = n + 1 end
   if n < T.QUORUM_KEY then return "pending" end
@@ -201,6 +210,47 @@ function T.hearRelayed(db, name, pk, relayer, now)
   for r in pairs(e.by) do by[r] = true end
   db.keys[name] = { pk = h, s = "weak", t = now, by = by }
   return "weak"
+end
+
+-- annex G: the candidate keys we heard relayed for `name` (raw pk list), the one in use first
+function T.candidates(db, name)
+  T.st(db)
+  local out, seen = {}, {}
+  local k = db.keys[name]
+  if k then out[1] = T.unhex(k.pk); seen[k.pk] = true end
+  for h in pairs(db.pend[name] or {}) do if not seen[h] then seen[h] = true; out[#out + 1] = T.unhex(h) end end
+  return out
+end
+-- annex G: >= 2 certificates of in-person issuers. Never over a key heard in person. Returns the replaced pk, if any.
+function T.certify(db, name, pk, now)
+  T.st(db)
+  local k = db.keys[name]
+  if k and k.s == "strong" then return nil end
+  local h, old = hex(pk), nil
+  if k and k.pk ~= h then old = T.unhex(k.pk) end
+  if k and k.pk == h and k.s == "cert" then return nil end
+  db.keys[name] = { pk = h, s = "cert", t = now, by = k and k.pk == h and k.by or nil }
+  db.contested[name] = nil
+  if db.pend[name] then db.pend[name][h] = nil; if next(db.pend[name]) == nil then db.pend[name] = nil end end
+  if old then alert(db, "cert-changed " .. name) end
+  return old
+end
+-- annex G: an in-person issuer lists another key: "disputed" (shown unverified, nothing new applied, diag). Returns
+-- the key that was in use (not in person), which the caller drops with what it signed.
+function T.dispute(db, name, now)
+  T.st(db)
+  local k = db.keys[name]
+  if k and k.s == "strong" then return nil end
+  if not db.contested[name] then alert(db, "disputed " .. name) end
+  db.contested[name] = db.contested[name] or now
+  if k then
+    db.keys[name] = nil
+    local pend = db.pend[name] or {}
+    pend[k.pk] = pend[k.pk] or { by = k.by or {}, t = now }
+    db.pend[name] = pend
+    return T.unhex(k.pk)
+  end
+  return nil
 end
 
 -- rotation statement: the OLD key signs ROT_TAG | name | new pk

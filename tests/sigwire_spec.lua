@@ -119,6 +119,6 @@ SMOKE_CHECKS = SMOKE_CHECKS or {}
 -- full client (zload fake WoW): /gsq diag carries the signatures line of point 8 (annex F)
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: /gsq diag sig line (verified/pending/rejected, keys strong/weak, replaced)", function(c)
   local rep = c.ns.DiagGlue.Report()
-  ok(type(rep) == "string" and rep:find("sig verified=%d+ pending=%d+ rejected=%d+ keys%(strong/weak%)=%d+/%d+ replaced=%d+"),
+  ok(type(rep) == "string" and rep:find("sig verified=%d+ pending=%d+ rejected=%d+ keys%(strong/weak%)=%d+/%d+ replaced=%d+") and rep:find("cert held=%d+ cert=%d+ disputed=%d+ pending=%d+ rejected=%d+"),
     "diag sig line")
 end }

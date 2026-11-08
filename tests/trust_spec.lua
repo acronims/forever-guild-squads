@@ -27,7 +27,8 @@ test("trust: owner in person = strong, pinned; a different key from the owner in
   ok(T.hearOwner(db, "A-R", "short", NOW) == "bad", "malformed key")
 end)
 
-test("trust: relayed keys need 2 distinct relayers (not the owner) and stay weak", function()
+test("[1.1 quorum] trust: relayed keys need 2 distinct relayers (not the owner) and stay weak", function()
+  T.CERTS = false
   local db = T.st({})
   ok(T.hearRelayed(db, "A-R", pkA, "X-R", NOW) == "pending", "one relayer: pending")
   ok(T.keyOf(db, "A-R") == nil, "no key yet")
@@ -41,7 +42,8 @@ test("trust: relayed keys need 2 distinct relayers (not the owner) and stay weak
   ok(T.hearRelayed(db2, "A-R", pkA, "A-R", NOW) == "new" and T.isStrong(db2, "A-R"), "relayer == owner: strong")
 end)
 
-test("trust: a weak key from alts never beats the owner; the alts become suspects", function()
+test("[1.1 quorum] trust: a weak key from alts never beats the owner; the alts become suspects", function()
+  T.CERTS = false
   local db = T.st({})
   T.hearRelayed(db, "A-R", pkFake, "Alt1-R", NOW)
   ok(T.hearRelayed(db, "A-R", pkFake, "Alt2-R", NOW) == "weak", "two alts plant a weak key for a stranger")
@@ -53,7 +55,8 @@ test("trust: a weak key from alts never beats the owner; the alts become suspect
   ok(T.keyOf(db, "A-R") == pkA and db.suspects["Alt3-R"] == 1, "ignored and counted")
 end)
 
-test("trust: two weak keys with quorum = contested, neither used until the owner", function()
+test("[1.1 quorum] trust: two weak keys with quorum = contested, neither used until the owner", function()
+  T.CERTS = false
   local db = T.st({})
   T.hearRelayed(db, "A-R", pkA, "X-R", NOW); T.hearRelayed(db, "A-R", pkA, "Y-R", NOW)
   T.hearRelayed(db, "A-R", pkFake, "Alt1-R", NOW)
@@ -65,6 +68,7 @@ test("trust: two weak keys with quorum = contested, neither used until the owner
 end)
 
 test("trust: rotation only signed by the old key; reset by hand", function()
+  T.CERTS = true
   local db = T.st({})
   T.hearOwner(db, "A-R", pkA, NOW)
   local skB, pkB = key("B")

@@ -157,7 +157,7 @@ function Sync.KeysFor(batch, to)
     local a = r.a
     local pk
     if a == me then pk = ns.myPk and ns.myPk()
-    else local k, s = T.keyOf(db, a); if s == "strong" then pk = k end end
+    else local k, s = T.keyOf(db, a); if s == "strong" or s == "cert" then pk = k end end
     local tag = (to or "*") .. "|" .. tostring(a)
     if pk and not (ks and ks[a]) and (not keySent[tag] or now - keySent[tag] >= Sync.KEY_EVERY) then
       keySent[tag] = now
@@ -178,7 +178,8 @@ local function learnKeys(payload, from)
     if type(a) == "string" and type(h) == "string" and a ~= (ns.me and ns.me()) and (a == from or (ns.roster and ns.roster(a))) then
       local pk = T.unhex(h)
       if pk then
-        if a == from then Sync.OnOwnerKey(a, T.hearOwner(db, a, pk, now)) else T.hearRelayed(db, a, pk, from, now) end
+        if a == from then Sync.OnOwnerKey(a, T.hearOwner(db, a, pk, now))
+        elseif T.hearRelayed(db, a, pk, from, now) == "pending" then Sync.CertEval(a) end
       end
     end
   end
@@ -187,6 +188,7 @@ end
 -- a weak key that is now the owner's strong key becomes strong
 function Sync.OnOwnerKey(name, res, old)
   local G, db = ns.Sig, ns.sigDB
+  if res == "new" or res == "replaced" then Sync.QueueOwnCert() end
   if res == "replaced" then
     if G and db then G.dropKey(db, name, old) end
     if ns.OnKeyReplaced then ns.OnKeyReplaced(name, old) end
@@ -285,6 +287,7 @@ local function offerManifests(payload, from)
 end
 -- one verification (call once per frame, never in combat): an accepted manifest re-applies that author's pending copies
 function Sync.SigStep()
+  if ns.Cert and ns.certDB and ns.Cert.pending() > 0 then return Sync.CertStep() end
   local G, db = ns.Sig, ns.sigDB
   if not (G and db) or G.pending() == 0 then return nil end
   local okS, who = pcall(G.step, db, function(author)
@@ -295,6 +298,63 @@ function Sync.SigStep()
   end)
   return okS and who or nil
 end
+-- v1.2 annex G: certificates. Ours lists the keys we heard in person (30 days); it goes in our hello and, when it
+-- changes (someone new heard in person), once by GUILD after CERT_DEBOUNCE s. Only the issuer's own certificate is
+-- taken (c.i == sender): an issuer counts only if we heard him in person, so relaying certificates adds nothing.
+Sync.CERT_DEBOUNCE = 30
+local certQueued, certSentN = false, nil
+function Sync.OwnCert()
+  local C, db, T = ns.Cert, ns.certDB, ns.Trust
+  local me = ns.me and ns.me()
+  if not (C and db and T and ns.trustDB and me and ns.mySk and ns.myPk) then return nil end
+  local sk, pk = ns.mySk(), ns.myPk()
+  if not (sk and pk) then return nil end
+  db.own = type(db.own) == "table" and db.own or {}
+  db.own[me] = type(db.own[me]) == "table" and db.own[me] or {}
+  local okC, c = pcall(C.own, db.own[me], ns.trustDB, me, sk, pk, math.floor(serverNow() or 0))
+  return okC and c or nil
+end
+function Sync.QueueOwnCert()
+  if certQueued or not ns.After or not ns.certDB then return end
+  certQueued = true
+  ns.After(Sync.CERT_DEBOUNCE, function()
+    certQueued = false
+    local c = Sync.OwnCert()
+    if not c or c.n == certSentN then return end
+    certSentN = c.n
+    Comm.Send("D", { r = {}, c = { i = c.i, n = c.n, e = c.e, s = c.s } })
+  end)
+end
+function Sync.HelloCert()
+  local c = Sync.OwnCert()
+  if c then certSentN = c.n; return { i = c.i, n = c.n, e = c.e, s = c.s } end
+end
+function Sync.OfferCert(c, from)
+  local C, db = ns.Cert, ns.certDB
+  if not (C and db and type(c) == "table" and c.i == from and from ~= (ns.me and ns.me())) then return end
+  pcall(C.offer, db, c)
+end
+-- a key dropped by the certificates (disputed, or certified to another key): forget what it signed
+local function certDrop(name, old)
+  if ns.Sig and ns.sigDB then ns.Sig.dropKey(ns.sigDB, name, old) end
+  if ns.OnKeyReplaced then ns.OnKeyReplaced(name, old) end
+end
+local function certOk(name) if ns.Sig then ns.Sig.unpark(name) end end
+function Sync.CertEval(name)
+  local C, db = ns.Cert, ns.certDB
+  if not (C and db and ns.trustDB) then return end
+  local okE, r = pcall(C.eval, db, ns.trustDB, name, math.floor(serverNow() or 0), certDrop)
+  if okE and r == "cert" then certOk(name) end
+end
+function Sync.CertStep()
+  local C, db = ns.Cert, ns.certDB
+  if not (C and db and ns.trustDB) or C.pending() == 0 then return nil end
+  local now = math.floor(serverNow() or 0)
+  local okS, who = pcall(C.step, db, ns.trustDB, now)
+  if okS and who then pcall(C.evalAll, db, ns.trustDB, now, certDrop, certOk) end
+  return okS and who or nil
+end
+
 function envelope(batch, to)
   return { r = batch, ks = Sync.KeysFor(batch, to), m = Sync.ManifestsFor(batch, to) }
 end
@@ -460,6 +520,7 @@ function Sync.Hello(again)
   end
   -- v1.2 annex F: our public key, learned strong by whoever hears it from us (WoW guarantees the sender)
   if ns.Trust and ns.myPk then local pk = ns.myPk(); if pk then msg.pk = ns.Trust.hex(pk) end end
+  msg.c = Sync.HelloCert()                          -- v1.2 annex G: our certificate
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
   if ns.After then
@@ -650,6 +711,7 @@ local function onHello(payload, sender)
       Sync.OnOwnerKey(from, ns.Trust.hearOwner(ns.trustDB, from, pk, now))
     end
   end
+  Sync.OfferCert(payload.c, from)
   -- only a fraction of the guild answers, after random jitter, to avoid a reply storm. Officers always answer a
   -- 1.0 / 1.1 requester (their relays are the trusted ones there); a 1.2 requester gets them as one more node.
   local online = ns.onlineCount and ns.onlineCount() or 1
@@ -696,6 +758,7 @@ local function onRecords(payload, sender)
   local from = (ns.fullName and ns.fullName(sender)) or sender
   local t = GetTime and GetTime() or 0
   learnKeys(payload, from)
+  Sync.OfferCert(payload.c, from)
   offerManifests(payload, from)
   for i = 1, math.min(#payload.r, 20) do
     local rec = payload.r[i]

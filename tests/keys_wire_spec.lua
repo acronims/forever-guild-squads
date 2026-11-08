@@ -15,7 +15,7 @@ local function wireNs(me, myPk)
   local ns = { Model = M, Permissions = NS.Permissions, Serialize = S, Trust = T, state = M.newState(), roster = roster,
                rosterReady = true, onlineCount = function() return 1 end, me = function() return me end,
                fullName = function(n) return n end, After = function(_, fn) fn() end, serverTime = function() return T0 end,
-               trustDB = T.st({}), myPk = function() return myPk end,
+               trustDB = T.st({}), myPk = function() return myPk end, Cert = NS.Cert, certDB = NS.Cert.st({}),
                Comm = { Send = function(tag, p, ch, to) sent[#sent + 1] = { tag, p, ch, to } end } }
   loadmod("Sync.lua", ns)
   return ns, sent
@@ -40,7 +40,8 @@ test("keys: the hello carries our pk; a hello's pk is pinned strong for its send
   for _, m in ipairs(sent3) do if m[1] == "H" then ok(m[2].pk == nil, "no pk before we have a key") end end
 end)
 
-test("keys: records carry their authors' strong keys (ks); 2 relayers make a weak key, the owner a strong one", function()
+test("keys: records carry their authors' strong keys (ks); 2 relayers make only a candidate, 2 in-person certificates a cert key (annex G), the owner a strong one", function()
+  NS.Cert.resetQueue()
   -- Bob holds Ali's key strong and replies with Ali's profile: ks has Ali's key
   local nsB, sentB = wireNs("Bob-R", pkB)
   T.hearOwner(nsB.trustDB, "Ali-R", pkA, T0)
@@ -52,19 +53,32 @@ test("keys: records carry their authors' strong keys (ks); 2 relayers make a wea
   -- the newcomer hears it from Bob, then from Cid: weak
   local nsN = wireNs("Eve-R", nil)
   nsN.Sync.OnMessage("D", d, "Bob-R")
-  ok(T.keyOf(nsN.trustDB, "Ali-R") == nil, "one relayer: pending")
+  ok(T.keyOf(nsN.trustDB, "Ali-R") == nil, "one relayer: candidate")
   nsN.Sync.OnMessage("D", d, "Cid-R")
+  ok(T.keyOf(nsN.trustDB, "Ali-R") == nil, "two relayers: still only a candidate (annex G: no quorum of relayers)")
+  -- a candidate is never relayed onward (each relayer vouches only for keys heard in person or certified)
+  local sentN = {}
+  nsN.Comm.Send = function(tag, p) sentN[#sentN + 1] = { tag, p } end
+  nsN.Sync.SendRecords({ M.stored(nsN.state, prof("Ali-R", T0)) or prof("Ali-R", T0) })
+  for _, m in ipairs(sentN) do if m[1] == "D" then ok(not (m[2].ks and m[2].ks["Ali-R"]), "candidate key relayed") end end
+  -- Eve heard Bob and Cid in person; their certificates list Ali's key: cert
+  local C = NS.Cert
+  local skB2 = key("B")
+  local skC, pkC = key("C")
+  T.hearOwner(nsN.trustDB, "Bob-R", pkB, T0); T.hearOwner(nsN.trustDB, "Cid-R", pkC, T0)
+  local cB, cC = C.build("Bob-R", 1, { ["Ali-R"] = pkA }, skB2, pkB), C.build("Cid-R", 1, { ["Ali-R"] = pkA }, skC, pkC)
+  nsN.Sync.OnMessage("D", { r = {}, c = cC }, "Bob-R")
+  ok(C.pending() == 0, "a certificate relayed by someone else than its issuer is ignored")
+  nsN.Sync.OnMessage("D", { r = {}, c = cB }, "Bob-R")
+  nsN.Sync.OnMessage("D", { r = {}, c = cC }, "Cid-R")
+  ok(C.pending() == 2, "both queued for a verify")
+  for _ = 1, 3 do nsN.Sync.SigStep() end
   local k, s = T.keyOf(nsN.trustDB, "Ali-R")
-  ok(k == pkA and s == "weak", "two relayers: weak")
+  ok(k == pkA and s == "cert", "two in-person certificates: cert")
   -- keys for names without a record in the message, or outside the roster, are ignored
   nsN.Sync.OnMessage("D", { r = d.r, ks = { ["Gm-R"] = T.hex(pkF), ["Zed-R"] = T.hex(pkF) } }, "Bob-R")
   nsN.Sync.OnMessage("D", { r = d.r, ks = { ["Gm-R"] = T.hex(pkF), ["Zed-R"] = T.hex(pkF) } }, "Cid-R")
   ok(T.keyOf(nsN.trustDB, "Gm-R") == nil and T.keyOf(nsN.trustDB, "Zed-R") == nil, "unrelated keys ignored")
-  -- weak keys are never relayed onward (each relayer vouches only for keys heard in person)
-  local _, sentN = nsN, {}
-  nsN.Comm.Send = function(tag, p) sentN[#sentN + 1] = { tag, p } end
-  nsN.Sync.SendRecords({ M.stored(nsN.state, prof("Ali-R", T0)) or prof("Ali-R", T0) })
-  for _, m in ipairs(sentN) do if m[1] == "D" then ok(not (m[2].ks and m[2].ks["Ali-R"]), "weak key relayed") end end
   -- the owner's own records carry his key: heard in person = strong
   local nsA, sentA = wireNs("Ali-R", pkA)
   ok(nsA.Sync.Apply(prof("Ali-R", T0 + 1), "Ali-R"))

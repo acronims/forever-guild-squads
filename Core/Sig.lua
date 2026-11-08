@@ -72,8 +72,20 @@ function G.st(db)
   db.cnt = type(db.cnt) == "table" and db.cnt or { verified = 0, rejected = 0 }
   return db
 end
-local queue, queued = {}, {}
-function G.resetQueue() queue, queued = {}, {} end
+local queue, queued, parked = {}, {}, {}
+local nParked = 0
+G.MAX_PARKED = 300             -- manifests of authors whose key we do not hold yet (annex G: it may get certified)
+function G.resetQueue() queue, queued, parked, nParked = {}, {}, {}, 0 end
+-- the author's key just became usable (certified, annex G): his parked manifest gets its verify
+function G.unpark(name)
+  local q = parked[name]
+  if not q then return false end
+  parked[name], nParked = nil, nParked - 1
+  if queued[q.tag] or #queue >= G.MAX_QUEUE then return false end
+  queued[q.tag] = true
+  queue[#queue + 1] = q
+  return true
+end
 function G.pending() return #queue end
 
 -- a manifest heard from anyone: queued for verification unless we already hold this or a newer one
@@ -105,12 +117,15 @@ function G.step(db, onAccept)
   if cur and cur.n >= m.n then return nil end
   local pk, strength = q.keyOf(m.a)
   if not pk then
-    -- no key yet: it may arrive later (hello / ks); the next copy of the manifest gets another try
+    -- no key yet: it may arrive later (hello / ks / certificates, annex G): parked, the newest per author
+    local p = parked[m.a]
+    if p then if p.m.n < m.n then parked[m.a] = q end
+    elseif nParked < G.MAX_PARKED then parked[m.a] = q; nParked = nParked + 1 end
     return nil
   end
   if not E.verify(pk, G.statement(m), unhex(m.s)) then db.cnt.rejected = db.cnt.rejected + 1; return nil end
   -- a weak key never replaces what a strong key signed
-  if cur and cur.strength == "strong" and strength ~= "strong" then db.cnt.rejected = db.cnt.rejected + 1; return nil end
+  if cur and cur.strength ~= "weak" and strength == "weak" then db.cnt.rejected = db.cnt.rejected + 1; return nil end
   db.man[m.a] = { n = m.n, h = m.h, s = m.s, strength = strength, pk = hex(pk) }
   db.cnt.verified = db.cnt.verified + 1
   if onAccept then onAccept(m.a, strength) end
