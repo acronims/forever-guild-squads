@@ -213,11 +213,14 @@ test("hello pagination: a fresh client gets 100 squads + 100 profiles in <= 5 ro
   end
   local ros = makeRoster(rk)
   local ns, sent = syncNs(A, "Gm-R", ros)   -- the responder is the GM => trusted relay
+  local tNow = T0
+  ns.serverTime = function() return tNow end   -- rounds are >= 30 s apart (sec F5: one reply per HELLO_MIN)
   local B = M.newState()
   local rounds = 0
   local nB = function() local n = 0 for _ in pairs(B.squads) do n = n + 1 end for _ in pairs(B.profiles) do n = n + 1 end return n end
   while nB() < 200 and rounds < 10 do
     rounds = rounds + 1
+    tNow = tNow + 35
     local h = {}
     for _, k in ipairs({ "settings", "squad", "profile", "reject", "boss", "annul" }) do h[k] = M.bucketHashes(B, k) end
     for i = #sent, 1, -1 do sent[i] = nil end

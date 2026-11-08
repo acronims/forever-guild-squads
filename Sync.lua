@@ -215,9 +215,24 @@ local function learnKeys(payload, from)
 end
 -- what hearOwner said; "replaced" drops what the old weak key signed (manifests, annex F); a manifest verified with
 -- a weak key that is now the owner's strong key becomes strong
+-- sec F4: the key heard in person always wins (BRO 8-nov 03:09), but a name flipping its key every few seconds must
+-- not make every client re-sign and broadcast its certificate each time: one broadcast per name per FLIP_MIN s for
+-- "replaced" (the certificate still lists the latest key at our next broadcast or whispered reply)
+Sync.FLIP_MIN = 600
+local flipAt = {}
 function Sync.OnOwnerKey(name, res, old)
   local G, db = ns.Sig, ns.sigDB
-  if res == "new" or res == "replaced" then Sync.QueueOwnCert() end
+  if res == "new" or res == "replaced" then
+    Sync.DropOwnCertCache()
+    local t = serverNow() or 0
+    local last = res == "replaced" and flipAt[name]
+    if last and t >= last and t - last < Sync.FLIP_MIN then
+      Sync.stats.flipCapped = (Sync.stats.flipCapped or 0) + 1
+    else
+      if res == "replaced" then flipAt[name] = t end
+      Sync.QueueOwnCert()
+    end
+  end
   if res == "replaced" then
     if G and db then G.dropKey(db, name, old) end
     if ns.OnKeyReplaced then ns.OnKeyReplaced(name, old) end
@@ -363,18 +378,29 @@ Sync.CERT_DEBOUNCE = 30
 Sync.CERT_REHELLO = 60
 Sync.CERT_REHELLO_MAX = 10
 local certQueued, certSentN, certRehelloAt, certRehelloTo, certRehelloN = false, nil, nil, {}, 0
+-- sec F5: C.own hashes every key heard in person; a hello flood must not run it per hello. Cached OWN_CERT_TTL s,
+-- dropped when a key heard in person changes (Sync.OnOwnerKey -> QueueOwnCert) or our own key changes
+Sync.OWN_CERT_TTL = 10
+local ownCache
 function Sync.OwnCert()
   local C, db, T = ns.Cert, ns.certDB, ns.Trust
   local me = ns.me and ns.me()
   if not (C and db and T and ns.trustDB and me and ns.mySk and ns.myPk) then return nil end
   local sk, pk = ns.mySk(), ns.myPk()
   if not (sk and pk) then return nil end
+  local t = serverNow() or 0
+  if ownCache and ownCache.pk == pk and ownCache.me == me and ownCache.db == db and t >= ownCache.t
+    and t - ownCache.t < Sync.OWN_CERT_TTL then return ownCache.c end
   db.own = type(db.own) == "table" and db.own or {}
   db.own[me] = type(db.own[me]) == "table" and db.own[me] or {}
-  local okC, c = pcall(C.own, db.own[me], ns.trustDB, me, sk, pk, math.floor(serverNow() or 0))
-  return okC and c or nil
+  local okC, c = pcall(C.own, db.own[me], ns.trustDB, me, sk, pk, math.floor(t))
+  c = okC and c or nil
+  ownCache = { pk = pk, me = me, db = db, t = t, c = c }
+  return c
 end
+function Sync.DropOwnCertCache() ownCache = nil end
 function Sync.QueueOwnCert()
+  ownCache = nil
   if certQueued or not ns.After or not ns.certDB then return end
   certQueued = true
   ns.After(Sync.CERT_DEBOUNCE, function()
@@ -817,6 +843,8 @@ local function isOfficerMe()
   return P and ns.me and ns.roster and P.isOfficer(ns.roster, ns.me(), M.settingsOf(ns.state)) or false
 end
 
+Sync.HELLO_MIN = 20
+local helloReplyAt = {}           -- requester -> serverNow of the last hello we considered answering
 local function onHello(payload, sender)
   if type(payload) ~= "table" or type(payload.h) ~= "table" then return end
   local from = (ns.fullName and ns.fullName(sender)) or sender
@@ -842,6 +870,12 @@ local function onHello(payload, sender)
   Sync.stats.hellos = Sync.stats.hellos + 1
   -- v1.2 (D2): officers keep answering every 1.0 / 1.1 requester; a 1.2 requester gets them as one more node
   local always = officer and not (X and X.protoOf(payload) >= 2)
+  -- sec F5: one reply per requester per HELLO_MIN s (a client's own hellos are >= 30 s apart; a flood from one
+  -- name, with or without cu, gets no more). Officers answering a 1.0 / 1.1 requester keep the same limit.
+  local tnow = serverNow() or 0
+  local lastH = helloReplyAt[from]
+  if lastH and tnow >= lastH and tnow - lastH < Sync.HELLO_MIN then Sync.stats.helloCapped = (Sync.stats.helloCapped or 0) + 1; return end
+  helloReplyAt[from] = tnow
   if not always and math.random() > p then return end
   Sync.stats.replied = Sync.stats.replied + 1
   if X and (tonumber(payload.p2) or 0) >= 2 and from ~= (ns.me and ns.me()) and not Sync.CertKnownBy(payload.cn) then

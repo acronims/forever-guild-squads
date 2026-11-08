@@ -802,6 +802,7 @@ SlashCmdList.GUILDSQUADS = function(msg)
     elseif sub == "reset" and who and who ~= "" and ns.Trust and ns.trustDB then
       local name = (ns.fullName and ns.fullName(who)) or who
       ns.Trust.reset(ns.trustDB, name)
+      if ns.Sync and ns.Sync.DropOwnCertCache then ns.Sync.DropOwnCertCache() end
       print_((L.TRUST_RESET or "Clave olvidada: %s"):format(name))
     else
       print_(L.TRUST_USAGE or "/gsq trust reset <nombre>")

@@ -138,6 +138,7 @@ test("keys: a 1.2 replier re-sends its certificate by WHISPER to the requester (
   eq(#certsSent(), 0, "empty: not re-sent")
   -- Bob meets Ali in person; Eve (offline when it changed) says hello: Bob whispers it to Eve
   T.hearOwner(nsB.trustDB, "Ali-R", pkA, now)
+  nsB.Sync.DropOwnCertCache()        -- what Sync.OnOwnerKey does when the key is heard through a hello (sec F5 cache)
   now = now + 5
   hello("Eve-R")
   local cs = certsSent()
@@ -291,4 +292,59 @@ test("keys AF5: /gsq trust newkey signs the new key with the old one; our relaye
   ok(ks and ks["Ali-R"] == T.hex(pkF), "own new key")
   ok(kr and T.rotate(T.st({ keys = { ["Ali-R"] = { pk = T.hex(pkA), s = "strong", t = T0 } } }), "Ali-R", pkF, T.unhex(kr["Ali-R"]), T0),
      "own rotation verifies with the old key")
+end)
+
+test("keys: F5: a flood of hellos from one name gets at most one reply per HELLO_MIN; our certificate is not recomputed on every hello", function()
+  NS.Cert.resetQueue()
+  local skB = key("B")
+  local now = T0
+  local nsB = wireNs("Bob-R", pkB, true)
+  nsB.serverTime = function() return now end
+  nsB.mySk = function() return skB end
+  local owns = 0
+  local C2 = {}
+  for k, v in pairs(NS.Cert) do C2[k] = v end
+  C2.own = function(...) owns = owns + 1; return NS.Cert.own(...) end
+  nsB.Cert = C2
+  T.hearOwner(nsB.trustDB, "Ali-R", pkA, now)
+  ok(type(nsB.Sync.HELLO_MIN) == "number", "Sync.HELLO_MIN exists")
+  local r0 = nsB.Sync.stats.replied
+  for _ = 1, 30 do nsB.Sync.OnMessage("H", { h = {}, p2 = 2, cu = 1, cn = "" }, "Eve-R") end
+  eq(nsB.Sync.stats.replied - r0, 1, "30 hellos from Eve in a burst: one reply")
+  now = now + (nsB.Sync.HELLO_MIN or 0) + 1
+  nsB.Sync.OnMessage("H", { h = {}, p2 = 2, cn = "" }, "Eve-R")
+  eq(nsB.Sync.stats.replied - r0, 2, "after HELLO_MIN Eve is answered again")
+  -- 30 hellos from 30 names at the same moment: the certificate is computed a few times, not 30
+  owns = 0
+  for i = 1, 30 do nsB.Sync.OnMessage("H", { h = {}, p2 = 2, cn = "" }, "X" .. i .. "-R") end
+  ok(owns <= 2, "C.own ran " .. owns .. " times for 30 hellos")
+end)
+
+test("keys: F4: a name flipping its key in person every few seconds triggers at most one certificate broadcast per FLIP_MIN", function()
+  NS.Cert.resetQueue()
+  local skB = key("B")
+  local now = T0
+  local nsB, sentB = wireNs("Bob-R", pkB, true)
+  nsB.serverTime = function() return now end
+  nsB.mySk = function() return skB end
+  local function guildCerts()
+    local n = 0
+    for _, m in ipairs(sentB) do if m[1] == "D" and m[2].c and m[3] == nil then n = n + 1 end end
+    return n
+  end
+  for i = 1, 30 do
+    local _, pk = key("flip" .. i)
+    nsB.Sync.OnMessage("H", { h = {}, pk = T.hex(pk) }, "Eve-R")
+    now = now + 5
+  end
+  local kpk = T.keyOf(nsB.trustDB, "Eve-R")
+  local _, last = key("flip30")
+  ok(kpk == last, "in person still wins: Eve's last key is the one we hold")
+  ok(guildCerts() <= 2, "GUILD certificate broadcasts: " .. guildCerts())
+  -- after FLIP_MIN a flip is broadcast again
+  now = now + (nsB.Sync.FLIP_MIN or 0) + 1
+  local before = guildCerts()
+  local _, pk = key("flip31")
+  nsB.Sync.OnMessage("H", { h = {}, pk = T.hex(pk) }, "Eve-R")
+  eq(guildCerts(), before + 1, "after FLIP_MIN: broadcast")
 end)
