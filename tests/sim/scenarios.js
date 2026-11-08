@@ -835,6 +835,65 @@ function S16(seed) {
   return out;
 }
 
+// S16b (annex G, AF7): 2 alts known in person by the honest clients certify the SAME fake key for Z (Mb11). Mb10
+// met Z in person and certifies his real key: with that honest certificate against, Z's key is "disputed" and
+// nothing new of Z is applied. When Z comes online (in person), his own records apply and the fake ones are dropped.
+function S16b(seed) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 1, 12);
+  const gm = sim.client('Gm');
+  const alts = ['Mb2', 'Mb3'].map((n) => sim.client(n));
+  const [h1, h2, wit] = ['Mb8', 'Mb9', 'Mb10'].map((n) => sim.client(n));
+  const z = sim.client('Mb11');
+  const ZED = full(sim, 'Mb11');
+  for (const c of [gm, h1, h2, wit, ...alts]) { c.login(); sim.run(5); }
+  check('GM settings written', gmSettings(gm));
+  sim.run(60);
+  for (const c of [gm, h1, h2, ...alts]) c.logout();
+  // Z meets only Mb10 in person, saves his profile, leaves
+  z.login(); sim.run(10); z.run('return A.SaveProfile({ note = "realz" })'); sim.run(60); z.logout();
+  sim.run(30);
+  for (const c of [h1, h2, ...alts]) { c.login(); sim.run(5); }
+  sim.run(120);
+  const keyView = (c) => c.val(`(function() local T, db = NS.Trust, NS.trustDB
+    local pk, s = T.keyOf(db, ${luaStr(ZED)}); local nc = #T.candidates(db, ${luaStr(ZED)})
+    local p = NS.state.profiles[${luaStr(ZED)}]
+    return tostring(s) .. "/" .. (db.contested[${luaStr(ZED)}] and "contested" or "-") .. "/c" .. nc .. "/" .. (p and (tostring(p.d.note) .. ":" .. tostring(NS.P2P.strengthOf(NS.state, p))) or "nil") end)()`)[0];
+  const pendZ = (c) => c.val(`(function() local n = 0 for kid, byId in pairs(NS.state.p2p and NS.state.p2p.pend or {}) do for _, e in pairs(byId) do if e.r.a == ${luaStr(ZED)} then n = n + 1 end end end return n end)()`)[0];
+  const before = [h1, h2].map(keyView).concat(['wit:' + keyView(wit), 'pendZ:' + [h1, h2].map(pendZ).join('/')]);
+  const FTS = sim.epoch + Math.round(sim.t) + 200;
+  // both alts: the same fake key for Z, a fake profile of Z signed with it, and a certificate (signed with the alt's
+  // own key, known in person) that lists hash12(Z | fake key) next to the keys the alt heard in person
+  const forge = (i) => `(function()
+    local E, G, C, T = NS.Ed25519, NS.Sig, NS.Cert, NS.Trust
+    local fsk = string.rep(string.char(77), 32); local fpk = E.publicKey(fsk)
+    local recs = { { k = "profile", id = ${luaStr(ZED)}, a = ${luaStr(ZED)}, ts = ${FTS}, sq = 9005, d = { note = "fantasma", level = 60 } } }
+    local heard = {}
+    for name, k in pairs(NS.trustDB.keys) do if k.s == "strong" then heard[name] = T.unhex(k.pk) end end
+    heard[${luaStr(ZED)}] = fpk
+    local osk, opk = T.own(GuildSquadsDB.ownKeys[NS.me()])
+    local c = C.build(NS.me(), ${FTS} + ${i}, heard, osk, opk)
+    NS.Comm.Send("D", { r = recs, ks = { [${luaStr(ZED)}] = T.hex(fpk) }, m = { G.build(${luaStr(ZED)}, 2000000000, recs, fsk, fpk) },
+      c = { i = c.i, n = c.n, e = c.e, s = c.s } })
+    return true end)()`;
+  for (let i = 0; i < alts.length; i++) { alts[i].val(forge(i)); sim.run(2); }
+  sim.run(120);
+  for (let n = 0; n < 200; n++) for (const c of [h1, h2]) c.step();
+  sim.run(60);
+  for (let n = 0; n < 50; n++) for (const c of [h1, h2]) c.step();
+  const after = [h1, h2].map(keyView);
+  check('2 alts + 1 honest certificate against: Z disputed on the honest clients', after.every((x) => /contested/.test(x) || /^disputed/.test(x)), after.join(','));
+  check('nothing fake of Z applied (no "fantasma")', after.every((x) => !/fantasma/.test(x)), after.join(','));
+  // Z online with Mb8 and Mb9: in person wins
+  z.login(); sim.run(10); z.run('return A.SaveProfile({ note = "realz2" })'); sim.run(90);
+  for (let n = 0; n < 200; n++) for (const c of [h1, h2]) c.step();
+  const fin = [h1, h2].map(keyView);
+  check('Z in person: his key strong and his own profile applied, the fake dropped', fin.every((x) => x.startsWith('strong/') && /realz2:strong/.test(x)), fin.join(','));
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { before, after, fin, t: Math.round(sim.t), ...sim.stats } };
+}
+
 // S13 (AC8): channel load. 40 clients (GM, 2 officers, 37 members) with 200 profiles + 20 squads on disk, 15 min
 // of profile edits: messages per minute per client of v1.1 vs the reference build (GSQ_REF, default v1.0.1 = 406029a)
 // with the same seed, the same MAX_REPLY and the same queue. Second run without GM / officers online. During an
@@ -1121,4 +1180,4 @@ function S18(seed) {
   return { pass: pass(), checks, metrics: { keys, certHeld, verified, total, sqVerified, sqTotal, maxOnline, sessions, t: Math.round(sim.t), ...sim.stats } };
 }
 
-module.exports = { S18, S8g, S15, S16, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+module.exports = { S18, S8g, S15, S16, S16b, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
