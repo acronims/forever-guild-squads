@@ -31,7 +31,9 @@ test("live records: sender must be the author; relays need an officer (announcem
   local okA, why = M.apply(st2, rec, { roster = roster, sender = "Eve-R" })
   -- v1.1: a profile is authorial; a single non-officer relay leaves it pending (unverified), never applied
   ok(not okA); eq(why, "pending", "non-officer relay of an unannounced record"); eq(st2.profiles["Ali-R"], nil)
-  ok(M.apply(st2, rec, { roster = roster, sender = "Off-R" }), "officer relay accepted")
+  -- v1.2 annex F: an officer's relay is not trusted on its own any more (needs the author's signature)
+  eq(select(2, M.apply(st2, rec, { roster = roster, sender = "Off-R" })), "pending", "officer relay without signature waits")
+  ok(M.apply(st2, rec, { roster = roster, trusted = true }), "applied once trusted (signed)")
   local st3 = M.newState()
   local ann = { ["Ali-R"] = { [M.versionHash(rec)] = true } }
   local okN, whyN = M.apply(st3, rec, { roster = roster, sender = "Bob-R", announced = function(a, h) return ann[a] and ann[a][h] end })
@@ -221,7 +223,8 @@ test("hello pagination: a fresh client gets 100 squads + 100 profiles in <= 5 ro
     for i = #sent, 1, -1 do sent[i] = nil end
     ns.Sync.OnMessage("H", { h = h }, "New-R")
     for _, m in ipairs(sent) do
-      if m[1] == "D" then for _, r in ipairs(m[2].r) do M.apply(B, r, { roster = ros, sender = "Gm-R" }) end end
+      -- pagination only: the signatures that make the GM's relay valid are in sigrules_spec (trusted here)
+      if m[1] == "D" then for _, r in ipairs(m[2].r) do M.apply(B, r, { roster = ros, trusted = true }) end end
     end
   end
   eq(nB(), 200, "records known by the fresh client")

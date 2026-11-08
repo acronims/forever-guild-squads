@@ -1,0 +1,88 @@
+-- v1.2 annex F (BRO 8-nov 00:46 + 01:02): the record rules with signed manifests. A relayed record (authorial or
+-- authority) is applied only if the last verified manifest of its author lists it; there is no quorum for records
+-- any more (only for keys), officers relaying do not skip the signature, a weak key never replaces nor deletes what
+-- was heard / signed strong, a repudiate or an authority record needs a strong key. Spec: docs/SPEC-v1.2-p2p.md (AF2).
+local M, X, G, E = NS.Model, NS.P2P, NS.Sig, NS.Ed25519
+local T0 = 1795000000
+local NOW = T0 + 5000
+local RANKS = { ["Gm-R"] = 0, ["Of-R"] = 1, ["Au-R"] = 5, ["Y-R"] = 5, ["Z-R"] = 5, ["W-R"] = 5, ["Cap-R"] = 5 }
+local roster = makeRoster(RANKS)
+local function copy(t) if type(t) ~= "table" then return t end local o = {} for k, v in pairs(t) do o[k] = copy(v) end return o end
+local function ap(s, r, sender) return M.apply(s, copy(r), { roster = roster, sender = sender, now = NOW }) end
+local function prof(a, ts, d) return { k = "profile", id = a, a = a, ts = ts, sq = 1, d = d or { note = "hola" } } end
+local function key(tag) local sk = E.sha512("sigrules " .. tag):sub(1, 32) return sk, E.publicKey(sk) end
+local KEYS = {}
+for _, n in ipairs({ "Au-R", "Cap-R", "Gm-R", "Y-R" }) do local sk, pk = key(n); KEYS[n] = { sk = sk, pk = pk } end
+local function newState()
+  G.resetQueue()
+  local s = M.newState()
+  s.sigdb = G.st({})
+  ok(ap(s, { k = "settings", id = "settings", a = "Gm-R", ts = T0, sq = 1,
+             d = { squadsEnabled = true, officerRanks = { 1 }, rlList = { "Cap-R" } } }))
+  return s
+end
+-- the author signs a manifest over `recs`; the receiver knows his key as `strength` (and signer = whose sk signs)
+local function sign(s, author, n, recs, strength, signer)
+  local k = KEYS[signer or author]
+  local m = G.build(author, n, recs, k.sk, k.pk)
+  G.offer(s.sigdb, m, function(name) if name == author then return k.pk, strength or "strong" end end)
+  return G.step(s.sigdb)
+end
+
+test("sig rules: a relayed record without its author's signature is never applied (no quorum, not even officers)", function()
+  ok(X.SIGNED == true, "P2P runs with signatures (X.SIGNED)")
+  local s = newState()
+  local p = prof("Au-R", T0 + 10, { note = "falso" })
+  for _, by in ipairs({ "Y-R", "Z-R", "W-R", "Of-R", "Gm-R" }) do
+    local okA, why = ap(s, p, by)
+    eq(okA, false, "relayed by " .. by .. ": not applied"); eq(why, "pending")
+  end
+  eq(s.profiles["Au-R"], nil, "five relayers (two officers among them) do not make a quorum any more")
+  local sq = { k = "squad", id = "A", a = "Cap-R", ts = T0 + 1, sq = 1, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R", "Y-R" } } }
+  for _, by in ipairs({ "Y-R", "Z-R", "W-R", "Of-R" }) do eq(select(2, ap(s, sq, by)), "pending") end
+  eq(s.squads["A"], nil, "an authority record relayed by anyone needs the owner's signature")
+end)
+
+test("sig rules: one relayer is enough with a strong manifest; a pending copy applies once the manifest verifies", function()
+  local s = newState()
+  local p = prof("Au-R", T0 + 10, { note = "real" })
+  eq(select(2, ap(s, p, "Y-R")), "pending")
+  eq(sign(s, "Au-R", 1, { p }), "Au-R", "manifest verified")
+  eq(X.retry(s, "Au-R", { roster = roster, now = NOW }), 1, "the pending copy is re-offered and applied")
+  eq(s.profiles["Au-R"] and s.profiles["Au-R"].d.note, "real")
+  local p2 = prof("Au-R", T0 + 20, { note = "cambiado por Y" })
+  eq(select(2, ap(s, p2, "Y-R")), "pending", "a version not in the manifest waits")
+  eq(s.profiles["Au-R"].d.note, "real")
+  local sq = { k = "squad", id = "A", a = "Cap-R", ts = T0 + 1, sq = 1, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R" } } }
+  sign(s, "Cap-R", 1, { sq })
+  local okA, why = ap(s, sq, "Z-R")
+  ok(okA, "the captain's signed squad applies from one relayer: " .. tostring(why))
+end)
+
+test("sig rules: a weak key never replaces nor deletes what is strong; repudiate and authority need strong", function()
+  local s = newState()
+  ok(ap(s, prof("Au-R", T0 + 10, { note = "en persona" }), "Au-R"), "heard from the author in person")
+  local fake = prof("Au-R", T0 + 50, { note = "de la debil" })
+  sign(s, "Au-R", 1, { fake }, "weak", "Y-R")     -- a weak key brought by 2 alts, really Y's key
+  local okA, why = ap(s, fake, "Z-R")
+  eq(okA, false, "not applied over the strong copy"); eq(why, "weak")
+  eq(s.profiles["Au-R"].d.note, "en persona")
+  local rep = X.repudiation(s.profiles["Au-R"], "Au-R", T0 + 60, 2)
+  sign(s, "Au-R", 2, { fake, rep }, "weak", "Y-R")
+  eq(select(2, ap(s, rep, "Z-R")), "weak", "a weak repudiate deletes nothing")
+  ok(s.profiles["Au-R"], "the real profile is still there")
+  local sq = { k = "squad", id = "B", a = "Cap-R", ts = T0 + 1, sq = 1, d = { name = "Beta", captain = "Cap-R", members = { "Cap-R" } } }
+  sign(s, "Cap-R", 1, { sq }, "weak")
+  eq(select(2, ap(s, sq, "Z-R")), "weak", "a squad signed by a weak key is not applied")
+  eq(s.squads["B"], nil)
+  -- a weak signature on a profile nobody holds is shown as unverified (applied, marked weak) and later yields
+  local s2 = newState()
+  local w = prof("W-R", T0 + 10, { note = "w" })
+  local skW, pkW = key("W-R")
+  G.offer(s2.sigdb, G.build("W-R", 1, { w }, skW, pkW), function() return pkW, "weak" end); G.step(s2.sigdb)
+  ok(ap(s2, w, "Z-R"), "a weak-signed authorial record with nothing strong under it is applied")
+  eq(X.strengthOf(s2, s2.profiles["W-R"]), "weak", "marked weak (shown unverified)")
+  ok(ap(s2, prof("W-R", T0 + 5, { note = "real, en persona" }), "W-R"), "the owner in person replaces a weak copy even if older")
+  eq(s2.profiles["W-R"].d.note, "real, en persona")
+  eq(X.strengthOf(s2, s2.profiles["W-R"]), "strong")
+end)

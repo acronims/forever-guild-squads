@@ -44,6 +44,7 @@ const ORDER = [
   'trust_spec.lua',
   'keys_wire_spec.lua',
   'sig_spec.lua',
+  'sigrules_spec.lua',
   'counters_spec.lua',
   'observations_spec.lua',
   'races_spec.lua',
@@ -69,7 +70,8 @@ if (unlisted.length || missing.length) {
   console.error('tests/run.js ORDER is out of date. Not listed: ' + (unlisted.join(', ') || '-') + '. Missing: ' + (missing.join(', ') || '-'));
   process.exit(2);
 }
-const specs = ORDER.map((f) => 'tests/' + f);
+const only = process.env.GSQ_ONLY ? process.env.GSQ_ONLY.split(',') : null; // iterate on a few specs
+const specs = ORDER.filter((f) => !only || only.includes(f)).map((f) => 'tests/' + f);
 const all = [...core, ...wow, ...specs, 'GuildSquads.toc'];
 setGlobalTable('SOURCES', all.map((f) => [f, read(f)]));
 setGlobalTable('CORE', core.map((f, i) => [i + 1, f]));

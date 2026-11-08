@@ -20,6 +20,17 @@ local function newState()
   return s
 end
 
+-- v1.2 annex F: records are accepted by signature (tests/sigrules_spec.lua). The tests below marked [1.1 quorum]
+-- still cover the 1.1 quorum path (X.SIGNED = false), pending their rewrite with signed manifests (AF2).
+local function legacyTest(name, fn)
+  test(name .. " [1.1 quorum]", function()
+    X.SIGNED = false
+    local okR, err = pcall(fn)
+    X.SIGNED = true
+    if not okR then error(err, 0) end
+  end)
+end
+
 test("p2p: the closed list of authorial kinds (annex A of the spec)", function()
   ok(X ~= nil, "Core/P2P.lua loaded (NS.P2P)")
   for _, k in ipairs({ "profile", "rsvp", "witness", "presence", "reject", "repudiate" }) do ok(M.P2P_KINDS[k], k) end
@@ -50,7 +61,7 @@ test("AC2: a forged profile relayed by one member stays unverified and never cou
 end)
 
 -- AC3: two distinct relayers, same version -> verified. Two different versions -> none until the author
-test("AC3: quorum of 2 distinct relayers applies; two versions apply nothing until the author", function()
+legacyTest("AC3: quorum of 2 distinct relayers applies; two versions apply nothing until the author", function()
   local s = newState()
   local v1 = prof("Au-R", T0 + 10, { note = "uno" })
   local okA, why = ap(s, v1, "Y-R"); eq(okA, false); eq(why, "pending")
@@ -73,7 +84,7 @@ test("AC3: quorum of 2 distinct relayers applies; two versions apply nothing unt
 end)
 
 -- AC4 (unit): the author's live version wins over any relay; the author's own client repudiates a fake
-test("AC4: the author's live version wins, a repudiate removes the fake and counts the relayers", function()
+legacyTest("AC4: the author's live version wins, a repudiate removes the fake and counts the relayers", function()
   local s = newState()
   local fake = prof("Au-R", T0 + 50, { note = "falso" })
   ap(s, fake, "Y-R"); ok(ap(s, fake, "Z-R"), "two colluding relayers get it verified")
@@ -124,7 +135,7 @@ end)
 
 -- AC5 (1.1) -> v1.2 AC1/AC4 (D1 = 2, BRO 7-nov 19:04): authority records relayed by a non-officer wait pending until
 -- QUORUM_AUTH = 2 distinct relayers
-test("v1.2: authority kinds relayed by a non-officer stay pending, never stored, until 2 distinct relayers", function()
+legacyTest("v1.2: authority kinds relayed by a non-officer stay pending, never stored, until 2 distinct relayers", function()
   local s = newState()
   local recs = {
     { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 5, sq = 2, d = { squadsEnabled = false } },
@@ -155,7 +166,7 @@ test("v1.2: authority kinds relayed by a non-officer stay pending, never stored,
 end)
 
 -- AC5b: captains are authority nodes of their own squad only
-test("AC5b: the captain of A verifies A's records at once, not B's; an ex-captain stops being a node", function()
+legacyTest("AC5b: the captain of A verifies A's records at once, not B's; an ex-captain stops being a node", function()
   local s = newState()
   ok(ap(s, { k = "squad", id = "A", a = "Cap-R", ts = T0 + 1, sq = 1, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R", "Au-R", "Z-R" } } }))
   ok(ap(s, { k = "squad", id = "B", a = "CapB-R", ts = T0 + 1, sq = 1, d = { name = "Beta", captain = "CapB-R", members = { "CapB-R", "W-R" } } }))
@@ -258,7 +269,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.1: an unverified profile is listed grey 
 end }
 
 -- v1.2 AC4: the GM repudiates a forged settings verified by quorum; a flooding relayer is capped at 200 pending
-test("v1.2: repudiate works on authority kinds (settings verified by 2 relayers is removed, relayers counted)", function()
+legacyTest("v1.2: repudiate works on authority kinds (settings verified by 2 relayers is removed, relayers counted)", function()
   local s = newState()
   local fake = { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 50, sq = 7, d = { squadsEnabled = false } }
   for _, n in ipairs({ "Y-R", "Z-R" }) do ap(s, fake, n) end
@@ -353,7 +364,7 @@ end }
 
 -- H4 (QA 1.1, baja): X.before() dropped st.via[kid] as soon as the author spoke, even when the author's record then
 -- failed to apply (dup); the relayed version lost its relayers (a later repudiate of it counts them)
-test("H4: a failed apply of the author's own record keeps the relay trail (st.via) of the relayed version", function()
+legacyTest("H4: a failed apply of the author's own record keeps the relay trail (st.via) of the relayed version", function()
   local s = newState()
   local rel = prof("Au-R", T0 + 10, { note = "por relevo" })
   ap(s, rel, "Y-R"); ap(s, rel, "Z-R")

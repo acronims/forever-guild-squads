@@ -71,14 +71,15 @@ test("achdef / achgrant written by an officer or a member are refused (live and 
   local _, w2 = apply(st, rec("achdef", "lvl.all.10", MEM, T, { on = false }), MEM)
   eq(w2, "denied", "member, live")
   local _, w3 = apply(st, rec("achdef", "lvl.all.10", MEM, T, { on = false }), OFF)
-  eq(w3, "denied", "member's record relayed by an officer")
+  eq(w3, "pending", "member's record relayed by an officer: waits for the author's signature (v1.2 annex F)")
   local _, w4 = apply(st, rec("achdef", "lvl.all.10", GM, T, { on = false }), MEM)
   eq(w4, "pending", "GM's record relayed by a member (or forged with a = GM): pending, quorum 2 (v1.2)")
   local _, w5 = apply(st, rec("achgrant", "first60|" .. MEM, OFF, T, { ach = "first60", who = MEM, reason = "x", on = true }), OFF)
   eq(w5, "denied", "achgrant by an officer")
   eq(next(st.achdefs or {}), nil, "nothing stored"); eq(next(st.achgrants or {}), nil)
-  local okG = apply(st, rec("achdef", "lvl.all.10", GM, T, { on = false }), OFF)
-  ok(okG, "GM record relayed by an officer is fine")
+  local okG, whyG = apply(st, rec("achdef", "lvl.all.10", GM, T, { on = false }), OFF)
+  ok(not okG and whyG == "pending", "GM record relayed by an officer waits for the GM's signature (v1.2 annex F)")
+  ok(apply(st, rec("achdef", "lvl.all.10", GM, T, { on = false }), GM), "the GM's record live is fine")
 end)
 
 -------------------------------------------------------------------------------

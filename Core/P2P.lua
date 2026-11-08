@@ -159,6 +159,19 @@ local function evictOldest(st)
   if okid then st.pend[okid][ovk] = nil; if next(st.pend[okid]) == nil then st.pend[okid] = nil end end
 end
 
+-- v1.2 annex F: records are accepted by the signature of their author (Core/Sig.lua), not by a quorum of relayers
+X.SIGNED = true
+local function sigdb(state) return state.sigdb or ns.sigDB end
+-- how sure we are of the stored copy: heard from its author in person / own disk = strong; relayed = the strength
+-- of the key that signed it (a 1.1 quorum copy, sig = nil, counts as weak)
+function X.strengthOf(state, rec)
+  if not rec then return nil end
+  local st = state.p2p
+  local via = st and st.via and st.via[kidOf(rec)]
+  if not via then return "strong" end
+  return via.sig == "strong" and "strong" or "weak"
+end
+
 local function commit(state, rec, ctx, vk, kid, voters)
   local st = X.st(state)
   local okA, why = M.apply(state, rec, { roster = ctx.roster, trusted = true, now = ctx.now })
@@ -192,7 +205,19 @@ function X.offer(state, rec, ctx, settings, u)
   if stored and not M.newer(rec, stored) then return false, "stale" end
   -- my own record in a version I never wrote (I hold an older one): refuse it and repudiate it
   if ctx.me and rec.a == ctx.me and stored then return false, "mine" end
-  if not u and M.isP2P(rec) and X.captainNode(state, rec, sender) then return commit(state, rec, ctx, vk, kid, { sender }) end
+  if X.SIGNED then
+    local G, db = ns.Sig, sigdb(state)
+    local status = G and db and G.status(db, rec)
+    if status then
+      -- a weak key: never a repudiate nor an authority record, never over a strong copy (it neither replaces nor deletes)
+      if status == "weak" and (rec.k == "repudiate" or not M.isP2P(rec) or (stored and X.strengthOf(state, stored) == "strong")) then
+        return false, "weak"
+      end
+      local okC, whyC = commit(state, rec, ctx, vk, kid, { type(sender) == "string" and sender or "?" })
+      if okC and st.via[kid] then st.via[kid].sig = status end
+      return okC, whyC
+    end
+  elseif not u and M.isP2P(rec) and X.captainNode(state, rec, sender) then return commit(state, rec, ctx, vk, kid, { sender }) end
   local byId = st.pend[kid]
   if not byId then byId = {}; st.pend[kid] = byId end
   local e = byId[vk]
@@ -214,8 +239,23 @@ function X.offer(state, rec, ctx, settings, u)
   if e.cf then return false, "conflict" end
   local voters = {}
   for n in pairs(e.by) do if not X.blocked(state, n, now) then voters[#voters + 1] = n end end
-  if #voters >= X.quorumFor(rec) then return commit(state, rec, ctx, vk, kid, voters) end
+  if not X.SIGNED and #voters >= X.quorumFor(rec) then return commit(state, rec, ctx, vk, kid, voters) end
   return false, "pending"
+end
+
+-- a manifest of `author` was just verified: re-offer his pending copies. -> how many applied
+function X.retry(state, author, ctx)
+  local st = X.st(state)
+  local list = {}
+  for _, byId in pairs(st.pend) do
+    for _, e in pairs(byId) do if e.r.a == author then list[#list + 1] = e end end
+  end
+  local n = 0
+  for _, e in ipairs(list) do
+    local okA = M.apply(state, e.r, { roster = ctx.roster, sender = e.from or "?", me = ctx.me, ledger = ctx.ledger, now = ctx.now })
+    if okA then n = n + 1 end
+  end
+  return n
 end
 
 -- before any authorial record is applied: repudiated versions never come back, and a live record of the author
