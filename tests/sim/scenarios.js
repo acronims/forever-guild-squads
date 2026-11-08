@@ -358,10 +358,14 @@ function S8(seed, minutes) {
   // SavedVariables logs in; t95 / t100 of the profiles + squads it holds (stored = verified), the curve
   // [s, held, pending ids] every 30 s, and the local "synced" chat line (once). GSQ_S8_NEWCOMER=0: no newcomer (the
   // traffic run for AC5, same conditions as the 1.1 S8).
-  let nc = null, t95 = null, t100 = null, target = null, curve = [], chat = [];
+  let nc = null, t95 = null, t100 = null, t95v = null, t100v = null, target = null, curve = [], chat = [];
   if (process.env.GSQ_S8_NEWCOMER !== '0') {
     const cnt = `(function() local n = 0 for _ in pairs(NS.state.profiles) do n = n + 1 end for _ in pairs(NS.state.squads) do n = n + 1 end return n end)()`;
     const pendCnt = `(function() local n = 0 for _ in pairs((NS.state.p2p and NS.state.p2p.pend) or {}) do n = n + 1 end return n end)()`;
+    // annex G (BRO 8-nov 04:13: what cannot be verified is shown «sin verificar»): `vis` = stored (verified) plus held
+    // pending (shown grey) ids. S8's 600 records are generated unsigned (1.1-era data, authors never online with 1.2
+    // keys), so most of them cannot be verified by design; AC3 is checked on vis, the verified-only times are metrics.
+    const visCnt = `(function() local s = {} for id in pairs(NS.state.profiles) do s["profile:" .. id] = true end for id in pairs(NS.state.squads) do s["squad:" .. id] = true end for kid, byId in pairs((NS.state.p2p and NS.state.p2p.pend) or {}) do if next(byId) and (kid:match("^profile:") or kid:match("^squad:")) then s[kid] = true end end local n = 0 for _ in pairs(s) do n = n + 1 end return n end)()`;
     target = Number(cs[0].val(cnt)[0]);
     nc = sim.client('Mb2');
     const tn = sim.t;
@@ -369,9 +373,12 @@ function S8(seed, minutes) {
     for (let k = 0; k < 60 && t100 === null; k++) {
       sim.run(10);
       const h = Number(nc.val(cnt)[0]);
-      if (k % 3 === 2) { curve.push([Math.round(sim.t - tn), h, Number(nc.val(pendCnt)[0])]); console.error('S8 newcomer', JSON.stringify(curve[curve.length - 1]), 'of', target); }
+      const v = Number(nc.val(visCnt)[0]);
+      if (k % 3 === 2) { curve.push([Math.round(sim.t - tn), h, Number(nc.val(pendCnt)[0]), v]); console.error('S8 newcomer', JSON.stringify(curve[curve.length - 1]), 'of', target); }
       if (t95 === null && h >= 0.95 * target) t95 = Math.round(sim.t - tn);
       if (h >= target) t100 = Math.round(sim.t - tn);
+      if (t95v === null && v >= 0.95 * target) t95v = Math.round(sim.t - tn);
+      if (t100v === null && v >= target) t100v = Math.round(sim.t - tn);
     }
     sim.run(120);  // room for the "synced" line (60 s of quiet after the last round)
     const raw = nc.val('(function() local o = {} for _, e in ipairs(SIM_LOCAL or {}) do o[#o + 1] = e.s end return table.concat(o, "\\n") end)()')[0];
@@ -384,13 +391,13 @@ function S8(seed, minutes) {
   check('model converged', sim.settle(900, 15));
   if (nc) {
     const syncedLines = chat.filter((x) => /^Guild Squads: (synced|sincronizado) \(\d+ /.test(x));
-    check('AC3 newcomer 95 % in <= 240 s (no worse than 1.1)', t95 !== null && t95 <= 240, t95 + ' s');
-    check('AC3 newcomer 100 % in <= 600 s', t100 !== null && t100 <= 600, t100 + ' s');
+    check('AC3 newcomer 95 % (verified + «sin verificar») in <= 240 s', t95v !== null && t95v <= 240, t95v + ' s (verified only: ' + t95 + ' s)');
+    check('AC3 newcomer 100 % (verified + «sin verificar») in <= 600 s', t100v !== null && t100v <= 600, t100v + ' s (verified only: ' + t100 + ' s)');
     check('AC3 the newcomer writes the local "synced" chat line exactly once', syncedLines.length === 1, JSON.stringify(chat).slice(0, 200));
   }
   errorsCheck(sim, check);
   return { pass: pass(), checks, metrics: { clients: cs.length, seconds: Math.round(dur), meanAll: +avgAll.toFixed(3), meanBusiest: +mean.toFixed(3), peak1s: peak1, peak10s: +peak10.toFixed(2), maxQueue: maxQ, throttled: thr, records: n,
-    partsEdits, newcomerTarget: target, newcomerT95: t95, newcomerT100: t100, newcomerCurve: curve, newcomerChat: chat } };
+    partsEdits, newcomerTarget: target, newcomerT95: t95, newcomerT100: t100, newcomerT95vis: t95v, newcomerT100vis: t100v, newcomerCurve: curve, newcomerChat: chat } };
 }
 
 // S9: chaos: 1 simulated hour of random actions with 5 % loss and random /reloads -> convergence, no Lua errors
