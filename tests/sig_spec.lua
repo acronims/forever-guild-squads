@@ -110,6 +110,25 @@ test("sig: a parked fake manifest with a huge n does not displace the real one (
   ok(G.status(db2, real) == "strong", "20 fakes from one sender still leave the real one parked")
 end)
 
+test("sig sec F11: one sender cannot fill the park; another sender's manifest is still parked", function()
+  G.resetQueue()
+  local keepMax = G.MAX_PARKED; G.MAX_PARKED = 30   -- lowered for the test (Fengari)
+  local db = G.st({})
+  local k = keys({})
+  local base = G.build("A-R", 7, { rec("A-R") }, skM, pkM)
+  for i = 1, 30 do
+    local m = {}; for f, v in pairs(base) do m[f] = v end
+    m.a = "Nokey" .. i .. "-R"
+    G.offer(db, m, k, "Mallory-R"); G.step(db)
+  end
+  local real = G.build("A-R", 5, { rec("A-R") }, skA, pkA)
+  G.offer(db, real, k, "Honest-R"); G.step(db)
+  local any = G.unpark("A-R")
+  G.MAX_PARKED = keepMax
+  ok(any == true, "the honest sender's manifest was parked although Mallory sent 30 for keyless authors")
+  ok((G.PARK_PER_SENDER or 1e9) <= 20, "per-sender cap on the park")
+end)
+
 test("sig sec F6: a copy with the real (a, n, s) but another body does not push the real manifest out of the queue", function()
   G.resetQueue()
   local db = G.st({})

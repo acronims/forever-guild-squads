@@ -74,10 +74,11 @@ function G.st(db)
   return db
 end
 local queue, queued, parked = {}, {}, {}
-local nParked = 0
+local nParked, parkedBy = 0, {}
 G.MAX_PARKED = 300             -- manifests of authors whose key we do not hold yet (annex G: it may get certified)
 G.PARK_PER_AUTHOR = 8          -- parked per author: one per sender (AF6: a fake with a huge n cannot displace the real)
-function G.resetQueue() queue, queued, parked, nParked = {}, {}, {}, 0 end
+G.PARK_PER_SENDER = 20         -- sec F11: one sender cannot fill the global park with keyless authors
+function G.resetQueue() queue, queued, parked, nParked, parkedBy = {}, {}, {}, 0, {} end
 -- the author's key just became usable (certified, annex G): his parked manifests get their verify, newest first
 -- (a fake one fails its verify, then the real one is next)
 function G.unpark(name)
@@ -85,7 +86,11 @@ function G.unpark(name)
   if not P then return false end
   parked[name] = nil
   local list = {}
-  for _, q in pairs(P.by) do list[#list + 1] = q; nParked = nParked - 1 end
+  for from, q in pairs(P.by) do
+    list[#list + 1] = q; nParked = nParked - 1
+    local c = (parkedBy[from] or 1) - 1
+    parkedBy[from] = c > 0 and c or nil
+  end
   table.sort(list, function(x, y) return x.m.n > y.m.n end)
   local any = false
   for _, q in ipairs(list) do
@@ -155,7 +160,9 @@ function G.step(db, onAccept)
     local from = q.from or "?"
     local p = P.by[from]
     if p then if p.m.n < m.n then P.by[from] = q end
-    elseif P.c < G.PARK_PER_AUTHOR and nParked < G.MAX_PARKED then P.by[from] = q; P.c = P.c + 1; nParked = nParked + 1 end
+    elseif P.c < G.PARK_PER_AUTHOR and nParked < G.MAX_PARKED and (parkedBy[from] or 0) < G.PARK_PER_SENDER then
+      P.by[from] = q; P.c = P.c + 1; nParked = nParked + 1; parkedBy[from] = (parkedBy[from] or 0) + 1
+    end
     if P.c > 0 then parked[m.a] = P end
     return nil
   end

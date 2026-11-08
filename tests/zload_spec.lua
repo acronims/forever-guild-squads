@@ -746,6 +746,26 @@ test("smoke: hall of fame, detection, annulment, export, celebrations, settings,
   ok(ns.HallGlue.Adoption() >= 1, "hello counted for adoption")
 end)
 
+test("sec F16: a presence version carrying UI escape codes is shown escaped in the adoption tooltip", function()
+  local me = ns.me()
+  ns.state.presence = ns.state.presence or {}
+  local keep = ns.state.presence[me]
+  ns.state.presence[me] = { k = "presence", id = me, a = me, ts = (GetServerTime and GetServerTime()) or time(), sq = 1,
+    d = { ver = "|TInterface\\X:64|t|Hx|h", day = 1 } }
+  local lines = {}
+  local gt = { SetText = function(_, t) lines[#lines + 1] = t end, AddLine = function(_, t) lines[#lines + 1] = t end }
+  local real = ns.VERSION; ns.VERSION = "|TInterface\\X:64|t|Hx|h"
+  ns.HallGlue.AdoptionTooltip(gt)
+  ns.VERSION = real; ns.state.presence[me] = keep
+  local seen = false
+  for _, t in ipairs(lines) do
+    local raw = t:gsub("||", "")
+    ok(not raw:find("|T", 1, true) and not raw:find("|H", 1, true), "no live escape code in: " .. t)
+    if t:find("||T", 1, true) then seen = true end
+  end
+  ok(seen, "the version is still shown (escaped)")
+end)
+
 test("geometry: Hall of Fame top row clear of the portrait, chips centred, tab present", function()
   local win = ns.UI.Window()
   ns.UI.Select("hall"); eq(ns.UI.Current(), "hall")

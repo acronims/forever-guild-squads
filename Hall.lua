@@ -524,7 +524,8 @@ function H.AdoptionTooltip(gt)
   gt:SetText(L.ADOPTION_TIP:format(days), 1, 0.82, 0)
   for i, e in ipairs(a.list) do
     if i > 40 then gt:AddLine("...", 0.6, 0.6, 0.6); break end
-    gt:AddLine(ns.shortName(e.name) .. "  |cff999999" .. tostring(e.ver) .. "|r", 1, 1, 1)
+    -- sec F16: `ver` is free text from the author's presence; "|" doubled so it can carry no UI escape code
+    gt:AddLine(ns.shortName(e.name) .. "  |cff999999" .. tostring(e.ver):gsub("|", "||") .. "|r", 1, 1, 1)
   end
   -- members heard by hello without a presence run 1.0.x: they only sync with officers
   for _, e in ipairs(a.list) do
