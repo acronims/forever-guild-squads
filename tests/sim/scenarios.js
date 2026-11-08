@@ -567,6 +567,33 @@ function squadHoldings(c, ids) {
     return table.concat(out) end)()`)[0];
 }
 
+// annex F/G key audit: each client's own key, counts, and every key it holds for another member compared with that
+// member's real key ("fakes" = name:author:strength of every wrong key held, uncontested)
+function keyAudit(cs, names) {
+  const keys = {};
+  for (const c of cs) {
+    c.login();
+    const v = c.run(`local pk = NS.myPk and NS.myPk(); local db = NS.trustDB or {}; local s, w, p = NS.Trust.counts(db)
+      local held = {}
+      for n, k in pairs(db.keys or {}) do if not (db.contested and db.contested[n]) then held[#held + 1] = n .. "=" .. k.pk .. "=" .. k.s end end
+      table.sort(held)
+      return pk and NS.Trust.hex(pk) or "", s, w, p, table.concat(held, ";")`);
+    keys[c.name] = { pk: String(v[0]).slice(0, 8), full: String(v[0]), strong: v[1], weak: v[2], pend: v[3], held: String(v[4] || '') };
+    c.logout();
+  }
+  const realPk = {}; for (const n of names) realPk[n] = keys[n].full;
+  const fakes = [];
+  for (const n of names) for (const e of keys[n].held.split(';').filter(Boolean)) {
+    const [who, pk, st] = e.split('=');
+    const short = who.split('-')[0];
+    const real = realPk[who] !== undefined ? realPk[who] : realPk[short];
+    if (real !== undefined && real !== pk) fakes.push(`${n}:${who}:${st}`);
+  }
+  const certHeld = Object.fromEntries(names.map((n) => [n, keys[n].held.split(';').filter((e) => e.endsWith('=cert')).length]));
+  for (const k of Object.values(keys)) { delete k.full; delete k.held; }
+  return { keys, fakes, certHeld };
+}
+
 // S11 (AC1): no GM / officer with the addon. 5 clients log in staggered, never more than 2 online at once
 // (forward chain, backward chain, forward chain: <= 3 sessions per client, each one overlapping the next for 25 min).
 // Every authorial record (profiles + presence) of every author reaches every client, and so do the squads (v1.2 AC1)
@@ -624,19 +651,16 @@ function s11core(seed, withGm) {
   check('100 % of the squads reached every client (verified or pending) after 3 passes', sqTotal > 0 && sqArrived === sqTotal, `${sqArrived}/${sqTotal} ${JSON.stringify(sq3)}`);
   if (withGm) check('GM online all along, no officer', !!gm.online && !sim.clients.Of1, '');
   else check('no GM / officer ever online', !sim.clients.Gm && !sim.clients.Of1, '');
-  // annex F wiring: every client made its own key, keys are distinct, and they travel (strong in person, weak by quorum)
-  const keys = {};
-  for (const c of cs) {
-    c.login();
-    const v = c.run('local pk = NS.myPk and NS.myPk(); local s, w, p = NS.Trust.counts(NS.trustDB or {}); return pk and NS.Trust.hex(pk) or "", s, w, p');
-    keys[c.name] = { pk: String(v[0]).slice(0, 8), strong: v[1], weak: v[2], pend: v[3] };
-    c.logout();
-  }
+  // annex F wiring: every client made its own key, keys are distinct, and they travel (strong in person, cert by annex G)
+  const { keys, fakes, certHeld } = keyAudit(cs, names);
+  check('AF7: 0 fake keys accepted', fakes.length === 0, JSON.stringify(fakes));
+  const maxGraph = withGm ? 38 : 26;   // annex G graph maximum, docs/DESIGN-certificados.md
+  check(`AF7: verified authorial records >= graph maximum (${maxGraph}/50)`, verified >= maxGraph, `${verified}/${total} certHeld=${JSON.stringify(certHeld)}`);
   const pks = Object.values(keys).map((k) => k.pk);
   check('annex F: every client has its own key, all distinct', pks.every((x) => x.length === 8) && new Set(pks).size === pks.length, JSON.stringify(keys));
   check('annex F: every client learned >= 1 key in person', Object.values(keys).every((k) => k.strong >= 1), JSON.stringify(keys));
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { keys, arrived, total, verified, sqArrived, sqTotal, sqVerified, after2, after3, sq2, sq3, sessions, t: Math.round(sim.t), ...sim.stats } };
+  return { pass: pass(), checks, metrics: { keys, fakes, certHeld, arrived, total, verified, sqArrived, sqTotal, sqVerified, after2, after3, sq2, sq3, sessions, t: Math.round(sim.t), ...sim.stats } };
 }
 function S11(seed) { return s11core(seed, false); }
 function S15(seed) { return s11core(seed, true); }
@@ -1036,4 +1060,58 @@ function S8g(seed, minutes) {
     newcomerT95: t95, newcomerT100: t100, newcomerCurve: curve, convergeAfterNewcomer: tConv, ...sim.stats } };
 }
 
-module.exports = { S8g, S15, S16, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+// S18 (AF7, annex G dense case, BRO 8-nov 04:13): 10 member clients, >= 3 online at once (sliding window of 4), 3
+// sessions each in three passes (in order, stride 3, in order). With >= 2 in-person certificates every key is reachable
+// in this meeting graph (tests/sim: 100/100 pairs), so every authorial record (profile + presence of the 10 authors on
+// the 10 clients = 200) and both squads (Mb1, Mb4 -> 20) must end VERIFIED, with 0 fake keys.
+function S18(seed) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 1, 10);
+  const names = []; for (let i = 1; i <= 10; i++) names.push('Mb' + i);
+  const cs = names.map((n) => sim.client(n));
+  const sessions = {}; let maxOnline = 0, minOverlap = 99;
+  const squadIds = [];
+  const OVER = 25 * 60, W = 4;
+  const on = (c) => {
+    c.login(); sessions[c.name] = (sessions[c.name] || 0) + 1;
+    maxOnline = Math.max(maxOnline, sim.online().length);
+    sim.run(20);
+    c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`);
+    if (sessions[c.name] === 1 && (c.name === 'Mb1' || c.name === 'Mb4')) {
+      sim.run(5);
+      c.run(`return A.CreateSquad({ name = ${luaStr('Squad ' + c.name)}, icon = 1, color = 1, border = 1, tags = {}, open = true })`);
+      const id = c.val('A.MySquadId()')[0];
+      if (id) squadIds.push(String(id));
+    }
+  };
+  const pass1 = (order) => {
+    for (let i = 0; i < order.length; i++) {
+      on(cs[order[i]]);
+      if (i >= W - 2) minOverlap = Math.min(minOverlap, sim.online().length);
+      sim.run(OVER);
+      if (i - (W - 1) >= 0) cs[order[i - (W - 1)]].logout();
+    }
+    for (const c of cs) if (c.online) c.logout();
+  };
+  pass1([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  pass1([0, 3, 6, 9, 2, 5, 8, 1, 4, 7]);
+  pass1([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  const after = {}, sq = {};
+  for (const c of cs) { c.login(); after[c.name] = holdings(sim, c, names); sq[c.name] = squadHoldings(c, squadIds); c.logout(); }
+  const cells = Object.values(after).join('');
+  const verified = cells.split('').filter((x) => x === 'v').length, total = cells.length;
+  const sqCells = Object.values(sq).join('');
+  const sqVerified = sqCells.split('').filter((x) => x === 'v').length, sqTotal = sqCells.length;
+  check('>= 3 member clients online at once while they overlap', minOverlap >= 3, minOverlap);
+  check('<= 3 sessions per client', Object.values(sessions).every((n) => n <= 3), JSON.stringify(sessions));
+  check('2 squads created (Mb1, Mb4)', squadIds.length === 2, JSON.stringify(squadIds));
+  const { keys, fakes, certHeld } = keyAudit(cs, names);
+  check('AF7: 0 fake keys accepted', fakes.length === 0, JSON.stringify(fakes));
+  check('AF7: 100 % of the authorial records VERIFIED on every client', total === 200 && verified === total, `${verified}/${total} ${JSON.stringify(after)}`);
+  check('AF7: 100 % of the squads VERIFIED on every client', sqTotal === 20 && sqVerified === sqTotal, `${sqVerified}/${sqTotal} ${JSON.stringify(sq)}`);
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { keys, certHeld, verified, total, sqVerified, sqTotal, maxOnline, sessions, t: Math.round(sim.t), ...sim.stats } };
+}
+
+module.exports = { S18, S8g, S15, S16, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
