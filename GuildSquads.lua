@@ -734,7 +734,8 @@ sigFrame:SetScript("OnUpdate", function()
   if not ((ns.sigDB and ns.Sig and ns.Sig.pending() > 0) or (ns.Cert and ns.certDB and ns.Cert.pending() > 0)
     or (Sync.RotPending and Sync.RotPending() > 0)) then return end
   if InCombatLockdown and InCombatLockdown() then return end
-  if IsEncounterInProgress and IsEncounterInProgress() then return end
+  local enc = ns.encounterFn and ns.encounterFn()  -- 16001: C_InstanceEncounter, not a global (QA r3 Q3-1)
+  if enc and enc() then return end
   Sync.SigStep()
 end)
 f:SetScript("OnEvent", function(_, ev, arg1)

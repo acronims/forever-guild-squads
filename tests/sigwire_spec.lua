@@ -298,3 +298,23 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 sec F6: a GUILD copy with the real (a,
   Sync.NoteManHeard(real)
   ok(Sync.ManHeardSince(real, "Req-Realm"), "the same manifest heard does")
 end }
+
+-- QA r3 Q3-1: in 16001 IsEncounterInProgress lives only in C_InstanceEncounter; the one-per-frame signature step
+-- must pause during a boss encounter through ns.encounterFn(), not through the (absent) global
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "QA r3 Q3-1: the signature step pauses in an encounter seen only through C_InstanceEncounter", function(c)
+  local S = c.ns.Sync
+  local gEnc, cEnc, rot, step = IsEncounterInProgress, C_InstanceEncounter, S.RotPending, S.SigStep
+  local steps = 0
+  IsEncounterInProgress = nil
+  C_InstanceEncounter = { IsEncounterInProgress = function() return true end }
+  S.RotPending = function() return 1 end
+  S.SigStep = function() steps = steps + 1 end
+  c.tick(5)
+  local during = steps
+  C_InstanceEncounter = { IsEncounterInProgress = function() return false end }
+  c.tick(3)
+  local after = steps
+  IsEncounterInProgress, C_InstanceEncounter, S.RotPending, S.SigStep = gEnc, cEnc, rot, step
+  eq(during, 0, "no signature step during the encounter")
+  ok(after >= 1, "the step resumes after the encounter: " .. after)
+end }
