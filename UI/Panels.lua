@@ -18,6 +18,12 @@ local function infoOf(name)
   return { name = name, class = r.class or d.class, level = r.level or d.level, online = r.online, zone = r.zone,
            role = d.role, role2 = d.role2, avail = d.avail, goals = d.goals or {}, seen = r.seen }
 end
+-- v1.2 annex G: why a relayed record is shown "unverified" and how it gets verified; a disputed key says so
+function ns.UnverifiedTip(name, from)
+  local db = ns.trustDB
+  if db and db.contested and db.contested[name] then return L.UNVERIFIED_TIP_DISPUTED:format(ns.shortName(name)) end
+  return L.UNVERIFIED_TIP:format(ns.shortName(from or "?"), ns.shortName(name))
+end
 local function nameColored(name, class)
   local _, _, _, hex = W.ClassColor(class)
   return hex .. (ns.displayName and ns.displayName(name) or ns.shortName(name)) .. "|r"   -- with surname
@@ -698,7 +704,7 @@ local function fillResult(c, item)
     W.SetClass(c.class, i.class)
     c.dot:SetTexture(i.online and "Interface\\FriendsFrame\\StatusIcon-Online" or "Interface\\FriendsFrame\\StatusIcon-Offline")
     if i.unverified then
-      -- arrived by a single relay: grey, never counted; confirmed by a second relayer, the captain or the author
+      -- arrived by relay without a verified signature: grey, never counted, until the author's manifest verifies
       c.name:SetText("|cff888888" .. ns.shortName(i.name) .. "  " .. L.LV_SHORT:format(tostring(i.level or "?")) .. "  (" .. L.UNVERIFIED .. ")|r")
     else
       c.name:SetText(nameColored(i.name, i.class) .. "  |cffaaaaaa" .. L.LV_SHORT:format(tostring(i.level or "?")) .. "|r")
@@ -707,7 +713,7 @@ local function fillResult(c, item)
     if i.role2 then W.SetRole(c.role2, i.role2); c.role2:Show() else c.role2:Hide() end
     twoChips(c, i.goals)
     if i.unverified then
-      W.Tooltip(c, L.UNVERIFIED, L.UNVERIFIED_TIP:format(ns.shortName(i.unverified.from or "?"), ns.shortName(i.name)))
+      W.Tooltip(c, L.UNVERIFIED, ns.UnverifiedTip(i.name, i.unverified.from))
     else
       W.Tooltip(c, memberTooltip(i.name))
     end

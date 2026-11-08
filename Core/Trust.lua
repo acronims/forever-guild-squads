@@ -5,13 +5,13 @@
 --   * learning other keys:
 --       - STRONG: heard from its owner in person (WoW guarantees the sender of addon messages): trust on first use,
 --         the first strong key heard is pinned.
---       - WEAK: relayed by others, once 2 distinct relayers (none of them the owner) bring the same key. What a weak
---         key signs is shown "unverified" and never deletes or replaces data signed by a strong key, never applies a
---         `repudiate`, a squad roster or settings (the callers check T.isStrong).
---       - two different weak keys for the same name, both with quorum: the name is "contested" and neither is used
---         until the owner is heard in person (a pair of alts cannot win a race against the real key).
---   * conflicts: the owner in person always beats a weak key; the weak key and what it signed are dropped and the
---     relayers that brought it are counted as suspects (diag). A pinned strong key that changes is refused and noted.
+--       - CERT (annex G): a key relayed by others is only a candidate (T.hearRelayed, no quorum); it is used once >= 2
+--         certificates of issuers heard in person by us list it (Core/Cert.lua -> T.certify). An in-person issuer
+--         listing another key makes the name "disputed" (T.dispute): shown unverified, nothing new applied, diag.
+--       - "weak" (the 1.1 / early 1.2 quorum of 2 relayers) is no longer produced; a "weak" entry left in an old
+--         SavedVariables is still treated as weak by the callers (never over strong, never a repudiate or authority).
+--   * conflicts: the owner in person always wins (BRO 8-nov 03:09); the replaced key and what it signed are dropped
+--     and the relayers that brought it are counted as suspects (diag).
 --   * rotation: only the old key signing the new one (T.rotation). A lost key needs `/gsq trust reset <name>` by hand.
 local _, ns = ...
 ns = ns or {}
@@ -20,10 +20,8 @@ local T = {}
 ns.Trust = T
 local E = ns.Ed25519
 
-T.QUORUM_KEY = 2               -- 1.1 / early 1.2 only (T.CERTS = false)
--- v1.2 annex G (BRO 8-nov 04:13, option 1): relayed keys are only candidates; a stranger's key is accepted when >= 2
--- certificates of issuers heard in person by us list it (Core/Cert.lua -> T.certify, strength "cert")
-T.CERTS = true
+-- v1.2 annex G (BRO 8-nov 04:13, option 1): relayed keys are only candidates (no quorum); a stranger's key is accepted
+-- when >= 2 certificates of issuers heard in person by us list it (Core/Cert.lua -> T.certify, strength "cert")
 T.MAX_PEND_KEYS = 500          -- relayed keys waiting for quorum on one client
 T.MAX_PEND_RELAYER = 200       -- of those, brought by one relayer (same cap as the P2P pending records)
 T.PEND_TTL = 7 * 86400
@@ -170,7 +168,7 @@ local function pendCount(db)
 end
 
 -- `relayer` (not the owner) says `name` has key `pk`. Returns "strong" (we already hold it strong: nothing to do),
--- "pending", "weak" (quorum reached: weak key), "contested", "full" (caps) or "bad".
+-- "pending" (a candidate for annex G certificates), the strength we already hold it with, "full" (caps) or "bad".
 function T.hearRelayed(db, name, pk, relayer, now)
   T.st(db)
   if not validPk(pk) or type(relayer) ~= "string" then return "bad" end
@@ -195,21 +193,7 @@ function T.hearRelayed(db, name, pk, relayer, now)
     db.pend[name] = byPk
   end
   e.by[relayer] = now
-  if T.CERTS then return "pending" end
-  local n = 0
-  for _ in pairs(e.by) do n = n + 1 end
-  if n < T.QUORUM_KEY then return "pending" end
-  if k and k.pk ~= h then
-    -- a second weak key with quorum: neither is used until the owner is heard in person
-    db.contested[name] = now
-    alert(db, "contested " .. name)
-    return "contested"
-  end
-  if db.contested[name] then return "contested" end
-  local by = {}
-  for r in pairs(e.by) do by[r] = true end
-  db.keys[name] = { pk = h, s = "weak", t = now, by = by }
-  return "weak"
+  return "pending"
 end
 
 -- annex G: the candidate keys we heard relayed for `name` (raw pk list), the one in use first

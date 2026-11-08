@@ -1,5 +1,5 @@
--- v1.2 annex F (no dev key, BRO 8-nov 01:02): keys per character, TOFU strong from the owner in person, weak with a
--- quorum of 2 relayers, contested weak keys, owner beats weak, pinned key change refused, rotation signed by the old
+-- v1.2 annex F (no dev key, BRO 8-nov 01:02): keys per character, TOFU strong from the owner in person, relayed keys
+-- are only candidates (annex G certificates: tests/cert_spec.lua), owner in person wins, rotation signed by the old
 -- key, reset by hand, entropy seed. Spec: docs/SPEC-v1.2-p2p.md, annex F.
 local T, E = NS.Trust, NS.Ed25519
 local NOW = 1795000000
@@ -27,48 +27,7 @@ test("trust: owner in person = strong, pinned; a different key from the owner in
   ok(T.hearOwner(db, "A-R", "short", NOW) == "bad", "malformed key")
 end)
 
-test("[1.1 quorum] trust: relayed keys need 2 distinct relayers (not the owner) and stay weak", function()
-  T.CERTS = false
-  local db = T.st({})
-  ok(T.hearRelayed(db, "A-R", pkA, "X-R", NOW) == "pending", "one relayer: pending")
-  ok(T.keyOf(db, "A-R") == nil, "no key yet")
-  ok(T.hearRelayed(db, "A-R", pkA, "X-R", NOW + 1) == "pending", "the same relayer twice does not count")
-  ok(T.hearRelayed(db, "A-R", pkA, "Y-R", NOW + 2) == "weak", "second relayer: weak")
-  local k, s = T.keyOf(db, "A-R")
-  ok(k == pkA and s == "weak" and not T.isStrong(db, "A-R"), "weak, not strong")
-  ok(T.hearOwner(db, "A-R", pkA, NOW + 3) == "same" and T.isStrong(db, "A-R", pkA), "the owner confirms it: strong")
-  -- the owner's own relay counts as in person
-  local db2 = T.st({})
-  ok(T.hearRelayed(db2, "A-R", pkA, "A-R", NOW) == "new" and T.isStrong(db2, "A-R"), "relayer == owner: strong")
-end)
-
-test("[1.1 quorum] trust: a weak key from alts never beats the owner; the alts become suspects", function()
-  T.CERTS = false
-  local db = T.st({})
-  T.hearRelayed(db, "A-R", pkFake, "Alt1-R", NOW)
-  ok(T.hearRelayed(db, "A-R", pkFake, "Alt2-R", NOW) == "weak", "two alts plant a weak key for a stranger")
-  local r, old = T.hearOwner(db, "A-R", pkA, NOW + 10)
-  ok(r == "replaced" and old == pkFake, "the owner in person replaces it (the caller drops what it signed)")
-  ok(T.isStrong(db, "A-R", pkA), "real key strong")
-  ok(db.suspects["Alt1-R"] == 1 and db.suspects["Alt2-R"] == 1, "both relayers counted as suspects")
-  ok(T.hearRelayed(db, "A-R", pkFake, "Alt3-R", NOW + 11) == "strong", "relaying a fake key against a strong one")
-  ok(T.keyOf(db, "A-R") == pkA and db.suspects["Alt3-R"] == 1, "ignored and counted")
-end)
-
-test("[1.1 quorum] trust: two weak keys with quorum = contested, neither used until the owner", function()
-  T.CERTS = false
-  local db = T.st({})
-  T.hearRelayed(db, "A-R", pkA, "X-R", NOW); T.hearRelayed(db, "A-R", pkA, "Y-R", NOW)
-  T.hearRelayed(db, "A-R", pkFake, "Alt1-R", NOW)
-  ok(T.hearRelayed(db, "A-R", pkFake, "Alt2-R", NOW) == "contested", "second key with quorum")
-  ok(T.keyOf(db, "A-R") == nil, "no key while contested")
-  ok(T.hearRelayed(db, "A-R", pkFake2, "Alt3-R", NOW) ~= "weak", "still no weak key")
-  ok(T.hearOwner(db, "A-R", pkA, NOW + 5) == "same" and T.isStrong(db, "A-R", pkA), "the owner settles it")
-  ok((db.suspects["Alt1-R"] or 0) >= 1 and (db.suspects["Alt2-R"] or 0) >= 1 and not db.suspects["X-R"], "only the liars are suspects")
-end)
-
 test("trust: rotation only signed by the old key; reset by hand", function()
-  T.CERTS = true
   local db = T.st({})
   T.hearOwner(db, "A-R", pkA, NOW)
   local skB, pkB = key("B")

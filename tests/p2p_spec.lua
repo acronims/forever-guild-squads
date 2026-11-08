@@ -1,7 +1,12 @@
--- v1.1: P2P relay of authorial records with a quorum of 2, captains as nodes of their squad, the author always
+-- v1.1 -> v1.2: P2P relay of authorial records (v1.2: accepted by the author's signed manifest), the author always
 -- wins and may repudiate, the real installed counter (presence). Spec: docs/SPEC-v1.1-sync-p2p.md.
 local M, R = NS.Model, NS.Roster
 local X = NS.P2P
+local G, E = NS.Sig, NS.Ed25519
+local KEYS = {}
+for _, n in ipairs({ "Au-R", "Gm-R", "V-R" }) do
+  local sk = E.sha512("p2p_spec " .. n):sub(1, 32); KEYS[n] = { sk = sk, pk = E.publicKey(sk) }
+end
 local T0 = 1795000000
 local NOW = T0 + 5000
 local DAY = 86400
@@ -14,21 +19,22 @@ local function copy(t) if type(t) ~= "table" then return t end local o = {} for 
 local function ap(s, r, sender, me) return M.apply(s, copy(r), { roster = roster, sender = sender, me = me, now = NOW }) end
 local function prof(a, ts, d, sq) return { k = "profile", id = a, a = a, ts = ts, sq = sq or 1, d = d or { note = "hola" } } end
 local function newState()
+  G.resetQueue()
   local s = M.newState()
+  s.sigdb = G.st({})
   ok(ap(s, { k = "settings", id = "settings", a = "Gm-R", ts = T0, sq = 1,
              d = { squadsEnabled = true, officerRanks = { 1 }, rlList = { "Cap-R", "CapB-R" } } }))
   return s
 end
 
--- v1.2 annex F: records are accepted by signature (tests/sigrules_spec.lua). The tests below marked [1.1 quorum]
--- still cover the 1.1 quorum path (X.SIGNED = false), pending their rewrite with signed manifests (AF2).
-local function legacyTest(name, fn)
-  test(name .. " [1.1 quorum]", function()
-    X.SIGNED = false
-    local okR, err = pcall(fn)
-    X.SIGNED = true
-    if not okR then error(err, 0) end
-  end)
+-- v1.2 annex F: records are accepted by the signature of their author (tests/sigrules_spec.lua). The 1.1 quorum
+-- path (relayers voting, captains as nodes) is gone; the tests that covered it are rewritten with signed manifests.
+-- the author signs a manifest over `recs`, the receiver knows his key strong; then his pending copies are re-offered
+local function sign(s, author, n, recs)
+  local k = KEYS[author]
+  G.offer(s.sigdb, G.build(author, n, recs, k.sk, k.pk), function(name) if name == author then return k.pk, "strong" end end)
+  eq(G.step(s.sigdb), author, "manifest of " .. author .. " verified")
+  return X.retry(s, author, { roster = roster, now = NOW })
 end
 
 test("p2p: the closed list of authorial kinds (annex A of the spec)", function()
@@ -61,54 +67,56 @@ test("AC2: a forged profile relayed by one member stays unverified and never cou
 end)
 
 -- AC3: two distinct relayers, same version -> verified. Two different versions -> none until the author
-legacyTest("AC3: quorum of 2 distinct relayers applies; two versions apply nothing until the author", function()
+test("AC3: relayers never vote; the author's manifest applies; two versions apply nothing until the author", function()
   local s = newState()
   local v1 = prof("Au-R", T0 + 10, { note = "uno" })
-  local okA, why = ap(s, v1, "Y-R"); eq(okA, false); eq(why, "pending")
-  okA, why = ap(s, v1, "Y-R"); eq(okA, false, "the same relayer twice is still one")
-  okA, why = ap(s, v1, "Z-R"); eq(okA, true, "second relayer"); eq(why, "verified")
+  for _, by in ipairs({ "Y-R", "Y-R", "Z-R", "W-R" }) do
+    local okA, why = ap(s, v1, by); eq(okA, false, by); eq(why, "pending", by)
+  end
+  eq(s.profiles["Au-R"], nil, "three distinct relayers are no quorum")
+  eq(sign(s, "Au-R", 1, { v1 }), 1, "the pending copy applies once the manifest lists it")
   eq(s.profiles["Au-R"].d.note, "uno")
   eq(X.unverified(s, "profile", "Au-R"), nil, "no longer pending")
   eq(X.stats(s).verified, 1)
-  -- the author's relay of the author's own record does not count as a relayer: it is live
   local s2 = newState()
   local a = prof("V-R", T0 + 10, { note = "a" })
   local b = prof("V-R", T0 + 10, { note = "b" })        -- same ts.sq.author, other content
   eq(select(2, ap(s2, a, "Y-R")), "pending")
   eq(select(2, ap(s2, b, "Z-R")), "conflict")
-  eq(select(2, ap(s2, a, "W-R")), "conflict", "two relayers of A, but B exists: no version applies")
+  eq(select(2, ap(s2, a, "W-R")), "conflict", "two versions: none applies by relay")
   eq(s2.profiles["V-R"], nil)
-  okA = ap(s2, b, "V-R"); ok(okA, "the author live decides")
+  ok(ap(s2, b, "V-R"), "the author live decides")
   eq(s2.profiles["V-R"].d.note, "b")
   eq(X.unverified(s2, "profile", "V-R"), nil, "the pending versions of that record are gone")
 end)
 
 -- AC4 (unit): the author's live version wins over any relay; the author's own client repudiates a fake
-legacyTest("AC4: the author's live version wins, a repudiate removes the fake and counts the relayers", function()
+test("AC4: the author's live version wins, a repudiate removes the fake and counts the relayers", function()
   local s = newState()
   local fake = prof("Au-R", T0 + 50, { note = "falso" })
-  ap(s, fake, "Y-R"); ok(ap(s, fake, "Z-R"), "two colluding relayers get it verified")
   local real = prof("Au-R", T0 + 10, { note = "real" })  -- older ts than the fake
-  ok(ap(s, real, "Au-R"), "author live replaces a relayed version whatever the ts")
-  eq(s.profiles["Au-R"].d.note, "real")
+  eq(sign(s, "Au-R", 1, { real }), 0)
+  eq(select(2, ap(s, fake, "Y-R")), "pending", "a version the manifest does not list waits")
+  ok(ap(s, real, "Z-R"), "the signed version applies from one relayer")
+  ok(ap(s, prof("Au-R", T0 + 5, { note = "en persona" }), "Au-R"), "author live replaces a relayed version whatever the ts")
+  eq(s.profiles["Au-R"].d.note, "en persona")
   -- the author's own client: a relayed record with my name that is not the one I hold -> "mine" (repudiate it)
   local me = newState()
   ok(ap(me, real))
   local okA, why = ap(me, fake, "Y-R", "Au-R")
   eq(okA, false); eq(why, "mine")
   eq(me.profiles["Au-R"].d.note, "real", "my own record untouched")
-  -- the repudiate signed by the author removes that version everywhere and counts both relayers
+  -- the repudiate of the author removes that version (pending) and counts both relayers
   local s3 = newState()
   ap(s3, fake, "Y-R"); ap(s3, fake, "Z-R")
-  eq(s3.profiles["Au-R"].d.note, "falso")
   local rp = X.repudiation(fake, "Au-R", T0 + 60, 2)
   ok(ap(s3, rp, "Au-R"), "repudiate applied live")
-  eq(s3.profiles["Au-R"], nil, "the fake version is gone")
+  eq(X.unverified(s3, "profile", "Au-R"), nil, "the fake version is gone")
   eq(X.relayerScore(s3, "Y-R"), 1); eq(X.relayerScore(s3, "Z-R"), 1)
   local okB, whyB = ap(s3, fake, "W-R")
   eq(okB, false); eq(whyB, "repudiated", "a repudiated version is never taken again")
   eq(X.stats(s3).repudiated, 1)
-  -- a repudiate relayed by a single member is pending (quorum like any authorial record)
+  -- a repudiate relayed by a member without the author's signature is pending
   local s4 = newState()
   eq(select(2, ap(s4, rp, "Y-R")), "pending")
   -- nobody else can repudiate the author's record
@@ -135,7 +143,7 @@ end)
 
 -- AC5 (1.1) -> v1.2 AC1/AC4 (D1 = 2, BRO 7-nov 19:04): authority records relayed by a non-officer wait pending until
 -- QUORUM_AUTH = 2 distinct relayers
-legacyTest("v1.2: authority kinds relayed by a non-officer stay pending, never stored, until 2 distinct relayers", function()
+test("v1.2: authority kinds relayed by anyone (officers too) stay pending until the author's manifest", function()
   local s = newState()
   local recs = {
     { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 5, sq = 2, d = { squadsEnabled = false } },
@@ -147,49 +155,28 @@ legacyTest("v1.2: authority kinds relayed by a non-officer stay pending, never s
     prof("Cap-R", T0 + 5, { squad = "A", xferTo = "A>Y-R" }),
   }
   for _, r in ipairs(recs) do
-    local okA, why = ap(s, r, "Y-R")
-    eq(okA, false, r.k); eq(why, "pending", r.k)
-    okA, why = ap(s, r, "Y-R"); eq(why, "pending", r.k .. " twice (same relayer)")
+    for _, by in ipairs({ "Y-R", "Z-R", "Of-R" }) do
+      local okA, why = ap(s, r, by); eq(okA, false, r.k .. " by " .. by); eq(why, "pending", r.k .. " by " .. by)
+    end
   end
-  -- one relayer (even twice) never verifies; the second distinct one does
-  eq(X.QUORUM_AUTH, 2)
-  eq(s.settings.d.squadsEnabled, true, "settings not replaced with 1 relayer")
+  eq(s.settings.d.squadsEnabled, true, "settings not replaced by three relayers (one an officer)")
   eq(s.squads["A"], nil, "squad not stored")
-  eq(select(2, ap(s, recs[1], "Z-R")), "verified", "second distinct relayer")
+  eq(sign(s, "Gm-R", 1, { recs[1] }), 1, "the GM's manifest applies the pending settings")
   eq(s.settings.d.squadsEnabled, false)
-  -- an officer relay of an unverified forward (u = 1) is not trusted
+  -- an officer relay is a relay: pending, also for an unverified forward (u = 1)
   local u = prof("V-R", T0 + 5); u.u = 1
   eq(select(2, ap(s, u, "Of-R")), "pending")
-  eq(s.profiles["V-R"], nil)
-  -- and an officer relay still is (unchanged)
-  ok(ap(s, prof("W-R", T0 + 5), "Of-R"))
+  eq(select(2, ap(s, prof("W-R", T0 + 5), "Of-R")), "pending")
+  eq(s.profiles["V-R"], nil); eq(s.profiles["W-R"], nil)
 end)
 
 -- AC5b: captains are authority nodes of their own squad only
-legacyTest("AC5b: the captain of A verifies A's records at once, not B's; an ex-captain stops being a node", function()
+test("AC5b (1.1) retired: a captain relaying his squad's records is one more relayer, no node", function()
   local s = newState()
-  ok(ap(s, { k = "squad", id = "A", a = "Cap-R", ts = T0 + 1, sq = 1, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R", "Au-R", "Z-R" } } }))
-  ok(ap(s, { k = "squad", id = "B", a = "CapB-R", ts = T0 + 1, sq = 1, d = { name = "Beta", captain = "CapB-R", members = { "CapB-R", "W-R" } } }))
+  ok(ap(s, { k = "squad", id = "A", a = "Cap-R", ts = T0 + 1, sq = 1, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R", "Au-R" } } }))
   ok(ap(s, prof("Cap-R", T0 + 2, { squad = "A" })))
-  ok(ap(s, prof("CapB-R", T0 + 2, { squad = "B" })))
-  local okA, why = ap(s, prof("Au-R", T0 + 3, { squad = "A" }), "Cap-R")
-  eq(okA, true, "member of A relayed by A's captain"); eq(why, "verified")
-  eq(select(2, ap(s, prof("W-R", T0 + 3, { squad = "B" }), "Cap-R")), "pending", "B's profile: one relayer")
-  -- RSVPs: the event's squad is the squad of the roster owner
-  local function ros(owner) return { k = "roster", id = owner .. ":1", a = owner, ts = T0 + 4, sq = 1,
-    d = { raid = "custom", size = 10, name = "Raid", at = T0 + 90000, st = "published", main = {}, bench = {} } } end
-  ok(ap(s, ros("Cap-R"))); ok(ap(s, ros("CapB-R")))
-  local function rsvp(name, rid) return { k = "rsvp", id = R.rsvpId(rid, name), a = name, ts = T0 + 6, sq = 1, d = { rid = rid, name = name, v = "yes" } } end
-  eq(select(2, ap(s, rsvp("Au-R", "Cap-R:1"), "Cap-R")), "verified", "RSVP to A's event")
-  eq(select(2, ap(s, rsvp("W-R", "CapB-R:1"), "Cap-R")), "pending", "RSVP to B's event")
-  -- the captain of A gains nothing over guild authority records
-  eq(select(2, ap(s, { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 7, sq = 3, d = { squadsEnabled = false } }, "Cap-R")), "pending")
-  -- transfer: Cap signs xferTo A>Au-R in his own profile (live) -> he is no longer A's node
-  ok(ap(s, prof("Cap-R", T0 + 8, { squad = "A", xferTo = "A>Au-R" }), "Cap-R"))
-  eq(select(2, ap(s, prof("Z-R", T0 + 9, { squad = "A" }), "Cap-R")), "pending", "ex-captain = one relayer")
-  -- a receiver that does not know the squad yet counts the captain as one ordinary relayer
-  local s2 = newState()
-  eq(select(2, ap(s2, prof("Au-R", T0 + 3, { squad = "A" }), "Cap-R")), "pending")
+  eq(select(2, ap(s, prof("Au-R", T0 + 3, { squad = "A" }), "Cap-R")), "pending", "member of A relayed by A's captain")
+  eq(X.captainNode, nil, "no captain-node path left")
 end)
 
 -- AC6: the installed counter (presence records, adoptDays = 30)
@@ -268,14 +255,29 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.1: an unverified profile is listed grey 
   cache["Uv-Realm"], cache["Rl-Realm"] = nil, nil
 end }
 
+-- v1.2 annex G (BRO 04:13): what is not verifiable is shown "unverified" with a tooltip saying why and how it gets
+-- verified (the author logs in, or 2 certificates of people we heard in person); a disputed key says so
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: the unverified tooltip explains pending vs disputed keys", function(c)
+  local ns, L = c.ns, c.ns.L
+  ok(type(ns.UnverifiedTip) == "function", "ns.UnverifiedTip")
+  local tip = ns.UnverifiedTip("Uv-Realm", "Rl-Realm")
+  eq(tip, L.UNVERIFIED_TIP:format("Rl", "Uv"), "pending: relayer + author")
+  ok(L.UNVERIFIED_TIP:find("2", 1, true), "the pending tip mentions the 2 certificates")
+  local db = ns.trustDB
+  ok(db and db.contested, "trust db loaded")
+  db.contested["Uv-Realm"] = 1
+  eq(ns.UnverifiedTip("Uv-Realm", "Rl-Realm"), L.UNVERIFIED_TIP_DISPUTED:format("Uv"), "disputed key")
+  db.contested["Uv-Realm"] = nil
+end }
+
 -- v1.2 AC4: the GM repudiates a forged settings verified by quorum; a flooding relayer is capped at 200 pending
-legacyTest("v1.2: repudiate works on authority kinds (settings verified by 2 relayers is removed, relayers counted)", function()
+test("v1.2: repudiate works on authority kinds (a forged settings is removed, relayers counted)", function()
   local s = newState()
   local fake = { k = "settings", id = "settings", a = "Gm-R", ts = T0 + 50, sq = 7, d = { squadsEnabled = false } }
-  for _, n in ipairs({ "Y-R", "Z-R" }) do ap(s, fake, n) end
-  eq(s.settings.d.squadsEnabled, false, "verified by quorum 2")
+  for _, n in ipairs({ "Y-R", "Z-R" }) do eq(select(2, ap(s, fake, n)), "pending", n) end
   ok(ap(s, X.repudiation(fake, "Gm-R", T0 + 60, 8), "Gm-R"))
-  eq(s.settings, nil, "the forged settings is gone")
+  eq(X.unverified(s, "settings", "settings"), nil, "the forged settings is gone")
+  eq(s.settings.d.squadsEnabled, true, "the real settings untouched")
   eq(X.relayerScore(s, "Y-R"), 1); eq(X.relayerScore(s, "Z-R"), 1)
   -- someone else cannot repudiate the GM's version
   local s2 = newState()
@@ -364,13 +366,14 @@ end }
 
 -- H4 (QA 1.1, baja): X.before() dropped st.via[kid] as soon as the author spoke, even when the author's record then
 -- failed to apply (dup); the relayed version lost its relayers (a later repudiate of it counts them)
-legacyTest("H4: a failed apply of the author's own record keeps the relay trail (st.via) of the relayed version", function()
+test("H4: a failed apply of the author's own record keeps the relay trail (st.via) of the relayed version", function()
   local s = newState()
   local rel = prof("Au-R", T0 + 10, { note = "por relevo" })
-  ap(s, rel, "Y-R"); ap(s, rel, "Z-R")
+  ap(s, rel, "Y-R")
+  eq(sign(s, "Au-R", 1, { rel }), 1, "applied by the author's manifest")
   local via = X.st(s).via
   local n0 = 0; for _ in pairs(via) do n0 = n0 + 1 end
-  ok(n0 >= 1, "the relayed version is applied by quorum and leaves a via entry")
+  ok(n0 >= 1, "the relayed version leaves a via entry")
   local okA, whyA = ap(s, rel, "Au-R")
   ok(not okA, "the author's copy of the same version does not apply again (" .. tostring(whyA) .. ")")
   local n1 = 0; for _ in pairs(via) do n1 = n1 + 1 end

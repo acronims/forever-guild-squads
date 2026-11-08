@@ -563,8 +563,6 @@ function M.provenance(rec, ctx, settings, u)
     if ctx.sender == rec.a then return true end
     -- v1.2 annex F: with signed manifests an officer's relay is not trusted on its own (a modified officer client
     -- could forge anyone's record): it goes through Core/P2P.lua like any relay and needs the author's signature
-    local X = ns.P2P
-    if not u and not (X and X.SIGNED) and P.isOfficer(roster, ctx.sender, settings) then return true end
     if M.isP2P(rec) then return false, "p2p" end
     -- v1.2: authority records relayed by a member are not refused either: they wait for QUORUM_AUTH relayers
     -- (Core/P2P.lua). Their validation (validateSquad, canEdit...) runs unchanged when the quorum commits them.

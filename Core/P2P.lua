@@ -113,31 +113,6 @@ function X.relayerScore(state, name)
   return e and e.n or 0
 end
 
--- the squad a record belongs to (captain nodes): profile -> d.squad, reject inv -> d.sid,
--- rsvp / witness -> the squad of the owner of the event's roster
-function X.squadOfRecord(state, rec)
-  local d = rec.d or {}
-  if rec.k == "profile" then return d.squad end
-  if rec.k == "reject" then return d.sid end
-  if rec.k == "rsvp" or rec.k == "witness" then
-    local ro = state.rosters and type(d.rid) == "string" and state.rosters[d.rid]
-    local owner = ro and ro.d and ro.d.owner
-    return owner and M.squadOf(state, owner) or nil
-  end
-  return nil
-end
--- the current captain of the squad (stored, not disbanded, not handed over with xferTo)
-function X.captainNode(state, rec, sender)
-  if type(sender) ~= "string" then return false end
-  local sid = X.squadOfRecord(state, rec)
-  if type(sid) ~= "string" then return false end
-  local sq = state.squads and state.squads[sid]
-  if not sq or sq.d.disbanded or sq.d.captain ~= sender then return false end
-  local cp = state.profiles[sender]
-  local xf = cp and cp.d and cp.d.xferTo
-  if type(xf) == "string" and xf:sub(1, #sid + 1) == sid .. ">" then return false end
-  return true
-end
 
 -- pending versions not newer than `rec` are obsolete once `rec` is stored
 local function clearPend(st, kid, rec)
@@ -217,7 +192,7 @@ function X.offer(state, rec, ctx, settings, u)
       if okC and st.via[kid] then st.via[kid].sig = status end
       return okC, whyC
     end
-  elseif not u and M.isP2P(rec) and X.captainNode(state, rec, sender) then return commit(state, rec, ctx, vk, kid, { sender }) end
+  end
   local byId = st.pend[kid]
   if not byId then byId = {}; st.pend[kid] = byId end
   local e = byId[vk]
@@ -237,9 +212,6 @@ function X.offer(state, rec, ctx, settings, u)
     if ovk ~= vk and o.r.ts == rec.ts and o.r.sq == rec.sq and o.r.a == rec.a then e.cf = true; o.cf = true end
   end
   if e.cf then return false, "conflict" end
-  local voters = {}
-  for n in pairs(e.by) do if not X.blocked(state, n, now) then voters[#voters + 1] = n end end
-  if not X.SIGNED and #voters >= X.quorumFor(rec) then return commit(state, rec, ctx, vk, kid, voters) end
   return false, "pending"
 end
 
