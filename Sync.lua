@@ -190,13 +190,17 @@ end
 -- froze every receiver): queued (ROT_Q_MAX, deduped) and verified by Sync.SigStep, the one-verify-per-frame step
 -- that pauses in combat and encounters (QA r2 N3: it used to run on its own After(0) timer, so a frame could hold
 -- two verifies and encounters did not pause it). A rotation that failed is remembered (ROT_BAD_MAX tags).
-Sync.ROT_Q_MAX, Sync.ROT_BAD_MAX = 20, 200
-local rotQ, rotQueued, rotBad, rotBadN = {}, {}, {}, 0
+-- sec r2 R4: at most ROT_PER_SENDER queued rotations per sender, so one member cannot fill the queue
+Sync.ROT_Q_MAX, Sync.ROT_BAD_MAX, Sync.ROT_PER_SENDER = 20, 200, 4
+local rotQ, rotQueued, rotBad, rotBadN, rotBy = {}, {}, {}, 0, {}
 function Sync.RotPending() return #rotQ end
 local function rotStep()
   if #rotQ == 0 then return nil end
   local e = table.remove(rotQ, 1)
   rotQueued[e.tag] = nil
+  local fk = e.from or "?"
+  rotBy[fk] = (rotBy[fk] or 1) - 1
+  if rotBy[fk] <= 0 then rotBy[fk] = nil end
   local T, db = ns.Trust, ns.trustDB
   local cur, cs = T.keyOf(db, e.a)
   -- still the same strong key we held when it was queued (a hello in person may have changed it meanwhile)
@@ -215,9 +219,13 @@ end
 function Sync.QueueRotation(a, pk, sig, from)
   local tag = a .. "|" .. pk .. "|" .. sig
   if rotBad[tag] or rotQueued[tag] then return end
-  if #rotQ >= Sync.ROT_Q_MAX then Sync.stats.rotDropped = (Sync.stats.rotDropped or 0) + 1; return end
+  local fk = from or "?"
+  if #rotQ >= Sync.ROT_Q_MAX or (rotBy[fk] or 0) >= Sync.ROT_PER_SENDER then
+    Sync.stats.rotDropped = (Sync.stats.rotDropped or 0) + 1; return
+  end
   rotQ[#rotQ + 1] = { a = a, pk = pk, sig = sig, tag = tag, from = from }
   rotQueued[tag] = true
+  rotBy[fk] = (rotBy[fk] or 0) + 1
 end
 -- `ks` of a D message: only for authors of records in it and roster members; the sender itself = in person
 local function learnKeys(payload, from)

@@ -413,3 +413,16 @@ test("keys: QA r2 N3: rotations go through Sync.SigStep (the one-per-frame step 
   end
   eq(nsB.Sync.RotPending(), 0)
 end)
+
+test("keys: sec r2 R4: one sender cannot fill the rotation queue (ROT_PER_SENDER)", function()
+  local nsB = wireNs("Bob-R", pkB, true)
+  local per = nsB.Sync.ROT_PER_SENDER
+  ok(type(per) == "number" and per < nsB.Sync.ROT_Q_MAX, "a per-sender cap below the queue size")
+  for i = 1, nsB.Sync.ROT_Q_MAX do nsB.Sync.QueueRotation("N" .. i .. "-R", ("ab"):rep(32), ("cd"):rep(64), "Fox-R") end
+  eq(nsB.Sync.RotPending(), per, "Fox fills only his share")
+  nsB.Sync.QueueRotation("Ali-R", ("ab"):rep(32), ("ef"):rep(64), "Eve-R")
+  eq(nsB.Sync.RotPending(), per + 1, "another sender still gets in")
+  while nsB.Sync.RotPending() > 0 do nsB.Sync.SigStep() end
+  nsB.Sync.QueueRotation("M1-R", ("ab"):rep(32), ("11"):rep(64), "Fox-R")
+  eq(nsB.Sync.RotPending(), 1, "the share is freed once his rotations are verified")
+end)
