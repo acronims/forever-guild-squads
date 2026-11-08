@@ -10,13 +10,14 @@ local _, pkA = key("A")
 local _, pkB = key("B")
 local _, pkF = key("F")
 
-local function wireNs(me, myPk)
+local function wireNs(me, myPk, p2p)
   local sent = {}
   local ns = { Model = M, Permissions = NS.Permissions, Serialize = S, Trust = T, state = M.newState(), roster = roster,
                rosterReady = true, onlineCount = function() return 1 end, me = function() return me end,
                fullName = function(n) return n end, After = function(_, fn) fn() end, serverTime = function() return T0 end,
                trustDB = T.st({}), myPk = function() return myPk end, Cert = NS.Cert, certDB = NS.Cert.st({}),
                Comm = { Send = function(tag, p, ch, to) sent[#sent + 1] = { tag, p, ch, to } end } }
+  if p2p then ns.P2P = NS.P2P end
   loadmod("Sync.lua", ns)
   return ns, sent
 end
@@ -117,4 +118,45 @@ test("keys: the owner in person with a new key replaces the pinned one; /gsq tru
   for i = 1, T.MIN_SAMPLES do pool.add(i, "x") end
   local sk, pk = T.ensureOwn(holder, pool)
   ok(sk and pk and holder.me and holder.keys == nil, "ensureOwn only writes `me`")
+end)
+
+test("keys: a 1.2 replier re-sends its certificate by GUILD (S16b: who was offline when it changed), once per CERT_REHELLO, coalesced", function()
+  NS.Cert.resetQueue()
+  local skB = key("B")
+  local now = T0
+  local nsB, sentB = wireNs("Bob-R", pkB, true)
+  local later = {}
+  nsB.After = function(d, fn) later[#later + 1] = { d, fn } end
+  nsB.serverTime = function() return now end
+  nsB.mySk = function() return skB end
+  local function certsSent()
+    local out = {}
+    for _, m in ipairs(sentB) do if m[1] == "D" and m[2].c then out[#out + 1] = { c = m[2].c, ch = m[3], to = m[4] } end end
+    return out
+  end
+  local H = { h = {}, p2 = 2 }
+  local function hello(from, pk) local h = { h = H.h, p2 = 2, pk = pk }; nsB.Sync.OnMessage("H", h, from) end
+  -- nobody heard in person yet: an empty certificate is not re-sent
+  hello("Cid-R")
+  eq(#certsSent(), 0, "empty: not re-sent")
+  -- Bob meets Ali in person; Eve (offline when it changed) says hello: Bob re-sends it by GUILD
+  T.hearOwner(nsB.trustDB, "Ali-R", pkA, now)
+  now = now + 5
+  hello("Eve-R")
+  local cs = certsSent()
+  eq(#cs, 1, "re-sent on a 1.2 hello")
+  ok(cs[1].c.i == "Bob-R" and #cs[1].c.e == 1 and cs[1].c.e[1] == NS.Cert.hash("Ali-R", pkA), "lists Ali")
+  ok(cs[1].ch == nil and cs[1].to == nil, "by GUILD")
+  -- two more hellos inside the window: one coalesced send at its end, not two
+  now = now + 10; hello("Gm-R")
+  now = now + 10; hello("Cid-R")
+  eq(#certsSent(), 1, "not right away")
+  local n = 0
+  for _, l in ipairs(later) do if l[1] == nsB.Sync.CERT_REHELLO - 10 then n = n + 1; now = now + 40; l[2]() end end
+  eq(n, 1, "one coalesced send scheduled")
+  eq(#certsSent(), 2, "sent at the end of the window")
+  -- a 1.0 / 1.1 hello (no p2) does not trigger it
+  now = now + 2 * nsB.Sync.CERT_REHELLO
+  nsB.Sync.OnMessage("H", { h = {} }, "Cid-R")
+  eq(#certsSent(), 2, "1.0/1.1 hello: nothing")
 end)

@@ -864,7 +864,9 @@ function S16b(seed) {
   const keyView = (c) => c.val(`(function() local T, db = NS.Trust, NS.trustDB
     local pk, s = T.keyOf(db, ${luaStr(ZED)}); local nc = #T.candidates(db, ${luaStr(ZED)})
     local p = NS.state.profiles[${luaStr(ZED)}]
-    return tostring(s) .. "/" .. (db.contested[${luaStr(ZED)}] and "contested" or "-") .. "/c" .. nc .. "/" .. (p and (tostring(p.d.note) .. ":" .. tostring(NS.P2P.strengthOf(NS.state, p))) or "nil") end)()`)[0];
+    local cw = NS.certDB.crt and NS.certDB.crt[${luaStr(full(sim,'Mb10'))}]
+    local dbg = " w=" .. (cw and (#cw.e .. "@" .. cw.n) or "none")
+    return tostring(s) .. "/" .. (db.contested[${luaStr(ZED)}] and "contested" or "-") .. "/c" .. nc .. "/" .. (p and (tostring(p.d.note) .. ":" .. tostring(NS.P2P.strengthOf(NS.state, p))) or "nil") .. dbg end)()`)[0];
   const pendZ = (c) => c.val(`(function() local n = 0 for kid, byId in pairs(NS.state.p2p and NS.state.p2p.pend or {}) do for _, e in pairs(byId) do if e.r.a == ${luaStr(ZED)} then n = n + 1 end end end return n end)()`)[0];
   const before = [h1, h2].map(keyView).concat(['wit:' + keyView(wit), 'pendZ:' + [h1, h2].map(pendZ).join('/')]);
   const FTS = sim.epoch + Math.round(sim.t) + 200;
