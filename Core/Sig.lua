@@ -58,11 +58,12 @@ end
 
 function G.validShape(m)
   if type(m) ~= "table" or type(m.a) ~= "string" or type(m.n) ~= "number" or m.n < 1 or m.n ~= math.floor(m.n)
-    or type(m.h) ~= "table" or type(m.s) ~= "string" or #m.s ~= 128 then return false end
+    or type(m.h) ~= "table" or type(m.s) ~= "string" or #m.s ~= 128 or m.a:find("%c") then return false end
   local c = 0
   for kid, h in pairs(m.h) do
     c = c + 1
-    if c > G.MAX_ENTRIES or type(kid) ~= "string" or type(h) ~= "string" or #h ~= G.HASH_LEN * 2 or h:find("[^0-9a-f]") then return false end
+    -- sec r2 R2: no newline/control or "=" in a kid, or entries could be merged into one key under the same statement
+    if c > G.MAX_ENTRIES or type(kid) ~= "string" or kid:find("[%c=]") or type(h) ~= "string" or #h ~= G.HASH_LEN * 2 or h:find("[^0-9a-f]") then return false end
   end
   return unhex(m.s) ~= nil
 end

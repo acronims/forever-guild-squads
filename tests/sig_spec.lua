@@ -144,3 +144,26 @@ test("sig sec F6: a copy with the real (a, n, s) but another body does not push 
   eq(G.status(db, r1), "strong", "the real manifest is verified")
   ok(G.sameBody(m, m) and not G.sameBody(m, fake), "G.sameBody compares the listed hashes")
 end)
+
+test("sig sec r2 R2 (QA D9): merging the manifest entries into one key with the same valid signature is refused", function()
+  G.resetQueue()
+  local db = G.st({})
+  local r1, r2, r3 = rec("A-R"), rec("B-R"), rec("C-R")
+  r2.a = "A-R"; r3.a = "A-R"
+  local m = G.build("A-R", 3, { r1, r2, r3 }, skA, pkA)
+  local kids = {}
+  for kid in pairs(m.h) do kids[#kids + 1] = kid end
+  table.sort(kids)
+  local parts = {}
+  for i = 1, #kids - 1 do parts[#parts + 1] = kids[i] .. "=" .. m.h[kids[i]] end
+  parts[#parts + 1] = kids[#kids]
+  local merged = { a = m.a, n = m.n, s = m.s, h = { [table.concat(parts, "\n")] = m.h[kids[#kids]] } }
+  eq(G.statement(merged), G.statement(m), "precondition: same signed bytes")
+  ok(not G.validShape(merged), "a kid with a newline or '=' is not a valid shape")
+  ok(not G.validShape({ a = "A-R\n9", n = 1, h = {}, s = m.s }), "an author with a control character is not a valid shape")
+  ok(G.validShape(m), "the real manifest is still valid")
+  local K = keys({ ["A-R"] = { pkA, "strong" } })
+  G.offer(db, merged, K); G.step(db)
+  G.offer(db, m, K); G.step(db)
+  eq(G.status(db, r1), "strong", "the real manifest is verified, the merged one never stored")
+end)
