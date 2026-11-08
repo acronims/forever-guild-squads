@@ -52,9 +52,27 @@ function G.statement(m)
 end
 
 -- the author's manifest over his records (list of records with rec.a == name)
+-- sec F7 / QA D6, decision 2 (BRO 8-nov): a manifest lists only the MAN_CAP most recent records of its author, so it
+-- always fits the 64 parts the receiver reassembles (Chunk.lua); older ones are seen "unverified". Signed pages: 1.2.1
+G.MAN_CAP = 180
+function G.pick(name, records)
+  local mine = {}
+  for _, rec in ipairs(records) do if rec.a == name then mine[#mine + 1] = rec end end
+  if #mine <= G.MAN_CAP then return mine end
+  local function kid(r) return tostring(r.k) .. ":" .. tostring(r.id) end
+  table.sort(mine, function(x, y)
+    local tx, ty = tonumber(x.ts) or 0, tonumber(y.ts) or 0
+    if tx ~= ty then return tx > ty end
+    return kid(x) < kid(y)
+  end)
+  local out = {}
+  for i = 1, G.MAN_CAP do out[i] = mine[i] end
+  return out
+end
+
 function G.build(name, n, records, sk, pk)
   local h = {}
-  for _, rec in ipairs(records) do if rec.a == name then h[rec.k .. ":" .. rec.id] = G.recHash(rec) end end
+  for _, rec in ipairs(G.pick(name, records)) do h[rec.k .. ":" .. rec.id] = G.recHash(rec) end
   local m = { a = name, n = n, h = h }
   m.s = hex(E.sign(sk, pk, G.statement(m)))
   return m

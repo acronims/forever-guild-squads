@@ -187,3 +187,36 @@ test("sig sec r3 S1: records whose id has '=' or a newline are signed and verifi
   ok(s1 ~= s2, "two bodies never build the same statement")
   ok(m2.s ~= m.s, "different manifests, different signatures")
 end)
+
+-- sec F7 / QA D6, decision 2 (BRO 8-nov): a manifest lists at most the MAN_CAP (180) most recent records of its author,
+-- so it always fits the 64 parts the receiver reassembles; the older ones are seen "unverified" (signed pages: 1.2.1)
+test("sig F7: a manifest signs the 180 most recent records of the author and fits in 64 parts", function()
+  G.resetQueue()
+  eq(G.MAN_CAP, 180, "cap of 180 records")
+  local recs = {}
+  for i = 1, 400 do
+    recs[#recs + 1] = { k = "attend", id = string.format("w%04d:A-Realmname", i), ts = 1795000000 + i * 37, sq = 1, a = "A-R",
+      d = { boss = "Ragnaros the Firelord", inst = 409, s = "yes", note = string.rep("n", 20) } }
+  end
+  -- out of order on purpose: the cap must pick by ts, not by position
+  for i = 1, #recs, 2 do recs[i], recs[#recs + 1 - i] = recs[#recs + 1 - i], recs[i] end
+  local m = G.build("A-R", 1, recs, skA, pkA)
+  local c = 0
+  for _ in pairs(m.h) do c = c + 1 end
+  eq(c, 180, "180 entries listed")
+  ok(G.validShape(m), "the capped manifest has a valid shape")
+  local db = G.st({})
+  G.offer(db, m, keys({ ["A-R"] = { pkA, "strong" } })); G.step(db)
+  local newest, oldest
+  for _, r in ipairs(recs) do
+    local i = tonumber(r.id:match("^w(%d+)"))
+    if i == 400 then newest = r elseif i == 220 then oldest = r end
+  end
+  eq(G.status(db, newest), "strong", "the newest record is signed")
+  local r221; for _, r in ipairs(recs) do if r.id:match("^w0221") then r221 = r end end
+  eq(G.status(db, r221), "strong", "the 180th most recent (n. 221) is signed")
+  eq(G.status(db, oldest), nil, "the 181st most recent (n. 220) is not signed: seen unverified")
+  local wire = NS.Serialize.escape and NS.Serialize.escape(NS.Serialize.encode({ r = {}, m = { m } })) or NS.Serialize.encode({ r = {}, m = { m } })
+  local parts = NS.Chunk.split(wire, "zz")
+  ok(#parts <= 64, "the capped manifest fits in 64 parts (" .. #parts .. ")")
+end)

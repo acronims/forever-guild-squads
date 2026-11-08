@@ -312,6 +312,7 @@ function Sync.OwnManifest()
   local mine = {}
   for _, r in ipairs(M.allRecords(ns.state)) do if r.a == me then mine[#mine + 1] = r end end
   if #mine == 0 then ownDirty = false; return cur end
+  mine = G.pick(me, mine)   -- sec F7: the MAN_CAP most recent (the same set G.build signs)
   local h = {}
   for _, r in ipairs(mine) do h[r.k .. ":" .. r.id] = G.recHash(r) end
   local same = not forceSign and cur and type(cur.h) == "table"
