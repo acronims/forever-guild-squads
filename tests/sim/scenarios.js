@@ -85,6 +85,30 @@ function S2(seed) {
   return { pass: pass(), checks, metrics: { applyAllSeconds: tAll, ...sim.stats } };
 }
 
+// S3: profiles the newcomer can see. seen = applied or pending ("unverified"); bad = applied with a version (ts + role +
+// avail) that the reference client `ref` (who holds the true copies, incl. the online authors' own newer profiles) does not have
+function s3Visible(c, names, ref) {
+  const q = names.map(luaStr).join(',');
+  const ver = (who) => who.val(`(function() local X, out = NS.P2P, {}
+    for _, id in ipairs({ ${q} }) do
+      local p = NS.state.profiles[id]
+      local u = X and X.unverified(NS.state, "profile", id)
+      local r = p or (u and u.r)
+      out[#out + 1] = r and (tostring(r.ts) .. "/" .. tostring(r.d.role) .. "/" .. tostring(r.d.avail) .. (p and "" or "?")) or "-"
+    end
+    return table.concat(out, ",") end)()`)[0].split(',');
+  const mine = ver(c), truth = ver(ref);
+  let seen = 0, verd = 0, bad = 0;
+  mine.forEach((m, k) => {
+    if (m === '-') return;
+    seen++;
+    if (m.endsWith('?')) return;
+    verd++;
+    if (m !== truth[k].replace(/\?$/, '')) bad++;
+  });
+  return { seen, ver: verd, bad };
+}
+
 // S3: a new client logs in with 200 records in the guild. (a) an officer online -> converges in <= N rounds.
 // (b) no GM / officer online -> v1.1: it gets every profile by P2P quorum (1.0: only what the connected authors own).
 function S3(seed) {
@@ -102,10 +126,13 @@ function S3(seed) {
     const nc = sim.client('Mb200');
     nc.login();
     const t0 = sim.t;
-    let tConv = null;
-    while (sim.t - t0 < 900) { sim.run(5); if (nc.hash() === off.hash()) { tConv = sim.t - t0; break; } }
-    check('newcomer converges with the officer in <= 6 hello rounds (<= 450 s)', tConv !== null && tConv <= 450, tConv === null ? 'no' : tConv.toFixed(0) + ' s');
-    metrics.convergeSeconds = tConv; metrics.records = n;
+    let tSeen = null, v = null;
+    while (sim.t - t0 < 900) { sim.run(5); v = s3Visible(nc, names, off); if (v.seen === names.length) { tSeen = sim.t - t0; break; } }
+    // v1.2 (BRO 8-nov, decision 1): the rule of >= 2 certificates stays, so with only 1 player online the newcomer
+    // cannot verify everything; it must SEE every profile (verified + "unverified" in grey) and apply 0 false copies
+    check('newcomer SEES the 200 profiles (verified + unverified) in <= 6 hello rounds (<= 450 s)', tSeen !== null && tSeen <= 450, tSeen === null ? `${v.seen}/${names.length}` : tSeen.toFixed(0) + ' s');
+    check('newcomer applied 0 false profiles', v.bad === 0, v.bad);
+    metrics.seenSeconds = tSeen; metrics.records = n; metrics.verified = v.ver; metrics.unverified = v.seen - v.ver;
     errorsCheck(sim, check);
   }
   {
@@ -118,13 +145,12 @@ function S3(seed) {
     const nc = sim.client('Mb150');
     nc.login();
     sim.run(600);
-    const got = nc.val('(function() local t = {} for id in pairs(NS.state.profiles) do t[#t+1] = id end table.sort(t) return table.concat(t, ",") end)()')[0];
-    const want = ['Mb1', 'Mb150', 'Mb2', 'Mb3'].map((n) => full(sim, n)).sort().join(',');
-    // v1.1: the 3 connected members hold the same 200 profiles; their replies give 2 distinct relayers per version
-    // (quorum) -> the newcomer converges on all of them without an officer (it used to get only the 3 authors' own)
-    const all = names.slice().sort().join(',');
-    check('without officers the newcomer gets every profile (P2P quorum of 2 relayers)', got === all, got.split(',').length + ' profiles');
-    metrics.noOfficerProfiles = got.split(',').length;
+    // the 3 connected members hold the same 200 profiles -> without an officer the newcomer SEES every profile
+    // (verified or "unverified" in grey) and applies 0 false copies
+    const v = s3Visible(nc, names, authors[0]);
+    check('without officers the newcomer SEES every profile (verified + unverified)', v.seen === names.length, `${v.seen}/${names.length}`);
+    check('without officers the newcomer applied 0 false profiles', v.bad === 0, v.bad);
+    metrics.noOfficerSeen = v.seen; metrics.noOfficerVerified = v.ver;
     errorsCheck(sim, check);
   }
   return { pass: pass(), checks, metrics };

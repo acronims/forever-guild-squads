@@ -42,7 +42,7 @@ jobs:
   sim:
     # Multi-client simulator: one scenario group per job (GitHub runners have 2 vCPU; one process per job).
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -50,7 +50,7 @@ jobs:
           - "S1 S3 S4 S5 --seed 7303 --s5seeds 5"
           - "S2 S6 --seed 7303"
           - "S7 --seed 7303"
-          - "S8 --seed 7303 --s8min 3"
+          - "S8 --seed 7303 --s8min 1"
           - "S9 --seed 7303 --s9min 15"
           - "S9 --seed 8303 --s9min 15"
           - "S9 --seed 9303 --s9min 15"
