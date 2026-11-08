@@ -32,6 +32,7 @@ Core\Progress.lua
 Core\Races.lua
 Core\Catalog.lua
 Core\Celebrate.lua
+Core\Ed25519.lua
 Core\P2P.lua
 Core\Diag.lua
 Comm.lua

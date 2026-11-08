@@ -19,7 +19,7 @@ function setGlobalTable(name, entries) {
   lua.lua_setglobal(L, to_luastring(name));
 }
 
-const core = ['Core/Serialize.lua', 'Core/Permissions.lua', 'Core/Chunk.lua', 'Core/Queue.lua', 'Core/Model.lua', 'Core/Match.lua', 'Core/Call.lua', 'Core/Content.lua', 'Core/Roster.lua', 'Core/Progress.lua', 'Core/Diag.lua', 'Core/Races.lua', 'Core/Catalog.lua', 'Core/Celebrate.lua', 'Core/P2P.lua'];
+const core = ['Core/Serialize.lua', 'Core/Permissions.lua', 'Core/Chunk.lua', 'Core/Queue.lua', 'Core/Model.lua', 'Core/Match.lua', 'Core/Call.lua', 'Core/Content.lua', 'Core/Roster.lua', 'Core/Progress.lua', 'Core/Diag.lua', 'Core/Races.lua', 'Core/Catalog.lua', 'Core/Celebrate.lua', 'Core/Ed25519.lua', 'Core/P2P.lua'];
 const wow = ['Locales/enUS.lua', 'Locales/esES.lua', 'Core/Logo.lua', 'Comm.lua', 'Sync.lua', 'UI/Widgets.lua', 'UI/Main.lua', 'GuildSquads.lua', 'Progress.lua', 'Hall.lua', 'Raids.lua', 'Diag.lua', 'UI/Panels.lua', 'UI/Ranking.lua', 'UI/Raids.lua', 'UI/Hall.lua', 'UI/Catalog.lua', 'UI/Minimap.lua'];
 // Specs run in this order: several register SMOKE_CHECKS that run later inside zload_spec.lua (in registration
 // order, sharing one fake client), so the order is part of the suite. A spec missing from the list fails the run.
@@ -40,6 +40,7 @@ const ORDER = [
   'squads_spec.lua',
   'sync_trust_spec.lua',
   'p2p_spec.lua',
+  'ed25519_spec.lua',
   'counters_spec.lua',
   'observations_spec.lua',
   'races_spec.lua',
@@ -71,6 +72,20 @@ setGlobalTable('SOURCES', all.map((f) => [f, read(f)]));
 setGlobalTable('CORE', core.map((f, i) => [i + 1, f]));
 setGlobalTable('SPECS', specs.map((f, i) => [i + 1, f]));
 
+// AF1 interop: fresh keys and signatures from node's crypto (OpenSSL), checked by the Lua port in ed25519_spec.lua
+{
+  const crypto = require('crypto');
+  const fx = [];
+  for (let i = 0; i < 2; i++) {
+    const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+    const sk = privateKey.export({ format: 'der', type: 'pkcs8' }).subarray(-32);
+    const pk = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32);
+    const msg = crypto.randomBytes(1 + i * 40);
+    const sig = crypto.sign(null, msg, privateKey);
+    fx.push([fx.length + 1, [sk, pk, msg, sig].map((b) => b.toString('hex')).join(':')]);
+  }
+  setGlobalTable('ED25519_NODE', fx);
+}
 const harness = read('tests/harness.lua');
 if (lauxlib.luaL_loadbuffer(L, to_luastring(harness), null, to_luastring('@tests/harness.lua')) !== lua.LUA_OK ||
     lua.lua_pcall(L, 0, 0, 0) !== lua.LUA_OK) {

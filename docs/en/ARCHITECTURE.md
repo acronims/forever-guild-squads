@@ -25,6 +25,7 @@ Pure Lua (`Core/`, no WoW API, unit-tested outside the game):
 | `Core/Races.lua` | Hall of Fame races (Top 100/10/3) from replicated observations; GM annulments; `vconfirm` kind. |
 | `Core/Catalog.lua` | The GM's catalog: `achdef` (on/off, Top size, name, custom races/badges) and `achgrant` (granted badges) kinds; effective size, off/legacy, bulk plans. |
 | `Core/Celebrate.lua` | Celebrations: what is announced (GM settings), single announcer per event via a claim, rate limit. |
+| `Core/Ed25519.lua` | Ed25519 signatures (RFC 8032), generated from ccryptolib (MIT) by `tests/tools/vendor-ed25519.js`. Pure Lua; strict verify (refuses S ≥ L and small-order points). |
 | `Core/Diag.lua` | Diagnostics model stored in `GuildSquadsDB.diag`. |
 
 WoW glue and UI:

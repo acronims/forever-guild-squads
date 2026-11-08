@@ -25,6 +25,7 @@ Lua puro (`Core/`, sin API de WoW, con tests unitarios fuera del juego):
 | `Core/Races.lua` | Carreras del Salón de la fama (Top 100/10/3) a partir de observaciones replicadas; anulaciones del GM; tipo `vconfirm`. |
 | `Core/Catalog.lua` | El catálogo del GM: tipos `achdef` (activado/desactivado, tamaño del Top, nombre, carreras/insignias propias) y `achgrant` (insignias otorgadas); tamaño efectivo, desactivado/legado, planes de cambio en bloque. |
 | `Core/Celebrate.lua` | Celebraciones: qué se anuncia (ajustes del GM), un solo anunciante por evento mediante un claim, límite de frecuencia. |
+| `Core/Ed25519.lua` | Firmas Ed25519 (RFC 8032), generado desde ccryptolib (MIT) por `tests/tools/vendor-ed25519.js`. Lua puro; verificación estricta (rechaza S ≥ L y puntos de orden pequeño). |
 | `Core/Diag.lua` | Modelo del diagnóstico, guardado en `GuildSquadsDB.diag`. |
 
 Pegamento con WoW e interfaz:
