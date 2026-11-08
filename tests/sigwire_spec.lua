@@ -194,3 +194,11 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: /gsq diag sig line (verified/pending/
   ok(type(rep) == "string" and rep:find("sig verified=%d+ pending=%d+ rejected=%d+ keys%(strong/weak%)=%d+/%d+ replaced=%d+") and rep:find("cert held=%d+ cert=%d+ disputed=%d+ pending=%d+ rejected=%d+"),
     "diag sig line")
 end }
+
+-- full client: /gsq diag carries the line of point 8 of the scope (p2 proto= sample= suppressed= auth-pend= seals=)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: /gsq diag p2 line (proto, sample, suppressed, auth-pend, seals)", function(c)
+  local rep = c.ns.DiagGlue.Report()
+  ok(type(rep) == "string" and rep:find("p2 proto=2 sample=%d+ suppressed=%d+ auth%-pend=%d+ seals=%d+"), "diag p2 line")
+  local y = c.ns.Sync.stats
+  ok(type(y.sampled) == "number" and type(y.suppressed) == "number", "sample / suppressed counters in Sync.stats")
+end }

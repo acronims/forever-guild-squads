@@ -52,7 +52,8 @@ local seenAfter = {}          -- id -> version string seen on the wire (reply su
 local corrections = {}        -- id -> true when a correction is already scheduled
 local cursor = {}             -- requester -> last reply key sent (pagination)
 local heard = {}              -- sender -> GetTime() of the last addon message (addon detection)
-Sync.stats = { hellos = 0, replied = 0, bad = 0, relayRefused = 0, future = 0, errors = 0, quarantined = 0, pending = 0, mine = 0 }
+Sync.stats = { hellos = 0, replied = 0, bad = 0, relayRefused = 0, future = 0, errors = 0, quarantined = 0, pending = 0, mine = 0,
+  sampled = 0, suppressed = 0 }  -- v1.2 point 8: records sent in sampled replies to 1.2 hellos / not sent (heard since the hello)
 
 local function vkey(r) return tostring(r.ts) .. "." .. tostring(r.sq) .. "." .. tostring(r.a) end
 local function serverNow()
@@ -631,7 +632,9 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
         -- skip: not ours to relay
       elseif queued[r.id] == vkey(r) then
         -- this version is already waiting in our send queue
-      elseif not suppressed(r, startedAt, otherPres and p2pReq or p2p, auth) then
+      elseif suppressed(r, startedAt, otherPres and p2pReq or p2p, auth) then
+        Sync.stats.suppressed = Sync.stats.suppressed + 1
+      else
         all[#all + 1] = { key = ("%03d|%s"):format(ki, r.id), r = r }   -- numeric kind order
         if otherPres then pres[#pres + 1] = #all end
       end
@@ -683,6 +686,7 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
     for _, t in ipairs({ prio, rest }) do
       for _, r in ipairs(t) do if #out < cap then out[#out + 1] = r end end
     end
+    Sync.stats.sampled = Sync.stats.sampled + #out
     return out, big
   end
   local last = cursor[sender]

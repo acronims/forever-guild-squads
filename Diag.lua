@@ -81,6 +81,14 @@ function G.Report()
   if ns.P2P and ns.state then -- v1.1: unverified versions, verified by quorum/captain, repudiations, blocked relayers
     extra[#extra + 1] = ns.P2P.diagLine(ns.state, (GetServerTime and GetServerTime()) or 0)
   end
+  if ns.Sync and ns.Sync.stats then -- v1.2 point 8: protocol, sampled / suppressed records, authorial versions waiting
+    -- for their author's signature (shown grey), manifests verified (annex F: the author's signature is the seal)
+    local y, X = ns.Sync.stats, ns.P2P
+    local pend = (X and ns.state) and X.stats(ns.state).pend or 0
+    local seals = (ns.Sig and ns.sigDB) and (ns.Sig.counts(ns.sigDB).verified or 0) or 0
+    extra[#extra + 1] = ("p2 proto=%d sample=%d suppressed=%d auth-pend=%d seals=%d"):format(X and X.PROTO or 0,
+      y.sampled or 0, y.suppressed or 0, pend, seals)
+  end
   if ns.Trust and ns.trustDB then -- v1.2 annex F: keys learned (strong in person / weak with quorum), alerts
     local db = ns.trustDB
     local st, wk, pend, sus = ns.Trust.counts(db)
