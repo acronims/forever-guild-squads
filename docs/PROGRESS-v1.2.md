@@ -422,3 +422,4 @@ Se mantiene la regla de **≥2 certificados de emisores fuertes**. **AF7 se reha
 - Mirado 11:51: BRO sin responder a AF4 ni a F7. Reprogramado a las 12:06 (desde las 13:00 sin respuesta se adelanta la batería final).
 - Mirado 12:06: BRO sigue sin responder a AF4 ni a F7. Reprogramado a las 12:21.
 - Mirado 12:21: BRO sigue sin responder a AF4 ni a F7. Reprogramado a las 12:36 (a partir de las 13:00 se adelanta la batería final).
+- Mirado 12:36: BRO sigue sin responder a AF4 ni a F7. Reprogramado a las 12:51 (a partir de las 13:00 se adelanta la batería final).
