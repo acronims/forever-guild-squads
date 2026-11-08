@@ -85,6 +85,8 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
   - Ante una inundación de clientes modificados el addon sigue funcionando, pero más lento: en la cola de verificación los certificados van antes que las rotaciones de clave y los manifiestos, las copias falsas sin firma de tus registros hacen que tu cliente firme hasta 5 desmentidos por hora (cada uno es un registro tuyo durante 30 días), un desmentido que solo coincide con la base de un registro no se reintenta cuando llega después el manifiesto del autor, a un nombre que pide ponerse al día se le da una respuesta grande como mucho una vez cada 25 segundos y 20 veces por hora, y las respuestas a hellos vuelven a susurrar certificados hasta 10 veces por minuto.
   - Si pierdes las SavedVariables, pierdes la clave: se crea una nueva y los demás la aceptan cuando te oyen en persona; hasta entonces ven tus datos sin verificar.
 - La 1.2 no se habla con la 1.0.x ni con la 1.1: tiene que actualizar toda la guild.
+- Cada jugador firma solo sus 180 registros más recientes; los más viejos se ven «sin verificar» (los manifiestos por páginas firmadas llegan en la 1.2.1).
+- Ponerse al día: el 95 % llega en unos 4 minutos; los últimos registros pueden tardar más (1.2.1).
 - Una resincronización completa de una guild grande tarda minutos (throttle, por diseño).
 - Los IDs de encuentros/instancias de Forever no se conocen: las instancias se reconocen por nombre y aprenden el ID al verlo.
 - El cliente 1.60.1 no ofrece `UnitPVPRank`: ahí los logros y carreras de rango PvP no se muestran.

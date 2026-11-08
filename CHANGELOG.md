@@ -18,6 +18,9 @@ Cada jugador con el addon es un nodo: perfiles, squads, ajustes, anulaciones, ro
 - Nadie puede tener más de 200 registros pendientes a la vez. Límites por remitente: un hello cada 20 s, 20 manifiestos aparcados y 4 rotaciones de clave en cola. Las colas de manifiestos y certificados por verificar tienen un tope total, no por remitente.
 - Seguridad: arreglos menores en el rastro de reenvío y en la comprobación del registro de reenviadores. Lo que queda bajo inundación de clientes modificados (turnos de la cola de verificación, desmentidos de copias sin firma, respuestas grandes de puesta al día como mucho cada 25 s y 20 por hora por nombre, reenvío de certificados) está en los límites del README.
 - `/gsq diag`: la línea `comm` cuenta los mensajes de versión vieja descartados (`badProto=`).
+- **Manifiesto con tope**: cada jugador firma sus **180 registros más recientes**; los más viejos (p. ej. asistencias antiguas de un GM) siguen llegando, pero se ven «sin verificar». Así el manifiesto cabe siempre en un mensaje que los demás pueden recibir.
+- Un recién llegado con un solo jugador conectado ve todos los perfiles al momento; los que no puede verificar todavía salen en gris y pasan a verificados en cuanto coinciden las firmas (al oír al autor o a 2 jugadores que certifiquen su clave).
+- **Límites conocidos, para la 1.2.1**: manifiestos por páginas firmadas (hoy, tope de 180 registros por autor); la cola de la puesta al día (el 95 % llega en ≤ 4 min, los últimos registros pueden tardar más porque una ronda vacía corta el catch-up).
 
 ### EN
 
@@ -33,6 +36,9 @@ Every player with the addon is a node: profiles, squads, settings, annulments, r
 - Nobody can hold more than 200 pending records at once. Per-sender limits: one hello per 20 s, 20 parked manifests and 4 queued key rotations. The queues of manifests and certificates to verify have a total cap, not a per-sender one.
 - Security: minor fixes to the relay trail and the relayer ledger check. What remains under a flood from modified clients (verify-queue turns, denials of unsigned copies, large catch-up answers at most every 25 s and 20 per hour per name, certificate re-sends) is in the README limits.
 - `/gsq diag`: the `comm` line counts the dropped old-version messages (`badProto=`).
+- **Capped manifest**: each player signs their **180 most recent records**; older ones (e.g. a GM's old attendance) still arrive but show as "unverified". The manifest therefore always fits in a message the others can receive.
+- A newcomer with a single player online sees every profile right away; the ones it cannot verify yet are grey and turn verified as soon as the signatures match (when it hears the author, or 2 players certify their key).
+- **Known limits, for 1.2.1**: signed manifest pages (today, a cap of 180 records per author); the catch-up tail (95 % arrives in ≤ 4 min, the last records can take longer because an empty round ends the catch-up).
 
 ## 1.1.0 — no publicada, incluida en la 1.2.0 / never published, included in 1.2.0 — Sincronización P2P sin oficiales / P2P sync without officers
 

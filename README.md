@@ -85,6 +85,8 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
   - Under a flood from modified clients the addon stays usable but slower: certificate checks go before key rotations and manifests in the verify queue, forged unsigned copies of your records make your client sign up to 5 denials per hour (each one is a record of yours for 30 days), a denial that only matches a record's base is not retried when the author's manifest arrives later, a name asking to catch up gets a large answer at most once every 25 seconds and 20 times per hour, and answers to hellos re-whisper certificates up to 10 times per minute.
   - Losing SavedVariables loses the key: a new one is made and others accept it when they hear you in person; until then your data looks unverified to them.
 - 1.2 does not talk to 1.0.x or 1.1: the whole guild has to update.
+- Each player signs only their 180 most recent records; older ones show as "unverified" (signed manifest pages come in 1.2.1).
+- Catching up: 95 % arrives in about 4 minutes; the last few records can take longer (1.2.1).
 - A full resync of a large guild takes minutes by design (throttle).
 - Forever encounter/instance IDs are unknown: instances match by name and learn the ID when seen.
 - The 1.60.1 client has no `UnitPVPRank`: PvP rank achievements and races are not shown there.
