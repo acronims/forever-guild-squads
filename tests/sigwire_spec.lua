@@ -98,3 +98,19 @@ test("sigwire: an author's manifest goes once per MAN_EVERY per destination unle
   nsA.Sync.SendRecords({ M.stored(nsA.state, prof("Ali-R", T0 + 2)) }, "Bob-R")
   ok(lastD(sentA).m, "a new n goes again")
 end)
+
+test("sigwire: a new own key (/gsq trust newkey) re-signs the same records with it, n keeps growing", function()
+  G.resetQueue()
+  local nsA, sentA = wireNs("Ali-R", skA, pkA)
+  ok(nsA.Sync.Publish(prof("Ali-R", T0 + 1, "a")))
+  local m1 = lastD(sentA).m[1]
+  local skN, pkN = key("A-new")
+  nsA.mySk, nsA.myPk = function() return skN end, function() return pkN end
+  ok(nsA.Sync.ResignOwn ~= nil, "Sync.ResignOwn exists")
+  nsA.Sync.ResignOwn()
+  nsA.Sync.SendRecords({ M.stored(nsA.state, prof("Ali-R", T0 + 1)) }, "Bob-R")
+  local m2 = lastD(sentA).m
+  ok(m2 and m2[1].n > m1.n, "a new n")
+  ok(E.verify(pkN, G.statement(m2[1]), T.unhex(m2[1].s)), "signed with the new key")
+  ok(not E.verify(pkA, G.statement(m2[1]), T.unhex(m2[1].s)), "not with the old one")
+end)

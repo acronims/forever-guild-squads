@@ -91,10 +91,10 @@ test("keys: the same author's key goes once per 10 min per destination", functio
   ok(last[2].ks and last[2].ks["Ali-R"], "a whisper to someone else carries it")
 end)
 
-test("keys: /gsq trust reset forgets a pinned key so the owner can be learned again", function()
+test("keys: the owner in person with a new key replaces the pinned one; /gsq trust reset still forgets", function()
   local db = T.st({})
   T.hearOwner(db, "Ali-R", pkA, T0)
-  eq(T.hearOwner(db, "Ali-R", pkF, T0 + 1), "changed")
+  eq(T.hearOwner(db, "Ali-R", pkF, T0 + 1), "replaced")
   T.reset(db, "Ali-R")
   eq(T.hearOwner(db, "Ali-R", pkF, T0 + 2), "new")
   -- own key holder is separate from the guild's trust db (per character, not per guild)

@@ -647,6 +647,17 @@ function ns.myPk()
   if ok and pk then db.ownKeys[me] = holder; ownPk = pk end
   return ownPk
 end
+-- /gsq trust newkey (BRO 8-nov 03:09): drop our key after a confirmation; a new one is made from fresh entropy,
+-- announced in the next hello (heard in person it always wins) and our records are signed again with it
+function ns.NewOwnKey()
+  local me = ns.me and ns.me()
+  if not (db and me and type(db.ownKeys) == "table") then return false end
+  db.ownKeys[me] = nil
+  ownPk = nil
+  if ns.Sync and ns.Sync.ResignOwn then ns.Sync.ResignOwn() end
+  if ns.Sync and ns.Sync.QueueOwnManifest then ns.Sync.QueueOwnManifest() end
+  return true
+end
 function ns.mySk()
   if not ns.myPk() then return nil end
   return ns.Trust.own(db.ownKeys[ns.me()])
@@ -732,7 +743,13 @@ SlashCmdList.GUILDSQUADS = function(msg)
   elseif cmd == "trust" then
     -- /gsq trust reset <name>: forget a member's key (he lost his SavedVariables); learned again from him in person
     local sub, who = (msg or ""):match("^%S+%s+(%S+)%s*(%S*)")
-    if sub == "reset" and who and who ~= "" and ns.Trust and ns.trustDB then
+    if sub == "newkey" then
+      local W = ns.W
+      local go = function()
+        if ns.NewOwnKey() then print_(L.TRUST_NEWKEY_DONE or "Clave nueva en curso.") end
+      end
+      if W and W.Confirm then W.Confirm(L.TRUST_NEWKEY_CONFIRM, go) else print_(L.TRUST_NEWKEY_CONFIRM) end
+    elseif sub == "reset" and who and who ~= "" and ns.Trust and ns.trustDB then
       local name = (ns.fullName and ns.fullName(who)) or who
       ns.Trust.reset(ns.trustDB, name)
       print_((L.TRUST_RESET or "Clave olvidada: %s"):format(name))

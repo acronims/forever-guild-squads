@@ -200,6 +200,9 @@ end
 -- the hashes differ; n = max(n + 1, server time) so a lost SavedVariables does not leave us below what others hold.
 -- Kept in the guild's sig db (sigDB.own[name]).
 function Sync.MarkOwnDirty() ownDirty = true end
+-- a new own key (/gsq trust newkey, BRO 8-nov 03:09): re-sign with it even if no record changed; n keeps growing
+local forceSign = false
+function Sync.ResignOwn() forceSign = true; ownDirty = true end
 function Sync.OwnManifest()
   local G, db = ns.Sig, ns.sigDB
   local me = ns.me and ns.me()
@@ -214,7 +217,7 @@ function Sync.OwnManifest()
   if #mine == 0 then ownDirty = false; return cur end
   local h = {}
   for _, r in ipairs(mine) do h[r.k .. ":" .. r.id] = G.recHash(r) end
-  local same = cur and type(cur.h) == "table"
+  local same = not forceSign and cur and type(cur.h) == "table"
   if same then
     for kid, v in pairs(h) do if cur.h[kid] ~= v then same = false; break end end
     if same then for kid in pairs(cur.h) do if h[kid] == nil then same = false; break end end end
@@ -224,6 +227,7 @@ function Sync.OwnManifest()
   local n = math.max((cur and tonumber(cur.n) or 0) + 1, math.floor(serverNow() or 0))
   local okS, m = pcall(G.build, me, n, mine, sk, pk)
   if not okS or not m then return cur end
+  forceSign = false
   db.own[me] = m
   return m
 end

@@ -114,8 +114,9 @@ end
 -- the owner `name` sent us `pk` himself. Returns:
 --   "new"      first key: pinned strong
 --   "same"     already pinned (or a weak one that becomes strong)
---   "replaced" it beat a weak/contested key: the caller drops what the old weak key signed (second value = old pk)
---   "changed"  a different strong key without rotation: refused, noted in alerts
+--   "replaced" it beat the key we held, weak, contested or strong (BRO 8-nov 03:09: WoW guarantees the sender, so a
+--              key heard from the owner in person always wins; the old one is "replaced", noted in alerts/diag, and
+--              the caller drops what it signed; second value = old pk)
 function T.hearOwner(db, name, pk, now)
   T.st(db)
   if not validPk(pk) then return "bad" end
@@ -123,9 +124,12 @@ function T.hearOwner(db, name, pk, now)
   local h = hex(pk)
   if k and k.s == "strong" then
     if k.pk == h then return "same" end
-    db.n.rejected = db.n.rejected + 1
+    db.n.replaced = (db.n.replaced or 0) + 1
     alert(db, "keychange " .. name)
-    return "changed"
+    db.keys[name] = { pk = h, s = "strong", t = now, prev = k.pk }
+    db.contested[name] = nil
+    dropPend(db, name)
+    return "replaced", T.unhex(k.pk)
   end
   local old
   if k and k.pk ~= h then
