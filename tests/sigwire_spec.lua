@@ -202,3 +202,23 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: /gsq diag p2 line (proto, sample, sup
   local y = c.ns.Sync.stats
   ok(type(y.sampled) == "number" and type(y.suppressed) == "number", "sample / suppressed counters in Sync.stats")
 end }
+
+-- full client: /gsq trust newkey in the same session makes a DIFFERENT key (fresh entropy, the pool starts over) and
+-- announces it in a hello as soon as it exists (before: the pool had stopped sampling, so the same seed = same key)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 AF5: /gsq trust newkey in-session makes a different key from fresh entropy and says hello with it", function(c)
+  local ns = c.ns
+  for _ = 1, 100 do if ns.myPk() then break end; c.tick(1) end
+  local pk1 = ns.myPk()
+  ok(pk1, "own key made")
+  local hellos, saved = {}, ns.Comm.Send
+  ns.Comm.Send = function(kind, msg, ...) if kind == "H" then hellos[#hellos + 1] = msg end; return saved(kind, msg, ...) end
+  ok(ns.NewOwnKey(), "newkey")
+  local pk2
+  for _ = 1, 200 do pk2 = ns.myPk(); if pk2 then break end; c.tick(1) end
+  for _ = 1, 5 do c.tick(1) end
+  ns.Comm.Send = saved
+  ok(pk2 and pk2 ~= pk1, "a different key")
+  local said
+  for _, h in ipairs(hellos) do if h.pk == ns.Trust.hex(pk2) then said = true end end
+  ok(said, "a hello carries the new key")
+end }

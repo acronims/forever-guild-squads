@@ -610,7 +610,7 @@ end)
 for _, c in ipairs(SMOKE_CHECKS or {}) do
   test(c[1], function()
     c[2]({ ns = ns, geo = geo, vis = vis, click = click, win = ns.UI.Window(), roster = roster, fire = fire,
-           allObjs = allObjs, under = under })
+           allObjs = allObjs, under = under, tick = tick })
   end)
 end
 

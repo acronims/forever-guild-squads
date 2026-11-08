@@ -637,6 +637,7 @@ end
 -- cursor position, the player GUID and math.random. The pool stops sampling once the key exists.
 local pool = ns.Trust and ns.Trust.entropy()
 local ownPk
+local f, sampler                       -- the events frame and its OnUpdate key sampler (defined below)
 local function sample(tag)
   if not pool or ownPk then return end
   local cx, cy
@@ -660,6 +661,10 @@ function ns.myPk()
       local osk, opk = ns.Trust.own(prev)
       if osk and opk and ns.Sync and ns.Sync.OwnRotation then pcall(ns.Sync.OwnRotation, osk, opk, pk) end
       db.prevOwnKeys[me] = nil
+      -- re-sign our records and say hello with the new key now (heard in person it is strong), not in the next one
+      if ns.Sync and ns.Sync.ResignOwn then ns.Sync.ResignOwn() end
+      if ns.Sync and ns.Sync.QueueOwnManifest then ns.Sync.QueueOwnManifest() end
+      if ns.Sync and ns.Sync.Hello and ns.rosterReady then pcall(ns.Sync.Hello) end
     end
   end
   return ownPk
@@ -675,8 +680,10 @@ function ns.NewOwnKey()
   end
   db.ownKeys[me] = nil
   ownPk = nil
-  if ns.Sync and ns.Sync.ResignOwn then ns.Sync.ResignOwn() end
-  if ns.Sync and ns.Sync.QueueOwnManifest then ns.Sync.QueueOwnManifest() end
+  -- fresh entropy: the old pool stopped sampling once our key existed, its seed would give the same key again.
+  -- The new key is made by the OnUpdate sampler once the new pool has T.MIN_SAMPLES samples (ns.myPk above).
+  pool = ns.Trust.entropy()
+  if f and sampler then f:SetScript("OnUpdate", sampler) end
   return true
 end
 function ns.mySk()
@@ -686,7 +693,7 @@ end
 
 -------------------------------------------------------------------------------
 -- events
-local f = CreateFrame("Frame")
+f = CreateFrame("Frame")
 f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_LOGOUT")
@@ -694,11 +701,12 @@ f:RegisterEvent("GUILD_ROSTER_UPDATE")
 f:RegisterEvent("PLAYER_LEVEL_UP")
 f:RegisterEvent("PLAYER_GUILD_UPDATE")
 local rosterQueued = false
-f:SetScript("OnUpdate", function()
+sampler = function()
   if ownPk or not pool then f:SetScript("OnUpdate", nil); return end
   sample("f")
   if pool.n >= ns.Trust.MIN_SAMPLES and db and ns.myPk() then f:SetScript("OnUpdate", nil) end
-end)
+end
+f:SetScript("OnUpdate", sampler)
 -- v1.2 annex F: at most one manifest verify per frame, never in combat nor during a boss encounter
 local sigFrame = CreateFrame("Frame")
 sigFrame:SetScript("OnUpdate", function()
