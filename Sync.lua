@@ -677,6 +677,17 @@ function Sync.CheckSynced(now)
 end
 -- the watcher stops after 40 checks (~11 min); if records were still trickling in, it writes the line anyway
 function Sync.GiveUpSynced() fireSynced() end
+-- v1.2 AC3 (S8, CI 42505121559): a newcomer catching up keeps its rounds going while it holds pending copies (up to
+-- MAX_CATCHUP_ROUNDS x 30 s) and each round teaches > SYNCED_FEW (second copies), so neither NoteRound nor the
+-- watcher (armed after the last round) fire in time. The first hello of the session arms a deadline: SYNCED_MAX s
+-- later the line is written anyway (fireSynced is idempotent). ResetSynced (new session) makes it stale.
+Sync.SYNCED_MAX = 480
+function Sync.ArmSyncedDeadline()
+  if synced.done or synced.deadline or not ns.After then return end
+  local mine = synced
+  mine.deadline = true
+  ns.After(Sync.SYNCED_MAX, function() if synced == mine then fireSynced() end end)
+end
 local function now() return GetTime and GetTime() or 0 end
 local function watchSynced()
   synced.checks = synced.checks + 1
@@ -696,7 +707,7 @@ function Sync.Fresh()
 end
 
 function Sync.Hello(again)
-  if not again then round = 0; catchup = X and Sync.Fresh() or false end
+  if not again then round = 0; catchup = X and Sync.Fresh() or false; Sync.ArmSyncedDeadline() end
   learned = 0
   syncUntil = (GetTime and GetTime() or 0) + 120
   local h = {}
