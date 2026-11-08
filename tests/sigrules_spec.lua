@@ -192,6 +192,18 @@ test("sig sec r3 M1: a cert key of the GM cannot disband, edit or evict a squad 
   ok(okO, "a captain's own squad under a cert key is applied (" .. tostring(whyO) .. ")")
 end)
 
+test("QA r3 Q3-5: a repudiated base lets through only the version a strong manifest lists, not a cert one", function()
+  local s = newState()
+  local forged = prof("Au-R", T0 + 10, { note = "falso" })
+  local forged2 = prof("Au-R", T0 + 10, { note = "falso2" })
+  local rep = X.repudiation(forged, "Au-R", T0 + 60, 2)
+  eq(sign(s, "Au-R", 2, { rep }), "Au-R", "the author's strong manifest lists the repudiate")
+  ok(ap(s, rep, "Y-R"), "the repudiate is applied")
+  -- the same signed base, other content, under a cert key of Au-R (2 alts certify a fake key: annex G limit)
+  eq(sign(s, "Au-R", 3, { forged2 }, "cert"), "Au-R", "a cert manifest lists the second forged copy")
+  eq(select(2, ap(s, forged2, "Z-R")), "repudiated", "it stays out: the base was repudiated by the author")
+end)
+
 test("sig sec r2 R1: a repudiate of a forged copy with the real (ts, sq, a) does not hide the author's signed version", function()
   local s = newState()
   local real = prof("Au-R", T0 + 10, { note = "real" })

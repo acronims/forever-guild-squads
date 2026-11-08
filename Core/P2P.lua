@@ -187,7 +187,8 @@ function X.offer(state, rec, ctx, settings, u)
   -- a forged copy with the real (ts, sq, a) gets repudiated, the signed real one must still come through
   if repudiatedBase(state, vk) then
     local G, db = ns.Sig, sigdb(state)
-    if (state.repudiates or {})[vk] or not (G and db and G.status(db, rec)) then return false, "repudiated" end
+    -- QA r3 Q3-5: only a strong manifest (the author's own key) lifts a base the author repudiated
+    if (state.repudiates or {})[vk] or not (G and db and G.status(db, rec) == "strong") then return false, "repudiated" end
   end
   local stored = M.stored(state, rec)
   if stored and M.same(rec, stored) then

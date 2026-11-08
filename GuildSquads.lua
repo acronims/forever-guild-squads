@@ -314,6 +314,12 @@ end
 local denied = {}
 local MINE_MAX, MINE_WINDOW = 5, 3600
 local mineAt = {}
+-- sec r3 I4: the window is kept in the guild's saved db in server time, so a /reload does not give MINE_MAX more
+local function mineTimes()
+  if not ns.gdb then return mineAt, GetTime and GetTime() or 0 end
+  ns.gdb.mineAt = type(ns.gdb.mineAt) == "table" and ns.gdb.mineAt or {}
+  return ns.gdb.mineAt, (ns.serverTime and ns.serverTime()) or (GetServerTime and GetServerTime()) or 0
+end
 function ns.OnMine(rec)
   local X = ns.P2P
   if not X or type(rec) ~= "table" then return end
@@ -321,10 +327,10 @@ function ns.OnMine(rec)
   if clean.a ~= ns.me() then return end
   local vk = X.vkey(clean)
   if denied[vk] or (ns.state.repudiates and ns.state.repudiates[vk]) then return end
-  local now = GetTime and GetTime() or 0
-  while mineAt[1] and now - mineAt[1] >= MINE_WINDOW do table.remove(mineAt, 1) end
-  if #mineAt >= MINE_MAX then Sync.stats.mineCapped = (Sync.stats.mineCapped or 0) + 1; return end
-  mineAt[#mineAt + 1] = now
+  local times, now = mineTimes()
+  while times[1] and (type(times[1]) ~= "number" or now - times[1] >= MINE_WINDOW or times[1] > now + 60) do table.remove(times, 1) end
+  if #times >= MINE_MAX then Sync.stats.mineCapped = (Sync.stats.mineCapped or 0) + 1; return end
+  times[#times + 1] = now
   denied[vk] = true
   write("repudiate", vk, { t = X.kid(clean), v = vk })
   Sync.Resend(M.stored(ns.state, clean))

@@ -203,6 +203,7 @@ local function rotStep()
   rotBy[fk] = (rotBy[fk] or 1) - 1
   if rotBy[fk] <= 0 then rotBy[fk] = nil end
   local T, db = ns.Trust, ns.trustDB
+  if not (T and db) then return nil end      -- QA r3 Q3-3: the guild was unloaded
   local cur, cs = T.keyOf(db, e.a)
   -- still the same strong key we held when it was queued (a hello in person may have changed it meanwhile)
   if cur and cs == "strong" and cur ~= e.pk then
@@ -217,6 +218,10 @@ local function rotStep()
   end
   return e.a
 end
+-- QA r3 Q3-3: the queue belongs to the guild that heard it (GuildSquads unloadGuild runs ns.guildUnloadHooks)
+function Sync.ResetRotations() rotQ, rotQueued, rotBy = {}, {}, {} end
+ns.guildUnloadHooks = ns.guildUnloadHooks or {}
+table.insert(ns.guildUnloadHooks, Sync.ResetRotations)
 function Sync.QueueRotation(a, pk, sig, from)
   local tag = a .. "|" .. pk .. "|" .. sig
   if rotBad[tag] or rotQueued[tag] then return end

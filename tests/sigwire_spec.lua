@@ -302,6 +302,9 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 sec F1: forged records with my name ma
   local made = nrep() - before
   ok(made >= 1, "the first forged versions are still repudiated (" .. made .. ")")
   ok(made <= 5, "30 forged versions make at most 5 repudiates (" .. made .. ")")
+  -- sec r3 I4: the window is saved per guild (a /reload does not give 5 more)
+  local saved = ns.gdb and ns.gdb.mineAt
+  ok(type(saved) == "table" and #saved >= 1 and #saved <= 5, "the repudiate times are in the saved guild db (" .. tostring(saved and #saved) .. ")")
 end }
 
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2 sec F6: a GUILD copy with the real (a, n, s) and another body does not skip our manifest", function(c)
@@ -334,4 +337,25 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "QA r3 Q3-1: the signature step pauses in an
   IsEncounterInProgress, C_InstanceEncounter, S.RotPending, S.SigStep = gEnc, cEnc, rot, step
   eq(during, 0, "no signature step during the encounter")
   ok(after >= 1, "the step resumes after the encounter: " .. after)
+end }
+
+-- QA r3 Q3-3: the rotation queue does not outlive the guild (unloadGuild empties it) and a step without trust db
+-- (guild unloaded) is no Lua error in the frame
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "QA r3 Q3-3: rotations queued when the guild unloads are dropped, no error without trust db", function(c)
+  local ns = c.ns
+  local Sync = ns.Sync
+  local saved = ns.trustDB
+  Sync.QueueRotation("Zq-Realm", string.rep("ab", 32), string.rep("cd", 64), "Y-Realm")
+  ok(Sync.RotPending() >= 1, "a rotation queued")
+  ns.trustDB = nil
+  local okS, err = pcall(Sync.SigStep)
+  ns.trustDB = saved
+  ok(okS, "a step with the guild unloaded raises no error (" .. tostring(err) .. ")")
+  Sync.QueueRotation("Zq-Realm", string.rep("ef", 32), string.rep("cd", 64), "Y-Realm")
+  ok(type(Sync.ResetRotations) == "function", "Sync.ResetRotations")
+  if Sync.ResetRotations then Sync.ResetRotations() end
+  eq(Sync.RotPending(), 0, "the queue is empty after the reset")
+  local hooked = false
+  for _, fn in ipairs(ns.guildUnloadHooks or {}) do if fn == Sync.ResetRotations then hooked = true end end
+  ok(hooked, "unloading the guild resets the rotation queue")
 end }
