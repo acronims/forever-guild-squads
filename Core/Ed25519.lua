@@ -12,7 +12,7 @@ local B32
 do
   local floor = math.floor
   local bit = rawget(_G, "bit")
-  local T32 = 4294967296
+  local T32 = 4294967296.0
   local band, bor, bxor
   if bit then
     band = function(a, b) return bit.band(a, b) % T32 end
@@ -21,37 +21,48 @@ do
   else
     -- no bit library (Fengari tests): byte-wise tables; slow but exact
     local AND, OR, XOR = {}, {}, {}
-    for x = 0, 255 do for y = 0, 255 do
-      local a, o, e, p, xx, yy = 0, 0, 0, 1, x, y
-      for _ = 1, 8 do
-        local bx, by = xx % 2, yy % 2
-        if bx == 1 and by == 1 then a = a + p end
-        if bx == 1 or by == 1 then o = o + p end
+    for x = 0.0, 255.0 do for y = 0.0, 255.0 do
+      local a, o, e, p, xx, yy = 0.0, 0.0, 0.0, 1.0, x, y
+      for _ = 1.0, 8.0 do
+        local bx, by = xx % 2.0, yy % 2.0
+        if bx == 1.0 and by == 1.0 then a = a + p end
+        if bx == 1.0 or by == 1.0 then o = o + p end
         if bx ~= by then e = e + p end
-        xx, yy, p = (xx - bx) / 2, (yy - by) / 2, p * 2
+        xx, yy, p = (xx - bx) / 2.0, (yy - by) / 2.0, p * 2.0
       end
-      local k = x * 256 + y
+      local k = x * 256.0 + y
       AND[k], OR[k], XOR[k] = a, o, e
     end end
     local function op(t)
       return function(a, b)
-        local r, p = 0, 1
-        for _ = 1, 4 do
-          local x, y = a % 256, b % 256
-          r = r + t[x * 256 + y] * p
-          a, b, p = (a - x) / 256, (b - y) / 256, p * 256
+        local r, p = 0.0, 1.0
+        for _ = 1.0, 4.0 do
+          local x, y = a % 256.0, b % 256.0
+          r = r + t[x * 256.0 + y] * p
+          a, b, p = (a - x) / 256.0, (b - y) / 256.0, p * 256.0
         end
         return r
       end
     end
     band, bor, bxor = op(AND), op(OR), op(XOR)
   end
+  -- bit32.band/bor/bxor are variadic and sha512 calls them with 3 arguments
+  local function var(f2)
+    return function(a, b, c, ...)
+      local r = f2(a, b)
+      if c == nil then return r end
+      r = f2(r, c)
+      for i = 1.0, select("#", ...) do r = f2(r, (select(i, ...))) end
+      return r
+    end
+  end
+  band, bor, bxor = var(band), var(bor), var(bxor)
   B32 = {
     band = band, bor = bor, bxor = bxor,
-    bnot = function(a) return T32 - 1 - a % T32 end,
-    lshift = function(a, n) return (a % 2 ^ (32 - n)) * 2 ^ n end,
-    rshift = function(a, n) return floor((a % T32) / 2 ^ n) end,
-    extract = function(a, f) return floor(a / 2 ^ f) % 2 end,
+    bnot = function(a) return T32 - 1.0 - a % T32 end,
+    lshift = function(a, n) return (a % 2.0 ^ (32.0 - n)) * 2.0 ^ n end,
+    rshift = function(a, n) return floor((a % T32) / 2.0 ^ n) end,
+    extract = function(a, f) return floor(a / 2.0 ^ f) % 2.0 end,
   }
 end
 local F = function() return false end
@@ -59,20 +70,20 @@ local HW = { sha512 = F, ed25519PublicKey = F, ed25519Sign = F, ed25519Verify = 
 local M = {}
 M.packing = (function()
 local PK, UK = {}, {}
-PK["<I3I3I3I3I3I3I3I3I3I3I2"] = (function() local C=string.char return function(_,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32 b1=n1%2^8 n1=(n1-b1)*2^-8 b2=n1%2^8 n1=(n1-b2)*2^-8 b4=n2%2^8 n2=(n2-b4)*2^-8 b5=n2%2^8 n2=(n2-b5)*2^-8 b7=n3%2^8 n3=(n3-b7)*2^-8 b8=n3%2^8 n3=(n3-b8)*2^-8 b10=n4%2^8 n4=(n4-b10)*2^-8 b11=n4%2^8 n4=(n4-b11)*2^-8 b13=n5%2^8 n5=(n5-b13)*2^-8 b14=n5%2^8 n5=(n5-b14)*2^-8 b16=n6%2^8 n6=(n6-b16)*2^-8 b17=n6%2^8 n6=(n6-b17)*2^-8 b19=n7%2^8 n7=(n7-b19)*2^-8 b20=n7%2^8 n7=(n7-b20)*2^-8 b22=n8%2^8 n8=(n8-b22)*2^-8 b23=n8%2^8 n8=(n8-b23)*2^-8 b25=n9%2^8 n9=(n9-b25)*2^-8 b26=n9%2^8 n9=(n9-b26)*2^-8 b28=n10%2^8 n10=(n10-b28)*2^-8 b29=n10%2^8 n10=(n10-b29)*2^-8 b31=n11%2^8 n11=(n11-b31)*2^-8 return C(b1,b2,n1%2^8,b4,b5,n2%2^8,b7,b8,n3%2^8,b10,b11,n4%2^8,b13,b14,n5%2^8,b16,b17,n6%2^8,b19,b20,n7%2^8,b22,b23,n8%2^8,b25,b26,n9%2^8,b28,b29,n10%2^8,b31,n11%2^8)end end)()
-PK[">I16"] = (function() local C=string.char return function(_,n1)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16 b1=n1%2^8 n1=(n1-b1)*2^-8 b2=n1%2^8 n1=(n1-b2)*2^-8 b3=n1%2^8 n1=(n1-b3)*2^-8 b4=n1%2^8 n1=(n1-b4)*2^-8 b5=n1%2^8 n1=(n1-b5)*2^-8 b6=n1%2^8 n1=(n1-b6)*2^-8 b7=n1%2^8 n1=(n1-b7)*2^-8 b8=n1%2^8 n1=(n1-b8)*2^-8 b9=n1%2^8 n1=(n1-b9)*2^-8 b10=n1%2^8 n1=(n1-b10)*2^-8 b11=n1%2^8 n1=(n1-b11)*2^-8 b12=n1%2^8 n1=(n1-b12)*2^-8 b13=n1%2^8 n1=(n1-b13)*2^-8 b14=n1%2^8 n1=(n1-b14)*2^-8 b15=n1%2^8 n1=(n1-b15)*2^-8 return C(n1%2^8,b15,b14,b13,b12,b11,b10,b9,b8,b7,b6,b5,b4,b3,b2,b1)end end)()
-PK[">I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4"] = (function() local C=string.char return function(_,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32,b33,b34,b35,b36,b37,b38,b39,b40,b41,b42,b43,b44,b45,b46,b47,b48,b49,b50,b51,b52,b53,b54,b55,b56,b57,b58,b59,b60,b61,b62,b63,b64 b1=n1%2^8 n1=(n1-b1)*2^-8 b2=n1%2^8 n1=(n1-b2)*2^-8 b3=n1%2^8 n1=(n1-b3)*2^-8 b5=n2%2^8 n2=(n2-b5)*2^-8 b6=n2%2^8 n2=(n2-b6)*2^-8 b7=n2%2^8 n2=(n2-b7)*2^-8 b9=n3%2^8 n3=(n3-b9)*2^-8 b10=n3%2^8 n3=(n3-b10)*2^-8 b11=n3%2^8 n3=(n3-b11)*2^-8 b13=n4%2^8 n4=(n4-b13)*2^-8 b14=n4%2^8 n4=(n4-b14)*2^-8 b15=n4%2^8 n4=(n4-b15)*2^-8 b17=n5%2^8 n5=(n5-b17)*2^-8 b18=n5%2^8 n5=(n5-b18)*2^-8 b19=n5%2^8 n5=(n5-b19)*2^-8 b21=n6%2^8 n6=(n6-b21)*2^-8 b22=n6%2^8 n6=(n6-b22)*2^-8 b23=n6%2^8 n6=(n6-b23)*2^-8 b25=n7%2^8 n7=(n7-b25)*2^-8 b26=n7%2^8 n7=(n7-b26)*2^-8 b27=n7%2^8 n7=(n7-b27)*2^-8 b29=n8%2^8 n8=(n8-b29)*2^-8 b30=n8%2^8 n8=(n8-b30)*2^-8 b31=n8%2^8 n8=(n8-b31)*2^-8 b33=n9%2^8 n9=(n9-b33)*2^-8 b34=n9%2^8 n9=(n9-b34)*2^-8 b35=n9%2^8 n9=(n9-b35)*2^-8 b37=n10%2^8 n10=(n10-b37)*2^-8 b38=n10%2^8 n10=(n10-b38)*2^-8 b39=n10%2^8 n10=(n10-b39)*2^-8 b41=n11%2^8 n11=(n11-b41)*2^-8 b42=n11%2^8 n11=(n11-b42)*2^-8 b43=n11%2^8 n11=(n11-b43)*2^-8 b45=n12%2^8 n12=(n12-b45)*2^-8 b46=n12%2^8 n12=(n12-b46)*2^-8 b47=n12%2^8 n12=(n12-b47)*2^-8 b49=n13%2^8 n13=(n13-b49)*2^-8 b50=n13%2^8 n13=(n13-b50)*2^-8 b51=n13%2^8 n13=(n13-b51)*2^-8 b53=n14%2^8 n14=(n14-b53)*2^-8 b54=n14%2^8 n14=(n14-b54)*2^-8 b55=n14%2^8 n14=(n14-b55)*2^-8 b57=n15%2^8 n15=(n15-b57)*2^-8 b58=n15%2^8 n15=(n15-b58)*2^-8 b59=n15%2^8 n15=(n15-b59)*2^-8 b61=n16%2^8 n16=(n16-b61)*2^-8 b62=n16%2^8 n16=(n16-b62)*2^-8 b63=n16%2^8 n16=(n16-b63)*2^-8 return C(n1%2^8,b3,b2,b1,n2%2^8,b7,b6,b5,n3%2^8,b11,b10,b9,n4%2^8,b15,b14,b13,n5%2^8,b19,b18,b17,n6%2^8,b23,b22,b21,n7%2^8,b27,b26,b25,n8%2^8,b31,b30,b29,n9%2^8,b35,b34,b33,n10%2^8,b39,b38,b37,n11%2^8,b43,b42,b41,n12%2^8,b47,b46,b45,n13%2^8,b51,b50,b49,n14%2^8,b55,b54,b53,n15%2^8,b59,b58,b57,n16%2^8,b63,b62,b61)end end)()
-UK["<I3I3I2I3I3I2I3I3I2I3I3I2"] = (function() local B=string.byte return function(_,s,i)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32=B(s,i,i+31)return b1+b2*2^8+b3*2^16,b4+b5*2^8+b6*2^16,b7+b8*2^8,b9+b10*2^8+b11*2^16,b12+b13*2^8+b14*2^16,b15+b16*2^8,b17+b18*2^8+b19*2^16,b20+b21*2^8+b22*2^16,b23+b24*2^8,b25+b26*2^8+b27*2^16,b28+b29*2^8+b30*2^16,b31+b32*2^8,i+32 end end)()
-UK["<I3I3I3I3I3I3I3I3I3I3I2"] = (function() local B=string.byte return function(_,s,i)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32=B(s,i,i+31)return b1+b2*2^8+b3*2^16,b4+b5*2^8+b6*2^16,b7+b8*2^8+b9*2^16,b10+b11*2^8+b12*2^16,b13+b14*2^8+b15*2^16,b16+b17*2^8+b18*2^16,b19+b20*2^8+b21*2^16,b22+b23*2^8+b24*2^16,b25+b26*2^8+b27*2^16,b28+b29*2^8+b30*2^16,b31+b32*2^8,i+32 end end)()
-UK["<I3I3I3I3I3I3I3I3I3I3I3"] = (function() local B=string.byte return function(_,s,i)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32,b33=B(s,i,i+32)return b1+b2*2^8+b3*2^16,b4+b5*2^8+b6*2^16,b7+b8*2^8+b9*2^16,b10+b11*2^8+b12*2^16,b13+b14*2^8+b15*2^16,b16+b17*2^8+b18*2^16,b19+b20*2^8+b21*2^16,b22+b23*2^8+b24*2^16,b25+b26*2^8+b27*2^16,b28+b29*2^8+b30*2^16,b31+b32*2^8+b33*2^16,i+33 end end)()
-UK["<I3I3I3I3I3I3I3I3I3I3I1"] = (function() local B=string.byte return function(_,s,i)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31=B(s,i,i+30)return b1+b2*2^8+b3*2^16,b4+b5*2^8+b6*2^16,b7+b8*2^8+b9*2^16,b10+b11*2^8+b12*2^16,b13+b14*2^8+b15*2^16,b16+b17*2^8+b18*2^16,b19+b20*2^8+b21*2^16,b22+b23*2^8+b24*2^16,b25+b26*2^8+b27*2^16,b28+b29*2^8+b30*2^16,b31,i+31 end end)()
-UK[">I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4"] = (function() local B=string.byte return function(_,s,i)local b4,b3,b2,b1,b8,b7,b6,b5,b12,b11,b10,b9,b16,b15,b14,b13,b20,b19,b18,b17,b24,b23,b22,b21,b28,b27,b26,b25,b32,b31,b30,b29,b36,b35,b34,b33,b40,b39,b38,b37,b44,b43,b42,b41,b48,b47,b46,b45,b52,b51,b50,b49,b56,b55,b54,b53,b60,b59,b58,b57,b64,b63,b62,b61,b68,b67,b66,b65,b72,b71,b70,b69,b76,b75,b74,b73,b80,b79,b78,b77,b84,b83,b82,b81,b88,b87,b86,b85,b92,b91,b90,b89,b96,b95,b94,b93,b100,b99,b98,b97,b104,b103,b102,b101,b108,b107,b106,b105,b112,b111,b110,b109,b116,b115,b114,b113,b120,b119,b118,b117,b124,b123,b122,b121,b128,b127,b126,b125=B(s,i,i+127)return b1+b2*2^8+b3*2^16+b4*2^24,b5+b6*2^8+b7*2^16+b8*2^24,b9+b10*2^8+b11*2^16+b12*2^24,b13+b14*2^8+b15*2^16+b16*2^24,b17+b18*2^8+b19*2^16+b20*2^24,b21+b22*2^8+b23*2^16+b24*2^24,b25+b26*2^8+b27*2^16+b28*2^24,b29+b30*2^8+b31*2^16+b32*2^24,b33+b34*2^8+b35*2^16+b36*2^24,b37+b38*2^8+b39*2^16+b40*2^24,b41+b42*2^8+b43*2^16+b44*2^24,b45+b46*2^8+b47*2^16+b48*2^24,b49+b50*2^8+b51*2^16+b52*2^24,b53+b54*2^8+b55*2^16+b56*2^24,b57+b58*2^8+b59*2^16+b60*2^24,b61+b62*2^8+b63*2^16+b64*2^24,b65+b66*2^8+b67*2^16+b68*2^24,b69+b70*2^8+b71*2^16+b72*2^24,b73+b74*2^8+b75*2^16+b76*2^24,b77+b78*2^8+b79*2^16+b80*2^24,b81+b82*2^8+b83*2^16+b84*2^24,b85+b86*2^8+b87*2^16+b88*2^24,b89+b90*2^8+b91*2^16+b92*2^24,b93+b94*2^8+b95*2^16+b96*2^24,b97+b98*2^8+b99*2^16+b100*2^24,b101+b102*2^8+b103*2^16+b104*2^24,b105+b106*2^8+b107*2^16+b108*2^24,b109+b110*2^8+b111*2^16+b112*2^24,b113+b114*2^8+b115*2^16+b116*2^24,b117+b118*2^8+b119*2^16+b120*2^24,b121+b122*2^8+b123*2^16+b124*2^24,b125+b126*2^8+b127*2^16+b128*2^24,i+128 end end)()
+PK["<I3I3I3I3I3I3I3I3I3I3I2"] = (function() local C=string.char return function(_,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32 b1=n1%2.0^8.0 n1=(n1-b1)*2.0^-8.0 b2=n1%2.0^8.0 n1=(n1-b2)*2.0^-8.0 b4=n2%2.0^8.0 n2=(n2-b4)*2.0^-8.0 b5=n2%2.0^8.0 n2=(n2-b5)*2.0^-8.0 b7=n3%2.0^8.0 n3=(n3-b7)*2.0^-8.0 b8=n3%2.0^8.0 n3=(n3-b8)*2.0^-8.0 b10=n4%2.0^8.0 n4=(n4-b10)*2.0^-8.0 b11=n4%2.0^8.0 n4=(n4-b11)*2.0^-8.0 b13=n5%2.0^8.0 n5=(n5-b13)*2.0^-8.0 b14=n5%2.0^8.0 n5=(n5-b14)*2.0^-8.0 b16=n6%2.0^8.0 n6=(n6-b16)*2.0^-8.0 b17=n6%2.0^8.0 n6=(n6-b17)*2.0^-8.0 b19=n7%2.0^8.0 n7=(n7-b19)*2.0^-8.0 b20=n7%2.0^8.0 n7=(n7-b20)*2.0^-8.0 b22=n8%2.0^8.0 n8=(n8-b22)*2.0^-8.0 b23=n8%2.0^8.0 n8=(n8-b23)*2.0^-8.0 b25=n9%2.0^8.0 n9=(n9-b25)*2.0^-8.0 b26=n9%2.0^8.0 n9=(n9-b26)*2.0^-8.0 b28=n10%2.0^8.0 n10=(n10-b28)*2.0^-8.0 b29=n10%2.0^8.0 n10=(n10-b29)*2.0^-8.0 b31=n11%2.0^8.0 n11=(n11-b31)*2.0^-8.0 return C(b1,b2,n1%2.0^8.0,b4,b5,n2%2.0^8.0,b7,b8,n3%2.0^8.0,b10,b11,n4%2.0^8.0,b13,b14,n5%2.0^8.0,b16,b17,n6%2.0^8.0,b19,b20,n7%2.0^8.0,b22,b23,n8%2.0^8.0,b25,b26,n9%2.0^8.0,b28,b29,n10%2.0^8.0,b31,n11%2.0^8.0)end end)()
+PK[">I16"] = (function() local C=string.char return function(_,n1)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16 b1=n1%2.0^8.0 n1=(n1-b1)*2.0^-8.0 b2=n1%2.0^8.0 n1=(n1-b2)*2.0^-8.0 b3=n1%2.0^8.0 n1=(n1-b3)*2.0^-8.0 b4=n1%2.0^8.0 n1=(n1-b4)*2.0^-8.0 b5=n1%2.0^8.0 n1=(n1-b5)*2.0^-8.0 b6=n1%2.0^8.0 n1=(n1-b6)*2.0^-8.0 b7=n1%2.0^8.0 n1=(n1-b7)*2.0^-8.0 b8=n1%2.0^8.0 n1=(n1-b8)*2.0^-8.0 b9=n1%2.0^8.0 n1=(n1-b9)*2.0^-8.0 b10=n1%2.0^8.0 n1=(n1-b10)*2.0^-8.0 b11=n1%2.0^8.0 n1=(n1-b11)*2.0^-8.0 b12=n1%2.0^8.0 n1=(n1-b12)*2.0^-8.0 b13=n1%2.0^8.0 n1=(n1-b13)*2.0^-8.0 b14=n1%2.0^8.0 n1=(n1-b14)*2.0^-8.0 b15=n1%2.0^8.0 n1=(n1-b15)*2.0^-8.0 return C(n1%2.0^8.0,b15,b14,b13,b12,b11,b10,b9,b8,b7,b6,b5,b4,b3,b2,b1)end end)()
+PK[">I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4"] = (function() local C=string.char return function(_,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32,b33,b34,b35,b36,b37,b38,b39,b40,b41,b42,b43,b44,b45,b46,b47,b48,b49,b50,b51,b52,b53,b54,b55,b56,b57,b58,b59,b60,b61,b62,b63,b64 b1=n1%2.0^8.0 n1=(n1-b1)*2.0^-8.0 b2=n1%2.0^8.0 n1=(n1-b2)*2.0^-8.0 b3=n1%2.0^8.0 n1=(n1-b3)*2.0^-8.0 b5=n2%2.0^8.0 n2=(n2-b5)*2.0^-8.0 b6=n2%2.0^8.0 n2=(n2-b6)*2.0^-8.0 b7=n2%2.0^8.0 n2=(n2-b7)*2.0^-8.0 b9=n3%2.0^8.0 n3=(n3-b9)*2.0^-8.0 b10=n3%2.0^8.0 n3=(n3-b10)*2.0^-8.0 b11=n3%2.0^8.0 n3=(n3-b11)*2.0^-8.0 b13=n4%2.0^8.0 n4=(n4-b13)*2.0^-8.0 b14=n4%2.0^8.0 n4=(n4-b14)*2.0^-8.0 b15=n4%2.0^8.0 n4=(n4-b15)*2.0^-8.0 b17=n5%2.0^8.0 n5=(n5-b17)*2.0^-8.0 b18=n5%2.0^8.0 n5=(n5-b18)*2.0^-8.0 b19=n5%2.0^8.0 n5=(n5-b19)*2.0^-8.0 b21=n6%2.0^8.0 n6=(n6-b21)*2.0^-8.0 b22=n6%2.0^8.0 n6=(n6-b22)*2.0^-8.0 b23=n6%2.0^8.0 n6=(n6-b23)*2.0^-8.0 b25=n7%2.0^8.0 n7=(n7-b25)*2.0^-8.0 b26=n7%2.0^8.0 n7=(n7-b26)*2.0^-8.0 b27=n7%2.0^8.0 n7=(n7-b27)*2.0^-8.0 b29=n8%2.0^8.0 n8=(n8-b29)*2.0^-8.0 b30=n8%2.0^8.0 n8=(n8-b30)*2.0^-8.0 b31=n8%2.0^8.0 n8=(n8-b31)*2.0^-8.0 b33=n9%2.0^8.0 n9=(n9-b33)*2.0^-8.0 b34=n9%2.0^8.0 n9=(n9-b34)*2.0^-8.0 b35=n9%2.0^8.0 n9=(n9-b35)*2.0^-8.0 b37=n10%2.0^8.0 n10=(n10-b37)*2.0^-8.0 b38=n10%2.0^8.0 n10=(n10-b38)*2.0^-8.0 b39=n10%2.0^8.0 n10=(n10-b39)*2.0^-8.0 b41=n11%2.0^8.0 n11=(n11-b41)*2.0^-8.0 b42=n11%2.0^8.0 n11=(n11-b42)*2.0^-8.0 b43=n11%2.0^8.0 n11=(n11-b43)*2.0^-8.0 b45=n12%2.0^8.0 n12=(n12-b45)*2.0^-8.0 b46=n12%2.0^8.0 n12=(n12-b46)*2.0^-8.0 b47=n12%2.0^8.0 n12=(n12-b47)*2.0^-8.0 b49=n13%2.0^8.0 n13=(n13-b49)*2.0^-8.0 b50=n13%2.0^8.0 n13=(n13-b50)*2.0^-8.0 b51=n13%2.0^8.0 n13=(n13-b51)*2.0^-8.0 b53=n14%2.0^8.0 n14=(n14-b53)*2.0^-8.0 b54=n14%2.0^8.0 n14=(n14-b54)*2.0^-8.0 b55=n14%2.0^8.0 n14=(n14-b55)*2.0^-8.0 b57=n15%2.0^8.0 n15=(n15-b57)*2.0^-8.0 b58=n15%2.0^8.0 n15=(n15-b58)*2.0^-8.0 b59=n15%2.0^8.0 n15=(n15-b59)*2.0^-8.0 b61=n16%2.0^8.0 n16=(n16-b61)*2.0^-8.0 b62=n16%2.0^8.0 n16=(n16-b62)*2.0^-8.0 b63=n16%2.0^8.0 n16=(n16-b63)*2.0^-8.0 return C(n1%2.0^8.0,b3,b2,b1,n2%2.0^8.0,b7,b6,b5,n3%2.0^8.0,b11,b10,b9,n4%2.0^8.0,b15,b14,b13,n5%2.0^8.0,b19,b18,b17,n6%2.0^8.0,b23,b22,b21,n7%2.0^8.0,b27,b26,b25,n8%2.0^8.0,b31,b30,b29,n9%2.0^8.0,b35,b34,b33,n10%2.0^8.0,b39,b38,b37,n11%2.0^8.0,b43,b42,b41,n12%2.0^8.0,b47,b46,b45,n13%2.0^8.0,b51,b50,b49,n14%2.0^8.0,b55,b54,b53,n15%2.0^8.0,b59,b58,b57,n16%2.0^8.0,b63,b62,b61)end end)()
+UK["<I3I3I2I3I3I2I3I3I2I3I3I2"] = (function() local B=string.byte return function(_,s,i)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32=B(s,i,i+31.0)return b1+b2*2.0^8.0+b3*2.0^16.0,b4+b5*2.0^8.0+b6*2.0^16.0,b7+b8*2.0^8.0,b9+b10*2.0^8.0+b11*2.0^16.0,b12+b13*2.0^8.0+b14*2.0^16.0,b15+b16*2.0^8.0,b17+b18*2.0^8.0+b19*2.0^16.0,b20+b21*2.0^8.0+b22*2.0^16.0,b23+b24*2.0^8.0,b25+b26*2.0^8.0+b27*2.0^16.0,b28+b29*2.0^8.0+b30*2.0^16.0,b31+b32*2.0^8.0,i+32.0 end end)()
+UK["<I3I3I3I3I3I3I3I3I3I3I2"] = (function() local B=string.byte return function(_,s,i)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32=B(s,i,i+31.0)return b1+b2*2.0^8.0+b3*2.0^16.0,b4+b5*2.0^8.0+b6*2.0^16.0,b7+b8*2.0^8.0+b9*2.0^16.0,b10+b11*2.0^8.0+b12*2.0^16.0,b13+b14*2.0^8.0+b15*2.0^16.0,b16+b17*2.0^8.0+b18*2.0^16.0,b19+b20*2.0^8.0+b21*2.0^16.0,b22+b23*2.0^8.0+b24*2.0^16.0,b25+b26*2.0^8.0+b27*2.0^16.0,b28+b29*2.0^8.0+b30*2.0^16.0,b31+b32*2.0^8.0,i+32.0 end end)()
+UK["<I3I3I3I3I3I3I3I3I3I3I3"] = (function() local B=string.byte return function(_,s,i)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31,b32,b33=B(s,i,i+32.0)return b1+b2*2.0^8.0+b3*2.0^16.0,b4+b5*2.0^8.0+b6*2.0^16.0,b7+b8*2.0^8.0+b9*2.0^16.0,b10+b11*2.0^8.0+b12*2.0^16.0,b13+b14*2.0^8.0+b15*2.0^16.0,b16+b17*2.0^8.0+b18*2.0^16.0,b19+b20*2.0^8.0+b21*2.0^16.0,b22+b23*2.0^8.0+b24*2.0^16.0,b25+b26*2.0^8.0+b27*2.0^16.0,b28+b29*2.0^8.0+b30*2.0^16.0,b31+b32*2.0^8.0+b33*2.0^16.0,i+33.0 end end)()
+UK["<I3I3I3I3I3I3I3I3I3I3I1"] = (function() local B=string.byte return function(_,s,i)local b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23,b24,b25,b26,b27,b28,b29,b30,b31=B(s,i,i+30.0)return b1+b2*2.0^8.0+b3*2.0^16.0,b4+b5*2.0^8.0+b6*2.0^16.0,b7+b8*2.0^8.0+b9*2.0^16.0,b10+b11*2.0^8.0+b12*2.0^16.0,b13+b14*2.0^8.0+b15*2.0^16.0,b16+b17*2.0^8.0+b18*2.0^16.0,b19+b20*2.0^8.0+b21*2.0^16.0,b22+b23*2.0^8.0+b24*2.0^16.0,b25+b26*2.0^8.0+b27*2.0^16.0,b28+b29*2.0^8.0+b30*2.0^16.0,b31,i+31.0 end end)()
+UK[">I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4"] = (function() local B=string.byte return function(_,s,i)local b4,b3,b2,b1,b8,b7,b6,b5,b12,b11,b10,b9,b16,b15,b14,b13,b20,b19,b18,b17,b24,b23,b22,b21,b28,b27,b26,b25,b32,b31,b30,b29,b36,b35,b34,b33,b40,b39,b38,b37,b44,b43,b42,b41,b48,b47,b46,b45,b52,b51,b50,b49,b56,b55,b54,b53,b60,b59,b58,b57,b64,b63,b62,b61,b68,b67,b66,b65,b72,b71,b70,b69,b76,b75,b74,b73,b80,b79,b78,b77,b84,b83,b82,b81,b88,b87,b86,b85,b92,b91,b90,b89,b96,b95,b94,b93,b100,b99,b98,b97,b104,b103,b102,b101,b108,b107,b106,b105,b112,b111,b110,b109,b116,b115,b114,b113,b120,b119,b118,b117,b124,b123,b122,b121,b128,b127,b126,b125=B(s,i,i+127.0)return b1+b2*2.0^8.0+b3*2.0^16.0+b4*2.0^24.0,b5+b6*2.0^8.0+b7*2.0^16.0+b8*2.0^24.0,b9+b10*2.0^8.0+b11*2.0^16.0+b12*2.0^24.0,b13+b14*2.0^8.0+b15*2.0^16.0+b16*2.0^24.0,b17+b18*2.0^8.0+b19*2.0^16.0+b20*2.0^24.0,b21+b22*2.0^8.0+b23*2.0^16.0+b24*2.0^24.0,b25+b26*2.0^8.0+b27*2.0^16.0+b28*2.0^24.0,b29+b30*2.0^8.0+b31*2.0^16.0+b32*2.0^24.0,b33+b34*2.0^8.0+b35*2.0^16.0+b36*2.0^24.0,b37+b38*2.0^8.0+b39*2.0^16.0+b40*2.0^24.0,b41+b42*2.0^8.0+b43*2.0^16.0+b44*2.0^24.0,b45+b46*2.0^8.0+b47*2.0^16.0+b48*2.0^24.0,b49+b50*2.0^8.0+b51*2.0^16.0+b52*2.0^24.0,b53+b54*2.0^8.0+b55*2.0^16.0+b56*2.0^24.0,b57+b58*2.0^8.0+b59*2.0^16.0+b60*2.0^24.0,b61+b62*2.0^8.0+b63*2.0^16.0+b64*2.0^24.0,b65+b66*2.0^8.0+b67*2.0^16.0+b68*2.0^24.0,b69+b70*2.0^8.0+b71*2.0^16.0+b72*2.0^24.0,b73+b74*2.0^8.0+b75*2.0^16.0+b76*2.0^24.0,b77+b78*2.0^8.0+b79*2.0^16.0+b80*2.0^24.0,b81+b82*2.0^8.0+b83*2.0^16.0+b84*2.0^24.0,b85+b86*2.0^8.0+b87*2.0^16.0+b88*2.0^24.0,b89+b90*2.0^8.0+b91*2.0^16.0+b92*2.0^24.0,b93+b94*2.0^8.0+b95*2.0^16.0+b96*2.0^24.0,b97+b98*2.0^8.0+b99*2.0^16.0+b100*2.0^24.0,b101+b102*2.0^8.0+b103*2.0^16.0+b104*2.0^24.0,b105+b106*2.0^8.0+b107*2.0^16.0+b108*2.0^24.0,b109+b110*2.0^8.0+b111*2.0^16.0+b112*2.0^24.0,b113+b114*2.0^8.0+b115*2.0^16.0+b116*2.0^24.0,b117+b118*2.0^8.0+b119*2.0^16.0+b120*2.0^24.0,b121+b122*2.0^8.0+b123*2.0^16.0+b124*2.0^24.0,b125+b126*2.0^8.0+b127*2.0^16.0+b128*2.0^24.0,i+128.0 end end)()
 return { compilePack = function(f) return assert(PK[f], f), f end, compileUnpack = function(f) return assert(UK[f], f), f end }
 end)()
 M.util = (function()
 local unpack = unpack or table.unpack
 local function lassert(val, err, level)
-    if not val then error(err, level + 1) end
+    if not val then error(err, level + 1.0) end
     return val
 end
 
@@ -83,10 +94,10 @@ end
 --- @return number[]
 local function rebaseLE(a, base1, base2) -- TODO Write contract properly.
     local out = {}
-    local outlen = 1
-    local acc = 0
-    local mul = 1
-    for i = 1, #a do
+    local outlen = 1.0
+    local acc = 0.0
+    local mul = 1.0
+    for i = 1.0, #a do
         acc = acc + a[i] * mul
         mul = mul * base1
         while mul >= base2 do
@@ -94,10 +105,10 @@ local function rebaseLE(a, base1, base2) -- TODO Write contract properly.
             acc = (acc - rem) / base2
             mul = mul / base2
             out[outlen] = rem
-            outlen = outlen + 1
+            outlen = outlen + 1.0
         end
     end
-    if mul > 0 then
+    if mul > 0.0 then
         out[outlen] = acc
     end
     return out
@@ -108,23 +119,23 @@ end
 --- @return number[] bits The decoded clamped bits.
 local function bits(str)
     -- Decode.
-    local bytes = {str:byte(1, 32)}
+    local bytes = {str:byte(1.0, 32.0)}
     local out = {}
-    for i = 1, 32 do
+    for i = 1.0, 32.0 do
         local byte = bytes[i]
-        for j = -7, 0 do
-            local bit = byte % 2
-            out[8 * i + j] = bit
-            byte = (byte - bit) / 2
+        for j = -7.0, 0.0 do
+            local bit = byte % 2.0
+            out[8.0 * i + j] = bit
+            byte = (byte - bit) / 2.0
         end
     end
 
     -- Clamp.
-    out[1] = 0
-    out[2] = 0
-    out[3] = 0
-    out[255] = 1
-    out[256] = 0
+    out[1.0] = 0.0
+    out[2.0] = 0.0
+    out[3.0] = 0.0
+    out[255.0] = 1.0
+    out[256.0] = 0.0
 
     return out
 end
@@ -133,7 +144,7 @@ end
 --- @param str string The 32-byte encoded exponent.
 --- @return number[] bits The decoded clamped bits, divided by 8.
 local function bits8(str)
-    return {unpack(bits(str), 4)}
+    return {unpack(bits(str), 4.0)}
 end
 
 return {
@@ -165,17 +176,17 @@ local unpack = unpack or table.unpack
 local function carryWeak(a)
     local a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10 = unpack(a)
 
-    local h00 = a00 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a01 = a01 + h00 * 2 ^ -24
-    local h01 = a01 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a02 = a02 + h01 * 2 ^ -24
-    local h02 = a02 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a03 = a03 + h02 * 2 ^ -24
-    local h03 = a03 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a04 = a04 + h03 * 2 ^ -24
-    local h04 = a04 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a05 = a05 + h04 * 2 ^ -24
-    local h05 = a05 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a06 = a06 + h05 * 2 ^ -24
-    local h06 = a06 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a07 = a07 + h06 * 2 ^ -24
-    local h07 = a07 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a08 = a08 + h07 * 2 ^ -24
-    local h08 = a08 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a09 = a09 + h08 * 2 ^ -24
-    local h09 = a09 + 3 * 2 ^ 75 - 3 * 2 ^ 75 a10 = a10 + h09 * 2 ^ -24
-    local h10 = a10 + 3 * 2 ^ 75 - 3 * 2 ^ 75
+    local h00 = a00 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a01 = a01 + h00 * 2.0 ^ -24.0
+    local h01 = a01 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a02 = a02 + h01 * 2.0 ^ -24.0
+    local h02 = a02 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a03 = a03 + h02 * 2.0 ^ -24.0
+    local h03 = a03 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a04 = a04 + h03 * 2.0 ^ -24.0
+    local h04 = a04 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a05 = a05 + h04 * 2.0 ^ -24.0
+    local h05 = a05 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a06 = a06 + h05 * 2.0 ^ -24.0
+    local h06 = a06 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a07 = a07 + h06 * 2.0 ^ -24.0
+    local h07 = a07 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a08 = a08 + h07 * 2.0 ^ -24.0
+    local h08 = a08 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a09 = a09 + h08 * 2.0 ^ -24.0
+    local h09 = a09 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0 a10 = a10 + h09 * 2.0 ^ -24.0
+    local h10 = a10 + 3.0 * 2.0 ^ 75.0 - 3.0 * 2.0 ^ 75.0
 
     return {
         a00 - h00,
@@ -189,7 +200,7 @@ local function carryWeak(a)
         a08 - h08,
         a09 - h09,
         a10 - h10,
-    }, h10 * 2 ^ -24
+    }, h10 * 2.0 ^ -24.0
 end
 
 --- Carries a number in base 2²⁴.
@@ -199,18 +210,18 @@ end
 local function carry(a)
     local a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10 = unpack(a)
 
-    local l00 = a00 % 2 ^ 24 a01 = a01 + (a00 - l00) * 2 ^ -24
-    local l01 = a01 % 2 ^ 24 a02 = a02 + (a01 - l01) * 2 ^ -24
-    local l02 = a02 % 2 ^ 24 a03 = a03 + (a02 - l02) * 2 ^ -24
-    local l03 = a03 % 2 ^ 24 a04 = a04 + (a03 - l03) * 2 ^ -24
-    local l04 = a04 % 2 ^ 24 a05 = a05 + (a04 - l04) * 2 ^ -24
-    local l05 = a05 % 2 ^ 24 a06 = a06 + (a05 - l05) * 2 ^ -24
-    local l06 = a06 % 2 ^ 24 a07 = a07 + (a06 - l06) * 2 ^ -24
-    local l07 = a07 % 2 ^ 24 a08 = a08 + (a07 - l07) * 2 ^ -24
-    local l08 = a08 % 2 ^ 24 a09 = a09 + (a08 - l08) * 2 ^ -24
-    local l09 = a09 % 2 ^ 24 a10 = a10 + (a09 - l09) * 2 ^ -24
-    local l10 = a10 % 2 ^ 24
-    local h10 = (a10 - l10) * 2 ^ -24
+    local l00 = a00 % 2.0 ^ 24.0 a01 = a01 + (a00 - l00) * 2.0 ^ -24.0
+    local l01 = a01 % 2.0 ^ 24.0 a02 = a02 + (a01 - l01) * 2.0 ^ -24.0
+    local l02 = a02 % 2.0 ^ 24.0 a03 = a03 + (a02 - l02) * 2.0 ^ -24.0
+    local l03 = a03 % 2.0 ^ 24.0 a04 = a04 + (a03 - l03) * 2.0 ^ -24.0
+    local l04 = a04 % 2.0 ^ 24.0 a05 = a05 + (a04 - l04) * 2.0 ^ -24.0
+    local l05 = a05 % 2.0 ^ 24.0 a06 = a06 + (a05 - l05) * 2.0 ^ -24.0
+    local l06 = a06 % 2.0 ^ 24.0 a07 = a07 + (a06 - l06) * 2.0 ^ -24.0
+    local l07 = a07 % 2.0 ^ 24.0 a08 = a08 + (a07 - l07) * 2.0 ^ -24.0
+    local l08 = a08 % 2.0 ^ 24.0 a09 = a09 + (a08 - l08) * 2.0 ^ -24.0
+    local l09 = a09 % 2.0 ^ 24.0 a10 = a10 + (a09 - l09) * 2.0 ^ -24.0
+    local l10 = a10 % 2.0 ^ 24.0
+    local h10 = (a10 - l10) * 2.0 ^ -24.0
 
     return {l00, l01, l02, l03, l04, l05, l06, l07, l08, l09, l10}, h10
 end
@@ -308,7 +319,7 @@ local function mul(a, b)
         a10 * b08 + a09 * b09 + a08 * b10,
         a10 * b09 + a09 * b10,
         a10 * b10,
-        0
+        0.0
     })
 end
 
@@ -323,7 +334,7 @@ end
 local function dwadd(a0, a1, b0, b1)
     local low, c = carry(add(a0, b0))
     local high = add(a1, b1)
-    high[1] = high[1] + c
+    high[1.0] = high[1.0] + c
     return low, carry(high)
 end
 
@@ -334,17 +345,17 @@ local function half(a)
     local a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10 = unpack(a)
 
     return (carryWeak {
-        a00 * 0.5 + a01 * 2 ^ 23,
-        a02 * 2 ^ 23,
-        a03 * 2 ^ 23,
-        a04 * 2 ^ 23,
-        a05 * 2 ^ 23,
-        a06 * 2 ^ 23,
-        a07 * 2 ^ 23,
-        a08 * 2 ^ 23,
-        a09 * 2 ^ 23,
-        a10 * 2 ^ 23,
-        0,
+        a00 * 0.5 + a01 * 2.0 ^ 23.0,
+        a02 * 2.0 ^ 23.0,
+        a03 * 2.0 ^ 23.0,
+        a04 * 2.0 ^ 23.0,
+        a05 * 2.0 ^ 23.0,
+        a06 * 2.0 ^ 23.0,
+        a07 * 2.0 ^ 23.0,
+        a08 * 2.0 ^ 23.0,
+        a09 * 2.0 ^ 23.0,
+        a10 * 2.0 ^ 23.0,
+        0.0,
     })
 end
 
@@ -354,17 +365,17 @@ end
 local function third(a)
     local a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10 = unpack(a)
 
-    local d00 = a00 * 0xaaaaaa
-    local d01 = a01 * 0xaaaaaa + d00
-    local d02 = a02 * 0xaaaaaa + d01
-    local d03 = a03 * 0xaaaaaa + d02
-    local d04 = a04 * 0xaaaaaa + d03
-    local d05 = a05 * 0xaaaaaa + d04
-    local d06 = a06 * 0xaaaaaa + d05
-    local d07 = a07 * 0xaaaaaa + d06
-    local d08 = a08 * 0xaaaaaa + d07
-    local d09 = a09 * 0xaaaaaa + d08
-    local d10 = a10 * 0xaaaaaa + d09
+    local d00 = a00 * 11184810.0
+    local d01 = a01 * 11184810.0 + d00
+    local d02 = a02 * 11184810.0 + d01
+    local d03 = a03 * 11184810.0 + d02
+    local d04 = a04 * 11184810.0 + d03
+    local d05 = a05 * 11184810.0 + d04
+    local d06 = a06 * 11184810.0 + d05
+    local d07 = a07 * 11184810.0 + d06
+    local d08 = a08 * 11184810.0 + d07
+    local d09 = a09 * 11184810.0 + d08
+    local d10 = a10 * 11184810.0 + d09
 
     -- We compute the modular division mod 2²⁶⁴. The carry isn't 0 but it isn't
     -- part of a ÷ 3 either.
@@ -387,7 +398,7 @@ end
 --- @param a MpSW11L24
 --- @return number c a mod 2.
 local function mod2(a)
-    return a[1] % 2
+    return a[1.0] % 2.0
 end
 
 --- Computes a number modulo 3.
@@ -395,7 +406,7 @@ end
 --- @return number c a mod 3.
 local function mod3(a)
     local a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10 = unpack(a)
-    return (a00 + a01 + a02 + a03 + a04 + a05 + a06 + a07 + a08 + a09 + a10) % 3
+    return (a00 + a01 + a02 + a03 + a04 + a05 + a06 + a07 + a08 + a09 + a10) % 3.0
 end
 
 --- Computes a double representing the most-significant bits of a number.
@@ -404,49 +415,49 @@ end
 local function approx(a)
     local a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10 = unpack(a)
     return a00
-        + a01 * 2 ^ 24
-        + a02 * 2 ^ 48
-        + a03 * 2 ^ 72
-        + a04 * 2 ^ 96
-        + a05 * 2 ^ 120
-        + a06 * 2 ^ 144
-        + a07 * 2 ^ 168
-        + a08 * 2 ^ 192
-        + a09 * 2 ^ 216
-        + a10 * 2 ^ 240
+        + a01 * 2.0 ^ 24.0
+        + a02 * 2.0 ^ 48.0
+        + a03 * 2.0 ^ 72.0
+        + a04 * 2.0 ^ 96.0
+        + a05 * 2.0 ^ 120.0
+        + a06 * 2.0 ^ 144.0
+        + a07 * 2.0 ^ 168.0
+        + a08 * 2.0 ^ 192.0
+        + a09 * 2.0 ^ 216.0
+        + a10 * 2.0 ^ 240.0
 end
 
 --- @param a MpUW11L24
 --- @param b MpUW11L24
 --- @return number c A number that compares to 0 the same as a compares to b.
 local function cmp(a, b)
-    return a[11] < b[11] and -1
-        or a[11] > b[11] and 1
-        or a[10] < b[10] and -1
-        or a[10] > b[10] and 1
-        or a[9] < b[9] and -1
-        or a[9] > b[9] and 1
-        or a[8] < b[8] and -1
-        or a[8] > b[8] and 1
-        or a[7] < b[7] and -1
-        or a[7] > b[7] and 1
-        or a[6] < b[6] and -1
-        or a[6] > b[6] and 1
-        or a[5] < b[5] and -1
-        or a[5] > b[5] and 1
-        or a[4] < b[4] and -1
-        or a[4] > b[4] and 1
-        or a[3] < b[3] and -1
-        or a[3] > b[3] and 1
-        or a[2] < b[2] and -1
-        or a[2] > b[2] and 1
-        or a[1] < b[1] and -1
-        or a[1] > b[1] and 1
-        or 0
+    return a[11.0] < b[11.0] and -1.0
+        or a[11.0] > b[11.0] and 1.0
+        or a[10.0] < b[10.0] and -1.0
+        or a[10.0] > b[10.0] and 1.0
+        or a[9.0] < b[9.0] and -1.0
+        or a[9.0] > b[9.0] and 1.0
+        or a[8.0] < b[8.0] and -1.0
+        or a[8.0] > b[8.0] and 1.0
+        or a[7.0] < b[7.0] and -1.0
+        or a[7.0] > b[7.0] and 1.0
+        or a[6.0] < b[6.0] and -1.0
+        or a[6.0] > b[6.0] and 1.0
+        or a[5.0] < b[5.0] and -1.0
+        or a[5.0] > b[5.0] and 1.0
+        or a[4.0] < b[4.0] and -1.0
+        or a[4.0] > b[4.0] and 1.0
+        or a[3.0] < b[3.0] and -1.0
+        or a[3.0] > b[3.0] and 1.0
+        or a[2.0] < b[2.0] and -1.0
+        or a[2.0] > b[2.0] and 1.0
+        or a[1.0] < b[1.0] and -1.0
+        or a[1.0] > b[1.0] and 1.0
+        or 0.0
 end
 
 local function num(a)
-    return {a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+    return {a, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
 end
 
 return {
@@ -482,64 +493,64 @@ local ufqh, fmtfqh = packing.compileUnpack("<I3I3I3I3I3I3I3I3I3I3I1")
 
 --- The scalar field's order, q = 2²⁵² + 27742317777372353535851937790883648493.
 local Q = {
-    16110573,
-    06494812,
-    14047250,
-    10680220,
-    14612958,
-    00000020,
-    00000000,
-    00000000,
-    00000000,
-    00000000,
-    00004096,
+    16110573.0,
+    06494812.0,
+    14047250.0,
+    10680220.0,
+    14612958.0,
+    00000020.0,
+    00000000.0,
+    00000000.0,
+    00000000.0,
+    00000000.0,
+    00004096.0,
 }
 
 --- The first Montgomery precomputed constant, -q⁻¹ mod 2²⁶⁴.
 local T0 = {
-    05537307,
-    01942290,
-    16765621,
-    16628356,
-    10618610,
-    07072433,
-    03735459,
-    01369940,
-    15276086,
-    13038191,
-    13409718,
+    05537307.0,
+    01942290.0,
+    16765621.0,
+    16628356.0,
+    10618610.0,
+    07072433.0,
+    03735459.0,
+    01369940.0,
+    15276086.0,
+    13038191.0,
+    13409718.0,
 }
 
 --- The second Montgomery precomputed constant, 2⁵²⁸ mod q.
 local T1 = {
-    11711996,
-    01747860,
-    08326961,
-    03814718,
-    01859974,
-    13327461,
-    16105061,
-    07590423,
-    04050668,
-    08138906,
-    00000283,
+    11711996.0,
+    01747860.0,
+    08326961.0,
+    03814718.0,
+    01859974.0,
+    13327461.0,
+    16105061.0,
+    07590423.0,
+    04050668.0,
+    08138906.0,
+    00000283.0,
 }
 
 local T8 = {
-    5110253,
-    3039345,
-    2503500,
-    11779568,
-    15416472,
-    16766550,
-    16777215,
-    16777215,
-    16777215,
-    16777215,
-    4095,
+    5110253.0,
+    3039345.0,
+    2503500.0,
+    11779568.0,
+    15416472.0,
+    16766550.0,
+    16777215.0,
+    16777215.0,
+    16777215.0,
+    16777215.0,
+    4095.0,
 }
 
-local ZERO = mp.num(0)
+local ZERO = mp.num(0.0)
 
 --- Reduces a number modulo q.
 --
@@ -551,7 +562,7 @@ local function reduce(a)
     local out, overflow = mp.carry(c)
 
     -- Return carry(a) if a < q.
-    if overflow < 0 then return (mp.carry(a)) end
+    if overflow < 0.0 then return (mp.carry(a)) end
 
     -- c >= q means c - q >= 0.
     -- Since q < 2²⁸⁸, c < 2q means c - q < q < 2²⁸⁸.
@@ -644,7 +655,7 @@ end
 -- @treturn {number...} 2²⁶⁴ × a mod q as 11 limbs in [0..2²⁴).
 --
 local function decode(str)
-    local dec = {ufq(fmtfq, str, 1)} dec[12] = nil
+    local dec = {ufq(fmtfq, str, 1.0)} dec[12.0] = nil
     return montgomery(dec)
 end
 
@@ -654,8 +665,8 @@ end
 -- @treturn {number...} 2²⁶⁴ × a mod q as 11 limbs in [0..2²⁴).
 --
 local function decodeWide(str)
-    local low = {ufql(fmtfql, str, 1)} low[12] = nil
-    local high = {ufqh(fmtfqh, str, 34)} high[12] = nil
+    local low = {ufql(fmtfql, str, 1.0)} low[12.0] = nil
+    local high = {ufqh(fmtfqh, str, 34.0)} high[12.0] = nil
     return add(montgomery(low), montgomery(montgomery(high)))
 end
 
@@ -666,12 +677,12 @@ end
 --
 local function decodeClamped(str)
     -- Decode.
-    local words = {ufq(fmtfq, str, 1)} words[12] = nil
+    local words = {ufq(fmtfq, str, 1.0)} words[12.0] = nil
 
     -- Clamp.
-    words[1] = B32.band(words[1], 0xfffff8)
-    words[11] = B32.band(words[11], 0x7fff)
-    words[11] = B32.bor(words[11], 0x4000)
+    words[1.0] = B32.band(words[1.0], 16777208.0)
+    words[11.0] = B32.band(words[11.0], 32767.0)
+    words[11.0] = B32.bor(words[11.0], 16384.0)
 
     return montgomery(words)
 end
@@ -693,7 +704,7 @@ end
 --
 local function encodeClamped(a)
     local c1 = demontgomery(eighth(a))
-    local c2 = mp.lmul(c1, mp.num(8))
+    local c2 = mp.lmul(c1, mp.num(8.0))
     return pfq(fmtfq, unpack(c2))
 end
 
@@ -703,8 +714,8 @@ end
 -- @treturn {number...} 2⁻²⁶⁴ × a mod q as 253 bits.
 --
 local function bits(a)
-    local out = util.rebaseLE(demontgomery(a), 2 ^ 24, 2)
-    for i = 254, 289 do out[i] = nil end
+    local out = util.rebaseLE(demontgomery(a), 2.0 ^ 24.0, 2.0)
+    for i = 254.0, 289.0 do out[i] = nil end
     return out
 end
 
@@ -740,16 +751,16 @@ local function makeRuleset(a, b)
     local ff = mp.approx(ft)
 
     -- Lookup table for inversions and halvings modulo 3.
-    local lut3 = {[0] = 0, 2, 1}
+    local lut3 = {[0.0] = 0.0, 2.0, 1.0}
 
     local rules = {}
     while true do
         local cmp = mp.cmp(mp.carry(dt), mp.carry(et))
-        if cmp == 0 then
+        if cmp == 0.0 then
             break
-        elseif cmp < 0 then
+        elseif cmp < 0.0 then
             -- M0. d < e
-            rules[#rules + 1] = 0
+            rules[#rules + 1.0] = 0.0
             -- (d, e) ← (e, d)
             dt, et = et, dt
             d2, e2 = e2, d2
@@ -757,63 +768,63 @@ local function makeRuleset(a, b)
             ef = mp.approx(et)
             ft = mp.carry(mp.sub(dt, et))
             ff = -ff
-        elseif 4 * ff - ef < -1 and d3 == lut3[e3] then
+        elseif 4.0 * ff - ef < -1.0 and d3 == lut3[e3] then
             -- M1. e < d ≤ 5/4 e, d ≡ -e (mod 3)
-            rules[#rules + 1] = 1
+            rules[#rules + 1.0] = 1.0
             -- (d, e) ← ((2d - e)/3, (2e - d)/3)
             dt = mp.third(mp.carryWeak(mp.add(dt, ft)))
             et = mp.third(mp.carryWeak(mp.sub(et, ft)))
             d2, e2 = e2, d2
             d3, e3 = mp.mod3(dt), mp.mod3(et)
             ef = mp.approx(et)
-        elseif 4 * ff - ef < -1 and d2 == e2 and d3 == e3 then
+        elseif 4.0 * ff - ef < -1.0 and d2 == e2 and d3 == e3 then
             -- M2. e < d ≤ 5/4 e, d ≡ e (mod 6)
-            rules[#rules + 1] = 2
+            rules[#rules + 1.0] = 2.0
             -- (d, e) ← ((d - e)/2, e)
             dt = mp.half(ft)
             d2 = mp.mod2(dt)
-            d3 = lut3[(d3 - e3) % 3]
+            d3 = lut3[(d3 - e3) % 3.0]
             ft = mp.carryWeak(mp.sub(dt, et))
             ff = mp.approx(ft)
-        elseif ff - 3 * ef < -1 then
+        elseif ff - 3.0 * ef < -1.0 then
             -- M3. d ≤ 4e
-            rules[#rules + 1] = 3
+            rules[#rules + 1.0] = 3.0
             -- (d, e) ← (d - e, e)
             dt = mp.carryWeak(ft)
-            d2 = (d2 - e2) % 2
-            d3 = (d3 - e3) % 3
+            d2 = (d2 - e2) % 2.0
+            d3 = (d3 - e3) % 3.0
             ft = mp.carryWeak(mp.sub(dt, et))
             ff = mp.approx(ft)
         elseif d2 == e2 then
             -- M4. d ≡ e (mod 2)
-            rules[#rules + 1] = 2
+            rules[#rules + 1.0] = 2.0
             -- (d, e) ← ((d - e)/2, e)
             dt = mp.half(ft)
             d2 = mp.mod2(dt)
-            d3 = lut3[(d3 - e3) % 3]
+            d3 = lut3[(d3 - e3) % 3.0]
             ft = mp.carryWeak(mp.sub(dt, et))
             ff = mp.approx(ft)
-        elseif d2 == 0 then
+        elseif d2 == 0.0 then
             -- M5. d ≡ 0 (mod 2)
-            rules[#rules + 1] = 5
+            rules[#rules + 1.0] = 5.0
             -- (d, e) ← (d/2, e)
             dt = mp.half(dt)
             d2 = mp.mod2(dt)
             d3 = lut3[d3]
             ft = mp.carryWeak(mp.sub(dt, et))
             ff = mp.approx(ft)
-        elseif d3 == 0 then
+        elseif d3 == 0.0 then
             -- M6. d ≡ 0 (mod 3)
-            rules[#rules + 1] = 6
+            rules[#rules + 1.0] = 6.0
             -- (d, e) ← (d/3 - e, e)
             dt = mp.carryWeak(mp.sub(mp.third(dt), et))
-            d2 = (d2 - e2) % 2
+            d2 = (d2 - e2) % 2.0
             d3 = mp.mod3(dt)
             ft = mp.carryWeak(mp.sub(dt, et))
             ff = mp.approx(ft)
         elseif d3 == lut3[e3] then
             -- M7. d ≡ -e (mod 3)
-            rules[#rules + 1] = 7
+            rules[#rules + 1.0] = 7.0
             -- (d, e) ← ((d - 2e)/3, e)
             dt = mp.third(mp.carryWeak(mp.sub(ft, et)))
             d3 = mp.mod3(dt)
@@ -821,16 +832,16 @@ local function makeRuleset(a, b)
             ff = mp.approx(ft)
         elseif d3 == e3 then
             -- M8. d ≡ e (mod 3)
-            rules[#rules + 1] = 8
+            rules[#rules + 1.0] = 8.0
             -- (d, e) ← ((d - e)/3, e)
             dt = mp.third(ft)
-            d2 = (d2 - e2) % 2
+            d2 = (d2 - e2) % 2.0
             d3 = mp.mod3(dt)
             ft = mp.carryWeak(mp.sub(dt, et))
             ff = mp.approx(ft)
         else
             -- M9. e ≡ 0 (mod 2)
-            rules[#rules + 1] = 9
+            rules[#rules + 1.0] = 9.0
             -- (d, e) ← (d, e/2)
             et = mp.half(et)
             e2 = mp.mod2(et)
@@ -841,8 +852,8 @@ local function makeRuleset(a, b)
         end
     end
 
-    local ubits = util.rebaseLE(dt, 2 ^ 24, 2)
-    while ubits[#ubits] == 0 do ubits[#ubits] = nil end
+    local ubits = util.rebaseLE(dt, 2.0 ^ 24.0, 2.0)
+    while ubits[#ubits] == 0.0 do ubits[#ubits] = nil end
 
     return {ubits, rules}
 end
@@ -880,25 +891,25 @@ local ufp, fmtfp = packing.compileUnpack("<I3I3I2I3I3I2I3I3I2I3I3I2")
 --- The modular square root of -1.
 --- @type FpR1
 local I = {
-    0958640 * 2 ^ 0,
-    0826664 * 2 ^ 22,
-    1613251 * 2 ^ 43,
-    1041528 * 2 ^ 64,
-    0013673 * 2 ^ 85,
-    0387171 * 2 ^ 107,
-    1824679 * 2 ^ 128,
-    0313839 * 2 ^ 149,
-    0709440 * 2 ^ 170,
-    0122635 * 2 ^ 192,
-    0262782 * 2 ^ 213,
-    0712905 * 2 ^ 234,
+    0958640.0 * 2.0 ^ 0.0,
+    0826664.0 * 2.0 ^ 22.0,
+    1613251.0 * 2.0 ^ 43.0,
+    1041528.0 * 2.0 ^ 64.0,
+    0013673.0 * 2.0 ^ 85.0,
+    0387171.0 * 2.0 ^ 107.0,
+    1824679.0 * 2.0 ^ 128.0,
+    0313839.0 * 2.0 ^ 149.0,
+    0709440.0 * 2.0 ^ 170.0,
+    0122635.0 * 2.0 ^ 192.0,
+    0262782.0 * 2.0 ^ 213.0,
+    0712905.0 * 2.0 ^ 234.0,
 }
 
 --- Converts a Lua number to an element.
 --- @param n number A number n in [0..2²²).
 --- @return FpR1 out The number as an element.
 local function num(n)
-    return {n, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+    return {n, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
 end
 
 --- Negates an element.
@@ -975,24 +986,24 @@ local function carry(a)
     local a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, a11 = unpack(a)
     local c00, c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11
 
-    c11 = a11 + 3 * 2 ^ 306 - 3 * 2 ^ 306  a00 = a00 + 19 / 2 ^ 255 * c11
+    c11 = a11 + 3.0 * 2.0 ^ 306.0 - 3.0 * 2.0 ^ 306.0  a00 = a00 + 19.0 / 2.0 ^ 255.0 * c11
 
-    c00 = a00 + 3 * 2 ^ 73  - 3 * 2 ^ 73   a01 = a01 + c00
-    c01 = a01 + 3 * 2 ^ 94  - 3 * 2 ^ 94   a02 = a02 + c01
-    c02 = a02 + 3 * 2 ^ 115 - 3 * 2 ^ 115  a03 = a03 + c02
-    c03 = a03 + 3 * 2 ^ 136 - 3 * 2 ^ 136  a04 = a04 + c03
-    c04 = a04 + 3 * 2 ^ 158 - 3 * 2 ^ 158  a05 = a05 + c04
-    c05 = a05 + 3 * 2 ^ 179 - 3 * 2 ^ 179  a06 = a06 + c05
-    c06 = a06 + 3 * 2 ^ 200 - 3 * 2 ^ 200  a07 = a07 + c06
-    c07 = a07 + 3 * 2 ^ 221 - 3 * 2 ^ 221  a08 = a08 + c07
-    c08 = a08 + 3 * 2 ^ 243 - 3 * 2 ^ 243  a09 = a09 + c08
-    c09 = a09 + 3 * 2 ^ 264 - 3 * 2 ^ 264  a10 = a10 + c09
-    c10 = a10 + 3 * 2 ^ 285 - 3 * 2 ^ 285  a11 = a11 - c11 + c10
+    c00 = a00 + 3.0 * 2.0 ^ 73.0  - 3.0 * 2.0 ^ 73.0   a01 = a01 + c00
+    c01 = a01 + 3.0 * 2.0 ^ 94.0  - 3.0 * 2.0 ^ 94.0   a02 = a02 + c01
+    c02 = a02 + 3.0 * 2.0 ^ 115.0 - 3.0 * 2.0 ^ 115.0  a03 = a03 + c02
+    c03 = a03 + 3.0 * 2.0 ^ 136.0 - 3.0 * 2.0 ^ 136.0  a04 = a04 + c03
+    c04 = a04 + 3.0 * 2.0 ^ 158.0 - 3.0 * 2.0 ^ 158.0  a05 = a05 + c04
+    c05 = a05 + 3.0 * 2.0 ^ 179.0 - 3.0 * 2.0 ^ 179.0  a06 = a06 + c05
+    c06 = a06 + 3.0 * 2.0 ^ 200.0 - 3.0 * 2.0 ^ 200.0  a07 = a07 + c06
+    c07 = a07 + 3.0 * 2.0 ^ 221.0 - 3.0 * 2.0 ^ 221.0  a08 = a08 + c07
+    c08 = a08 + 3.0 * 2.0 ^ 243.0 - 3.0 * 2.0 ^ 243.0  a09 = a09 + c08
+    c09 = a09 + 3.0 * 2.0 ^ 264.0 - 3.0 * 2.0 ^ 264.0  a10 = a10 + c09
+    c10 = a10 + 3.0 * 2.0 ^ 285.0 - 3.0 * 2.0 ^ 285.0  a11 = a11 - c11 + c10
 
-    c11 = a11 + 3 * 2 ^ 306 - 3 * 2 ^ 306
+    c11 = a11 + 3.0 * 2.0 ^ 306.0 - 3.0 * 2.0 ^ 306.0
 
     return {
-        a00 - c00 + 19 / 2 ^ 255 * c11,
+        a00 - c00 + 19.0 / 2.0 ^ 255.0 * c11,
         a01 - c01,
         a02 - c02,
         a03 - c03,
@@ -1022,34 +1033,34 @@ local function canonicalize(a)
 
     -- Perform an euclidean reduction.
     -- TODO Range check.
-    c00 = a00 % 2 ^ 22   a01 = a00 - c00 + a01
-    c01 = a01 % 2 ^ 43   a02 = a01 - c01 + a02
-    c02 = a02 % 2 ^ 64   a03 = a02 - c02 + a03
-    c03 = a03 % 2 ^ 85   a04 = a03 - c03 + a04
-    c04 = a04 % 2 ^ 107  a05 = a04 - c04 + a05
-    c05 = a05 % 2 ^ 128  a06 = a05 - c05 + a06
-    c06 = a06 % 2 ^ 149  a07 = a06 - c06 + a07
-    c07 = a07 % 2 ^ 170  a08 = a07 - c07 + a08
-    c08 = a08 % 2 ^ 192  a09 = a08 - c08 + a09
-    c09 = a09 % 2 ^ 213  a10 = a09 - c09 + a10
-    c10 = a10 % 2 ^ 234  a11 = a10 - c10 + a11
-    c11 = a11 % 2 ^ 255  c00 = c00 + 19 / 2 ^ 255 * (a11 - c11)
+    c00 = a00 % 2.0 ^ 22.0   a01 = a00 - c00 + a01
+    c01 = a01 % 2.0 ^ 43.0   a02 = a01 - c01 + a02
+    c02 = a02 % 2.0 ^ 64.0   a03 = a02 - c02 + a03
+    c03 = a03 % 2.0 ^ 85.0   a04 = a03 - c03 + a04
+    c04 = a04 % 2.0 ^ 107.0  a05 = a04 - c04 + a05
+    c05 = a05 % 2.0 ^ 128.0  a06 = a05 - c05 + a06
+    c06 = a06 % 2.0 ^ 149.0  a07 = a06 - c06 + a07
+    c07 = a07 % 2.0 ^ 170.0  a08 = a07 - c07 + a08
+    c08 = a08 % 2.0 ^ 192.0  a09 = a08 - c08 + a09
+    c09 = a09 % 2.0 ^ 213.0  a10 = a09 - c09 + a10
+    c10 = a10 % 2.0 ^ 234.0  a11 = a10 - c10 + a11
+    c11 = a11 % 2.0 ^ 255.0  c00 = c00 + 19.0 / 2.0 ^ 255.0 * (a11 - c11)
 
     -- Canonicalize.
-    if      c11 / 2 ^ 234 == 2 ^ 21 - 1
-        and c10 / 2 ^ 213 == 2 ^ 21 - 1
-        and c09 / 2 ^ 192 == 2 ^ 21 - 1
-        and c08 / 2 ^ 170 == 2 ^ 22 - 1
-        and c07 / 2 ^ 149 == 2 ^ 21 - 1
-        and c06 / 2 ^ 128 == 2 ^ 21 - 1
-        and c05 / 2 ^ 107 == 2 ^ 21 - 1
-        and c04 / 2 ^ 85  == 2 ^ 22 - 1
-        and c03 / 2 ^ 64  == 2 ^ 21 - 1
-        and c02 / 2 ^ 43  == 2 ^ 21 - 1
-        and c01 / 2 ^ 22  == 2 ^ 21 - 1
-        and c00 >= 2 ^ 22 - 19
+    if      c11 / 2.0 ^ 234.0 == 2.0 ^ 21.0 - 1.0
+        and c10 / 2.0 ^ 213.0 == 2.0 ^ 21.0 - 1.0
+        and c09 / 2.0 ^ 192.0 == 2.0 ^ 21.0 - 1.0
+        and c08 / 2.0 ^ 170.0 == 2.0 ^ 22.0 - 1.0
+        and c07 / 2.0 ^ 149.0 == 2.0 ^ 21.0 - 1.0
+        and c06 / 2.0 ^ 128.0 == 2.0 ^ 21.0 - 1.0
+        and c05 / 2.0 ^ 107.0 == 2.0 ^ 21.0 - 1.0
+        and c04 / 2.0 ^ 85.0  == 2.0 ^ 22.0 - 1.0
+        and c03 / 2.0 ^ 64.0  == 2.0 ^ 21.0 - 1.0
+        and c02 / 2.0 ^ 43.0  == 2.0 ^ 21.0 - 1.0
+        and c01 / 2.0 ^ 22.0  == 2.0 ^ 21.0 - 1.0
+        and c00 >= 2.0 ^ 22.0 - 19.0
     then
-        return {19 - 2 ^ 22 + c00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+        return {19.0 - 2.0 ^ 22.0 + c00, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
     else
         return {c00, c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11}
     end
@@ -1061,7 +1072,7 @@ end
 --- @return boolean eq Whether a ≡ b (mod p).
 local function eq(a, b)
     local c = canonicalize(sub(a, b))
-    for i = 1, 12 do if c[i] ~= 0 then return false end end
+    for i = 1.0, 12.0 do if c[i] ~= 0.0 then return false end end
     return true
 end
 
@@ -1143,34 +1154,34 @@ local function mul(a, b)
     c10 = a11 * b11
 
     -- Multiply low half with reduction into c00..c11.
-    c00 = c00 * (19 / 2 ^ 255)
+    c00 = c00 * (19.0 / 2.0 ^ 255.0)
         + a00 * b00
-    c01 = c01 * (19 / 2 ^ 255)
+    c01 = c01 * (19.0 / 2.0 ^ 255.0)
         + a01 * b00
         + a00 * b01
-    c02 = c02 * (19 / 2 ^ 255)
+    c02 = c02 * (19.0 / 2.0 ^ 255.0)
         + a02 * b00
         + a01 * b01
         + a00 * b02
-    c03 = c03 * (19 / 2 ^ 255)
+    c03 = c03 * (19.0 / 2.0 ^ 255.0)
         + a03 * b00
         + a02 * b01
         + a01 * b02
         + a00 * b03
-    c04 = c04 * (19 / 2 ^ 255)
+    c04 = c04 * (19.0 / 2.0 ^ 255.0)
         + a04 * b00
         + a03 * b01
         + a02 * b02
         + a01 * b03
         + a00 * b04
-    c05 = c05 * (19 / 2 ^ 255)
+    c05 = c05 * (19.0 / 2.0 ^ 255.0)
         + a05 * b00
         + a04 * b01
         + a03 * b02
         + a02 * b03
         + a01 * b04
         + a00 * b05
-    c06 = c06 * (19 / 2 ^ 255)
+    c06 = c06 * (19.0 / 2.0 ^ 255.0)
         + a06 * b00
         + a05 * b01
         + a04 * b02
@@ -1178,7 +1189,7 @@ local function mul(a, b)
         + a02 * b04
         + a01 * b05
         + a00 * b06
-    c07 = c07 * (19 / 2 ^ 255)
+    c07 = c07 * (19.0 / 2.0 ^ 255.0)
         + a07 * b00
         + a06 * b01
         + a05 * b02
@@ -1187,7 +1198,7 @@ local function mul(a, b)
         + a02 * b05
         + a01 * b06
         + a00 * b07
-    c08 = c08 * (19 / 2 ^ 255)
+    c08 = c08 * (19.0 / 2.0 ^ 255.0)
         + a08 * b00
         + a07 * b01
         + a06 * b02
@@ -1197,7 +1208,7 @@ local function mul(a, b)
         + a02 * b06
         + a01 * b07
         + a00 * b08
-    c09 = c09 * (19 / 2 ^ 255)
+    c09 = c09 * (19.0 / 2.0 ^ 255.0)
         + a09 * b00
         + a08 * b01
         + a07 * b02
@@ -1208,7 +1219,7 @@ local function mul(a, b)
         + a02 * b07
         + a01 * b08
         + a00 * b09
-    c10 = c10 * (19 / 2 ^ 255)
+    c10 = c10 * (19.0 / 2.0 ^ 255.0)
         + a10 * b00
         + a09 * b01
         + a08 * b02
@@ -1234,25 +1245,25 @@ local function mul(a, b)
         + a00 * b11
 
     -- Carry and reduce.
-    a10 = c10 + 3 * 2 ^ 285 - 3 * 2 ^ 285  c11 = c11 + a10
-    a11 = c11 + 3 * 2 ^ 306 - 3 * 2 ^ 306  c00 = c00 + 19 / 2 ^ 255 * a11
+    a10 = c10 + 3.0 * 2.0 ^ 285.0 - 3.0 * 2.0 ^ 285.0  c11 = c11 + a10
+    a11 = c11 + 3.0 * 2.0 ^ 306.0 - 3.0 * 2.0 ^ 306.0  c00 = c00 + 19.0 / 2.0 ^ 255.0 * a11
 
-    a00 = c00 + 3 * 2 ^ 73  - 3 * 2 ^ 73   c01 = c01 + a00
-    a01 = c01 + 3 * 2 ^ 94  - 3 * 2 ^ 94   c02 = c02 + a01
-    a02 = c02 + 3 * 2 ^ 115 - 3 * 2 ^ 115  c03 = c03 + a02
-    a03 = c03 + 3 * 2 ^ 136 - 3 * 2 ^ 136  c04 = c04 + a03
-    a04 = c04 + 3 * 2 ^ 158 - 3 * 2 ^ 158  c05 = c05 + a04
-    a05 = c05 + 3 * 2 ^ 179 - 3 * 2 ^ 179  c06 = c06 + a05
-    a06 = c06 + 3 * 2 ^ 200 - 3 * 2 ^ 200  c07 = c07 + a06
-    a07 = c07 + 3 * 2 ^ 221 - 3 * 2 ^ 221  c08 = c08 + a07
-    a08 = c08 + 3 * 2 ^ 243 - 3 * 2 ^ 243  c09 = c09 + a08
-    a09 = c09 + 3 * 2 ^ 264 - 3 * 2 ^ 264  c10 = c10 - a10 + a09
-    a10 = c10 + 3 * 2 ^ 285 - 3 * 2 ^ 285  c11 = c11 - a11 + a10
+    a00 = c00 + 3.0 * 2.0 ^ 73.0  - 3.0 * 2.0 ^ 73.0   c01 = c01 + a00
+    a01 = c01 + 3.0 * 2.0 ^ 94.0  - 3.0 * 2.0 ^ 94.0   c02 = c02 + a01
+    a02 = c02 + 3.0 * 2.0 ^ 115.0 - 3.0 * 2.0 ^ 115.0  c03 = c03 + a02
+    a03 = c03 + 3.0 * 2.0 ^ 136.0 - 3.0 * 2.0 ^ 136.0  c04 = c04 + a03
+    a04 = c04 + 3.0 * 2.0 ^ 158.0 - 3.0 * 2.0 ^ 158.0  c05 = c05 + a04
+    a05 = c05 + 3.0 * 2.0 ^ 179.0 - 3.0 * 2.0 ^ 179.0  c06 = c06 + a05
+    a06 = c06 + 3.0 * 2.0 ^ 200.0 - 3.0 * 2.0 ^ 200.0  c07 = c07 + a06
+    a07 = c07 + 3.0 * 2.0 ^ 221.0 - 3.0 * 2.0 ^ 221.0  c08 = c08 + a07
+    a08 = c08 + 3.0 * 2.0 ^ 243.0 - 3.0 * 2.0 ^ 243.0  c09 = c09 + a08
+    a09 = c09 + 3.0 * 2.0 ^ 264.0 - 3.0 * 2.0 ^ 264.0  c10 = c10 - a10 + a09
+    a10 = c10 + 3.0 * 2.0 ^ 285.0 - 3.0 * 2.0 ^ 285.0  c11 = c11 - a11 + a10
 
-    a11 = c11 + 3 * 2 ^ 306 - 3 * 2 ^ 306
+    a11 = c11 + 3.0 * 2.0 ^ 306.0 - 3.0 * 2.0 ^ 306.0
 
     return {
-        c00 - a00 + 19 / 2 ^ 255 * a11,
+        c00 - a00 + 19.0 / 2.0 ^ 255.0 * a11,
         c01 - a01,
         c02 - a02,
         c03 - a03,
@@ -1327,47 +1338,47 @@ local function square(a)
     c10 = a11 * a11
 
     -- Multiply low half with reduction into c00..c11.
-    c00 = c00 * (19 / 2 ^ 255)
+    c00 = c00 * (19.0 / 2.0 ^ 255.0)
         + a00 * a00
-    c01 = c01 * (19 / 2 ^ 255)
+    c01 = c01 * (19.0 / 2.0 ^ 255.0)
         + a01 * d00
-    c02 = c02 * (19 / 2 ^ 255)
+    c02 = c02 * (19.0 / 2.0 ^ 255.0)
         + a02 * d00
         + a01 * a01
-    c03 = c03 * (19 / 2 ^ 255)
+    c03 = c03 * (19.0 / 2.0 ^ 255.0)
         + a03 * d00
         + a02 * d01
-    c04 = c04 * (19 / 2 ^ 255)
+    c04 = c04 * (19.0 / 2.0 ^ 255.0)
         + a04 * d00
         + a03 * d01
         + a02 * a02
-    c05 = c05 * (19 / 2 ^ 255)
+    c05 = c05 * (19.0 / 2.0 ^ 255.0)
         + a05 * d00
         + a04 * d01
         + a03 * d02
-    c06 = c06 * (19 / 2 ^ 255)
+    c06 = c06 * (19.0 / 2.0 ^ 255.0)
         + a06 * d00
         + a05 * d01
         + a04 * d02
         + a03 * a03
-    c07 = c07 * (19 / 2 ^ 255)
+    c07 = c07 * (19.0 / 2.0 ^ 255.0)
         + a07 * d00
         + a06 * d01
         + a05 * d02
         + a04 * d03
-    c08 = c08 * (19 / 2 ^ 255)
+    c08 = c08 * (19.0 / 2.0 ^ 255.0)
         + a08 * d00
         + a07 * d01
         + a06 * d02
         + a05 * d03
         + a04 * a04
-    c09 = c09 * (19 / 2 ^ 255)
+    c09 = c09 * (19.0 / 2.0 ^ 255.0)
         + a09 * d00
         + a08 * d01
         + a07 * d02
         + a06 * d03
         + a05 * d04
-    c10 = c10 * (19 / 2 ^ 255)
+    c10 = c10 * (19.0 / 2.0 ^ 255.0)
         + a10 * d00
         + a09 * d01
         + a08 * d02
@@ -1382,25 +1393,25 @@ local function square(a)
         + a06 * d05
 
     -- Carry and reduce.
-    a10 = c10 + 3 * 2 ^ 285 - 3 * 2 ^ 285  c11 = c11 + a10
-    a11 = c11 + 3 * 2 ^ 306 - 3 * 2 ^ 306  c00 = c00 + 19 / 2 ^ 255 * a11
+    a10 = c10 + 3.0 * 2.0 ^ 285.0 - 3.0 * 2.0 ^ 285.0  c11 = c11 + a10
+    a11 = c11 + 3.0 * 2.0 ^ 306.0 - 3.0 * 2.0 ^ 306.0  c00 = c00 + 19.0 / 2.0 ^ 255.0 * a11
 
-    a00 = c00 + 3 * 2 ^ 73  - 3 * 2 ^ 73   c01 = c01 + a00
-    a01 = c01 + 3 * 2 ^ 94  - 3 * 2 ^ 94   c02 = c02 + a01
-    a02 = c02 + 3 * 2 ^ 115 - 3 * 2 ^ 115  c03 = c03 + a02
-    a03 = c03 + 3 * 2 ^ 136 - 3 * 2 ^ 136  c04 = c04 + a03
-    a04 = c04 + 3 * 2 ^ 158 - 3 * 2 ^ 158  c05 = c05 + a04
-    a05 = c05 + 3 * 2 ^ 179 - 3 * 2 ^ 179  c06 = c06 + a05
-    a06 = c06 + 3 * 2 ^ 200 - 3 * 2 ^ 200  c07 = c07 + a06
-    a07 = c07 + 3 * 2 ^ 221 - 3 * 2 ^ 221  c08 = c08 + a07
-    a08 = c08 + 3 * 2 ^ 243 - 3 * 2 ^ 243  c09 = c09 + a08
-    a09 = c09 + 3 * 2 ^ 264 - 3 * 2 ^ 264  c10 = c10 - a10 + a09
-    a10 = c10 + 3 * 2 ^ 285 - 3 * 2 ^ 285  c11 = c11 - a11 + a10
+    a00 = c00 + 3.0 * 2.0 ^ 73.0  - 3.0 * 2.0 ^ 73.0   c01 = c01 + a00
+    a01 = c01 + 3.0 * 2.0 ^ 94.0  - 3.0 * 2.0 ^ 94.0   c02 = c02 + a01
+    a02 = c02 + 3.0 * 2.0 ^ 115.0 - 3.0 * 2.0 ^ 115.0  c03 = c03 + a02
+    a03 = c03 + 3.0 * 2.0 ^ 136.0 - 3.0 * 2.0 ^ 136.0  c04 = c04 + a03
+    a04 = c04 + 3.0 * 2.0 ^ 158.0 - 3.0 * 2.0 ^ 158.0  c05 = c05 + a04
+    a05 = c05 + 3.0 * 2.0 ^ 179.0 - 3.0 * 2.0 ^ 179.0  c06 = c06 + a05
+    a06 = c06 + 3.0 * 2.0 ^ 200.0 - 3.0 * 2.0 ^ 200.0  c07 = c07 + a06
+    a07 = c07 + 3.0 * 2.0 ^ 221.0 - 3.0 * 2.0 ^ 221.0  c08 = c08 + a07
+    a08 = c08 + 3.0 * 2.0 ^ 243.0 - 3.0 * 2.0 ^ 243.0  c09 = c09 + a08
+    a09 = c09 + 3.0 * 2.0 ^ 264.0 - 3.0 * 2.0 ^ 264.0  c10 = c10 - a10 + a09
+    a10 = c10 + 3.0 * 2.0 ^ 285.0 - 3.0 * 2.0 ^ 285.0  c11 = c11 - a11 + a10
 
-    a11 = c11 + 3 * 2 ^ 306 - 3 * 2 ^ 306
+    a11 = c11 + 3.0 * 2.0 ^ 306.0 - 3.0 * 2.0 ^ 306.0
 
     return {
-        c00 - a00 + 19 / 2 ^ 255 * a11,
+        c00 - a00 + 19.0 / 2.0 ^ 255.0 * a11,
         c01 - a01,
         c02 - a02,
         c03 - a03,
@@ -1437,24 +1448,24 @@ local function kmul(a, k)
     a10 = a10 * k
     a11 = a11 * k
 
-    c11 = a11 + 3 * 2 ^ 306 - 3 * 2 ^ 306  a00 = a00 + 19 / 2 ^ 255 * c11
+    c11 = a11 + 3.0 * 2.0 ^ 306.0 - 3.0 * 2.0 ^ 306.0  a00 = a00 + 19.0 / 2.0 ^ 255.0 * c11
 
-    c00 = a00 + 3 * 2 ^ 73  - 3 * 2 ^ 73   a01 = a01 + c00
-    c01 = a01 + 3 * 2 ^ 94  - 3 * 2 ^ 94   a02 = a02 + c01
-    c02 = a02 + 3 * 2 ^ 115 - 3 * 2 ^ 115  a03 = a03 + c02
-    c03 = a03 + 3 * 2 ^ 136 - 3 * 2 ^ 136  a04 = a04 + c03
-    c04 = a04 + 3 * 2 ^ 158 - 3 * 2 ^ 158  a05 = a05 + c04
-    c05 = a05 + 3 * 2 ^ 179 - 3 * 2 ^ 179  a06 = a06 + c05
-    c06 = a06 + 3 * 2 ^ 200 - 3 * 2 ^ 200  a07 = a07 + c06
-    c07 = a07 + 3 * 2 ^ 221 - 3 * 2 ^ 221  a08 = a08 + c07
-    c08 = a08 + 3 * 2 ^ 243 - 3 * 2 ^ 243  a09 = a09 + c08
-    c09 = a09 + 3 * 2 ^ 264 - 3 * 2 ^ 264  a10 = a10 + c09
-    c10 = a10 + 3 * 2 ^ 285 - 3 * 2 ^ 285  a11 = a11 - c11 + c10
+    c00 = a00 + 3.0 * 2.0 ^ 73.0  - 3.0 * 2.0 ^ 73.0   a01 = a01 + c00
+    c01 = a01 + 3.0 * 2.0 ^ 94.0  - 3.0 * 2.0 ^ 94.0   a02 = a02 + c01
+    c02 = a02 + 3.0 * 2.0 ^ 115.0 - 3.0 * 2.0 ^ 115.0  a03 = a03 + c02
+    c03 = a03 + 3.0 * 2.0 ^ 136.0 - 3.0 * 2.0 ^ 136.0  a04 = a04 + c03
+    c04 = a04 + 3.0 * 2.0 ^ 158.0 - 3.0 * 2.0 ^ 158.0  a05 = a05 + c04
+    c05 = a05 + 3.0 * 2.0 ^ 179.0 - 3.0 * 2.0 ^ 179.0  a06 = a06 + c05
+    c06 = a06 + 3.0 * 2.0 ^ 200.0 - 3.0 * 2.0 ^ 200.0  a07 = a07 + c06
+    c07 = a07 + 3.0 * 2.0 ^ 221.0 - 3.0 * 2.0 ^ 221.0  a08 = a08 + c07
+    c08 = a08 + 3.0 * 2.0 ^ 243.0 - 3.0 * 2.0 ^ 243.0  a09 = a09 + c08
+    c09 = a09 + 3.0 * 2.0 ^ 264.0 - 3.0 * 2.0 ^ 264.0  a10 = a10 + c09
+    c10 = a10 + 3.0 * 2.0 ^ 285.0 - 3.0 * 2.0 ^ 285.0  a11 = a11 - c11 + c10
 
-    c11 = a11 + 3 * 2 ^ 306 - 3 * 2 ^ 306
+    c11 = a11 + 3.0 * 2.0 ^ 306.0 - 3.0 * 2.0 ^ 306.0
 
     return {
-        a00 - c00 + 19 / 2 ^ 255 * c11,
+        a00 - c00 + 19.0 / 2.0 ^ 255.0 * c11,
         a01 - c01,
         a02 - c02,
         a03 - c03,
@@ -1474,7 +1485,7 @@ end
 --- @param n number The number of times to square a.
 --- @return FpR1 c A number c such that c ≡ a ^ 2 ^ n (mod p).
 local function nsquare(a, n)
-    for _ = 1, n do a = square(a) end
+    for _ = 1.0, n do a = square(a) end
     return a
 end
 
@@ -1486,19 +1497,19 @@ end
 --- @return FpR1 c An element such that c ≡ a⁻¹ (mod p), or 0 if c doesn't exist.
 local function invert(a)
     local a2 = square(a)
-    local a9 = mul(a, nsquare(a2, 2))
+    local a9 = mul(a, nsquare(a2, 2.0))
     local a11 = mul(a9, a2)
 
     local x5 = mul(square(a11), a9)
-    local x10 = mul(nsquare(x5, 5), x5)
-    local x20 = mul(nsquare(x10, 10), x10)
-    local x40 = mul(nsquare(x20, 20), x20)
-    local x50 = mul(nsquare(x40, 10), x10)
-    local x100 = mul(nsquare(x50, 50), x50)
-    local x200 = mul(nsquare(x100, 100), x100)
-    local x250 = mul(nsquare(x200, 50), x50)
+    local x10 = mul(nsquare(x5, 5.0), x5)
+    local x20 = mul(nsquare(x10, 10.0), x10)
+    local x40 = mul(nsquare(x20, 20.0), x20)
+    local x50 = mul(nsquare(x40, 10.0), x10)
+    local x100 = mul(nsquare(x50, 50.0), x50)
+    local x200 = mul(nsquare(x100, 100.0), x100)
+    local x250 = mul(nsquare(x200, 50.0), x50)
 
-    return mul(nsquare(x250, 5), a11)
+    return mul(nsquare(x250, 5.0), a11)
 end
 
 --- Returns an element x that satisfies vx² = u.
@@ -1518,16 +1529,16 @@ local function sqrtDiv(u, v)
     local uv7 = mul(u, v7)
 
     local x2 = mul(square(uv7), uv7)
-    local x4 = mul(nsquare(x2, 2), x2)
-    local x8 = mul(nsquare(x4, 4), x4)
-    local x16 = mul(nsquare(x8, 8), x8)
-    local x18 = mul(nsquare(x16, 2), x2)
-    local x32 = mul(nsquare(x16, 16), x16)
-    local x50 = mul(nsquare(x32, 18), x18)
-    local x100 = mul(nsquare(x50, 50), x50)
-    local x200 = mul(nsquare(x100, 100), x100)
-    local x250 = mul(nsquare(x200, 50), x50)
-    local pr = mul(nsquare(x250, 2), uv7)
+    local x4 = mul(nsquare(x2, 2.0), x2)
+    local x8 = mul(nsquare(x4, 4.0), x4)
+    local x16 = mul(nsquare(x8, 8.0), x8)
+    local x18 = mul(nsquare(x16, 2.0), x2)
+    local x32 = mul(nsquare(x16, 16.0), x16)
+    local x50 = mul(nsquare(x32, 18.0), x18)
+    local x100 = mul(nsquare(x50, 50.0), x50)
+    local x200 = mul(nsquare(x100, 100.0), x100)
+    local x250 = mul(nsquare(x200, 50.0), x50)
+    local pr = mul(nsquare(x250, 2.0), uv7)
 
     local uv3 = mul(u, v3)
     local b = mul(uv3, pr)
@@ -1561,25 +1572,25 @@ local function encode(a)
     local acc = a00
 
     local function putBytes(n)
-        for _ = 1, n do
-            local byte = acc % 256
-            bytes[#bytes + 1] = byte
-            acc = (acc - byte) / 256
+        for _ = 1.0, n do
+            local byte = acc % 256.0
+            bytes[#bytes + 1.0] = byte
+            acc = (acc - byte) / 256.0
         end
     end
 
-    putBytes(2) acc = acc + a01 / 2 ^ 16
-    putBytes(3) acc = acc + a02 / 2 ^ 40
-    putBytes(3) acc = acc + a03 / 2 ^ 64
-    putBytes(2) acc = acc + a04 / 2 ^ 80
-    putBytes(3) acc = acc + a05 / 2 ^ 104
-    putBytes(3) acc = acc + a06 / 2 ^ 128
-    putBytes(2) acc = acc + a07 / 2 ^ 144
-    putBytes(3) acc = acc + a08 / 2 ^ 168
-    putBytes(3) acc = acc + a09 / 2 ^ 192
-    putBytes(2) acc = acc + a10 / 2 ^ 208
-    putBytes(3) acc = acc + a11 / 2 ^ 232
-    putBytes(3)
+    putBytes(2.0) acc = acc + a01 / 2.0 ^ 16.0
+    putBytes(3.0) acc = acc + a02 / 2.0 ^ 40.0
+    putBytes(3.0) acc = acc + a03 / 2.0 ^ 64.0
+    putBytes(2.0) acc = acc + a04 / 2.0 ^ 80.0
+    putBytes(3.0) acc = acc + a05 / 2.0 ^ 104.0
+    putBytes(3.0) acc = acc + a06 / 2.0 ^ 128.0
+    putBytes(2.0) acc = acc + a07 / 2.0 ^ 144.0
+    putBytes(3.0) acc = acc + a08 / 2.0 ^ 168.0
+    putBytes(3.0) acc = acc + a09 / 2.0 ^ 192.0
+    putBytes(2.0) acc = acc + a10 / 2.0 ^ 208.0
+    putBytes(3.0) acc = acc + a11 / 2.0 ^ 232.0
+    putBytes(3.0)
 
     return string.char(unpack(bytes)) --[[@as String32, putBytes sums to 32]]
 end
@@ -1589,23 +1600,23 @@ end
 --- @return FpR1 out The decoded element. It may not be canonical.
 local function decode(b)
     local w00, w01, w02, w03, w04, w05, w06, w07, w08, w09, w10, w11 =
-        ufp(fmtfp, b, 1)
+        ufp(fmtfp, b, 1.0)
 
-    w11 = w11 % 2 ^ 15
+    w11 = w11 % 2.0 ^ 15.0
 
     return carry {
         w00,
-        w01 * 2 ^ 24,
-        w02 * 2 ^ 48,
-        w03 * 2 ^ 64,
-        w04 * 2 ^ 88,
-        w05 * 2 ^ 112,
-        w06 * 2 ^ 128,
-        w07 * 2 ^ 152,
-        w08 * 2 ^ 176,
-        w09 * 2 ^ 192,
-        w10 * 2 ^ 216,
-        w11 * 2 ^ 240,
+        w01 * 2.0 ^ 24.0,
+        w02 * 2.0 ^ 48.0,
+        w03 * 2.0 ^ 64.0,
+        w04 * 2.0 ^ 88.0,
+        w05 * 2.0 ^ 112.0,
+        w06 * 2.0 ^ 128.0,
+        w07 * 2.0 ^ 152.0,
+        w08 * 2.0 ^ 176.0,
+        w09 * 2.0 ^ 192.0,
+        w10 * 2.0 ^ 216.0,
+        w11 * 2.0 ^ 240.0,
     }
 end
 
@@ -1616,7 +1627,7 @@ local function eqz(a)
     local c = canonicalize(a)
     local c00, c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11 = unpack(c)
     return c00 + c01 + c02 + c03 + c04 + c05 + c06 + c07 + c08 + c09 + c10 + c11
-        == 0
+        == 0.0
 end
 
 return {
@@ -1654,91 +1665,91 @@ local p16x4, fmt16x4 = packing.compilePack(">I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4")
 local u32x4, fmt32x4 = packing.compileUnpack(">I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4I4")
 
 local function carry64(a1, a0)
-    local r0 = a0 % 2 ^ 32
-    a1 = a1 + (a0 - r0) / 2 ^ 32
-    return a1 % 2 ^ 32, r0
+    local r0 = a0 % 2.0 ^ 32.0
+    a1 = a1 + (a0 - r0) / 2.0 ^ 32.0
+    return a1 % 2.0 ^ 32.0, r0
 end
 
 local K = {
-    0x428a2f98, 0xd728ae22, 0x71374491, 0x23ef65cd, 0xb5c0fbcf, 0xec4d3b2f,
-    0xe9b5dba5, 0x8189dbbc, 0x3956c25b, 0xf348b538, 0x59f111f1, 0xb605d019,
-    0x923f82a4, 0xaf194f9b, 0xab1c5ed5, 0xda6d8118, 0xd807aa98, 0xa3030242,
-    0x12835b01, 0x45706fbe, 0x243185be, 0x4ee4b28c, 0x550c7dc3, 0xd5ffb4e2,
-    0x72be5d74, 0xf27b896f, 0x80deb1fe, 0x3b1696b1, 0x9bdc06a7, 0x25c71235,
-    0xc19bf174, 0xcf692694, 0xe49b69c1, 0x9ef14ad2, 0xefbe4786, 0x384f25e3,
-    0x0fc19dc6, 0x8b8cd5b5, 0x240ca1cc, 0x77ac9c65, 0x2de92c6f, 0x592b0275,
-    0x4a7484aa, 0x6ea6e483, 0x5cb0a9dc, 0xbd41fbd4, 0x76f988da, 0x831153b5,
-    0x983e5152, 0xee66dfab, 0xa831c66d, 0x2db43210, 0xb00327c8, 0x98fb213f,
-    0xbf597fc7, 0xbeef0ee4, 0xc6e00bf3, 0x3da88fc2, 0xd5a79147, 0x930aa725,
-    0x06ca6351, 0xe003826f, 0x14292967, 0x0a0e6e70, 0x27b70a85, 0x46d22ffc,
-    0x2e1b2138, 0x5c26c926, 0x4d2c6dfc, 0x5ac42aed, 0x53380d13, 0x9d95b3df,
-    0x650a7354, 0x8baf63de, 0x766a0abb, 0x3c77b2a8, 0x81c2c92e, 0x47edaee6,
-    0x92722c85, 0x1482353b, 0xa2bfe8a1, 0x4cf10364, 0xa81a664b, 0xbc423001,
-    0xc24b8b70, 0xd0f89791, 0xc76c51a3, 0x0654be30, 0xd192e819, 0xd6ef5218,
-    0xd6990624, 0x5565a910, 0xf40e3585, 0x5771202a, 0x106aa070, 0x32bbd1b8,
-    0x19a4c116, 0xb8d2d0c8, 0x1e376c08, 0x5141ab53, 0x2748774c, 0xdf8eeb99,
-    0x34b0bcb5, 0xe19b48a8, 0x391c0cb3, 0xc5c95a63, 0x4ed8aa4a, 0xe3418acb,
-    0x5b9cca4f, 0x7763e373, 0x682e6ff3, 0xd6b2b8a3, 0x748f82ee, 0x5defb2fc,
-    0x78a5636f, 0x43172f60, 0x84c87814, 0xa1f0ab72, 0x8cc70208, 0x1a6439ec,
-    0x90befffa, 0x23631e28, 0xa4506ceb, 0xde82bde9, 0xbef9a3f7, 0xb2c67915,
-    0xc67178f2, 0xe372532b, 0xca273ece, 0xea26619c, 0xd186b8c7, 0x21c0c207,
-    0xeada7dd6, 0xcde0eb1e, 0xf57d4f7f, 0xee6ed178, 0x06f067aa, 0x72176fba,
-    0x0a637dc5, 0xa2c898a6, 0x113f9804, 0xbef90dae, 0x1b710b35, 0x131c471b,
-    0x28db77f5, 0x23047d84, 0x32caab7b, 0x40c72493, 0x3c9ebe0a, 0x15c9bebc,
-    0x431d67c4, 0x9c100d4c, 0x4cc5d4be, 0xcb3e42b6, 0x597f299c, 0xfc657e2a,
-    0x5fcb6fab, 0x3ad6faec, 0x6c44198c, 0x4a475817,
+    1116352408.0, 3609767458.0, 1899447441.0, 602891725.0, 3049323471.0, 3964484399.0,
+    3921009573.0, 2173295548.0, 961987163.0, 4081628472.0, 1508970993.0, 3053834265.0,
+    2453635748.0, 2937671579.0, 2870763221.0, 3664609560.0, 3624381080.0, 2734883394.0,
+    310598401.0, 1164996542.0, 607225278.0, 1323610764.0, 1426881987.0, 3590304994.0,
+    1925078388.0, 4068182383.0, 2162078206.0, 991336113.0, 2614888103.0, 633803317.0,
+    3248222580.0, 3479774868.0, 3835390401.0, 2666613458.0, 4022224774.0, 944711139.0,
+    264347078.0, 2341262773.0, 604807628.0, 2007800933.0, 770255983.0, 1495990901.0,
+    1249150122.0, 1856431235.0, 1555081692.0, 3175218132.0, 1996064986.0, 2198950837.0,
+    2554220882.0, 3999719339.0, 2821834349.0, 766784016.0, 2952996808.0, 2566594879.0,
+    3210313671.0, 3203337956.0, 3336571891.0, 1034457026.0, 3584528711.0, 2466948901.0,
+    113926993.0, 3758326383.0, 338241895.0, 168717936.0, 666307205.0, 1188179964.0,
+    773529912.0, 1546045734.0, 1294757372.0, 1522805485.0, 1396182291.0, 2643833823.0,
+    1695183700.0, 2343527390.0, 1986661051.0, 1014477480.0, 2177026350.0, 1206759142.0,
+    2456956037.0, 344077627.0, 2730485921.0, 1290863460.0, 2820302411.0, 3158454273.0,
+    3259730800.0, 3505952657.0, 3345764771.0, 106217008.0, 3516065817.0, 3606008344.0,
+    3600352804.0, 1432725776.0, 4094571909.0, 1467031594.0, 275423344.0, 851169720.0,
+    430227734.0, 3100823752.0, 506948616.0, 1363258195.0, 659060556.0, 3750685593.0,
+    883997877.0, 3785050280.0, 958139571.0, 3318307427.0, 1322822218.0, 3812723403.0,
+    1537002063.0, 2003034995.0, 1747873779.0, 3602036899.0, 1955562222.0, 1575990012.0,
+    2024104815.0, 1125592928.0, 2227730452.0, 2716904306.0, 2361852424.0, 442776044.0,
+    2428436474.0, 593698344.0, 2756734187.0, 3733110249.0, 3204031479.0, 2999351573.0,
+    3329325298.0, 3815920427.0, 3391569614.0, 3928383900.0, 3515267271.0, 566280711.0,
+    3940187606.0, 3454069534.0, 4118630271.0, 4000239992.0, 116418474.0, 1914138554.0,
+    174292421.0, 2731055270.0, 289380356.0, 3203993006.0, 460393269.0, 320620315.0,
+    685471733.0, 587496836.0, 852142971.0, 1086792851.0, 1017036298.0, 365543100.0,
+    1126000580.0, 2618297676.0, 1288033470.0, 3409855158.0, 1501505948.0, 4234509866.0,
+    1607167915.0, 987167468.0, 1816402316.0, 1246189591.0,
 }
 
 --- Hashes data bytes using SHA512.
 --- @param data string The input data.
 --- @return string hash The 64-byte hash value.
 local function digest(data)
-    expect(1, data, "string")
+    expect(1.0, data, "string")
     local ok, out = hw.sha512(data)
     if ok then return out end
 
     -- Pad input.
-    local bitlen = #data * 8
-    local padlen = -(#data + 17) % 128
+    local bitlen = #data * 8.0
+    local padlen = -(#data + 17.0) % 128.0
     data = data .. "\128" .. ("\0"):rep(padlen) .. p1x16(fmt1x16, bitlen)
 
     -- Initialize state.
-    local h01, h00 = 0x6a09e667, 0xf3bcc908
-    local h11, h10 = 0xbb67ae85, 0x84caa73b
-    local h21, h20 = 0x3c6ef372, 0xfe94f82b
-    local h31, h30 = 0xa54ff53a, 0x5f1d36f1
-    local h41, h40 = 0x510e527f, 0xade682d1
-    local h51, h50 = 0x9b05688c, 0x2b3e6c1f
-    local h61, h60 = 0x1f83d9ab, 0xfb41bd6b
-    local h71, h70 = 0x5be0cd19, 0x137e2179
+    local h01, h00 = 1779033703.0, 4089235720.0
+    local h11, h10 = 3144134277.0, 2227873595.0
+    local h21, h20 = 1013904242.0, 4271175723.0
+    local h31, h30 = 2773480762.0, 1595750129.0
+    local h41, h40 = 1359893119.0, 2917565137.0
+    local h51, h50 = 2600822924.0, 725511199.0
+    local h61, h60 = 528734635.0, 4215389547.0
+    local h71, h70 = 1541459225.0, 327033209.0
 
     -- Digest.
-    for i = 1, #data, 128 do
+    for i = 1.0, #data, 128.0 do
         local w = {u32x4(fmt32x4, data, i)}
 
         -- Message schedule.
-        for j = 33, 160, 2 do
-            local wf1, wf0 = w[j - 30], w[j - 29]
-            local t1 = shr(wf1, 1) + shl(wf0, 31)
-            local t0 = shr(wf0, 1) + shl(wf1, 31)
-            local u1 = shr(wf1, 8) + shl(wf0, 24)
-            local u0 = shr(wf0, 8) + shl(wf1, 24)
-            local v1 = shr(wf1, 7)
-            local v0 = shr(wf0, 7) + shl(wf1, 25)
+        for j = 33.0, 160.0, 2.0 do
+            local wf1, wf0 = w[j - 30.0], w[j - 29.0]
+            local t1 = shr(wf1, 1.0) + shl(wf0, 31.0)
+            local t0 = shr(wf0, 1.0) + shl(wf1, 31.0)
+            local u1 = shr(wf1, 8.0) + shl(wf0, 24.0)
+            local u0 = shr(wf0, 8.0) + shl(wf1, 24.0)
+            local v1 = shr(wf1, 7.0)
+            local v0 = shr(wf0, 7.0) + shl(wf1, 25.0)
 
-            local w21, w20 = w[j - 4], w[j - 3]
-            local w1 = shr(w21, 19) + shl(w20, 13)
-            local w0 = shr(w20, 19) + shl(w21, 13)
-            local x0 = shr(w21, 29) + shl(w20, 3)
-            local x1 = shr(w20, 29) + shl(w21, 3)
-            local y1 = shr(w21, 6)
-            local y0 = shr(w20, 6) + shl(w21, 26)
+            local w21, w20 = w[j - 4.0], w[j - 3.0]
+            local w1 = shr(w21, 19.0) + shl(w20, 13.0)
+            local w0 = shr(w20, 19.0) + shl(w21, 13.0)
+            local x0 = shr(w21, 29.0) + shl(w20, 3.0)
+            local x1 = shr(w20, 29.0) + shl(w21, 3.0)
+            local y1 = shr(w21, 6.0)
+            local y0 = shr(w20, 6.0) + shl(w21, 26.0)
 
             local r1, r0 =
-                w[j - 32] + bxor(t1, u1, v1) + w[j - 14] + bxor(w1, x1, y1),
-                w[j - 31] + bxor(t0, u0, v0) + w[j - 13] + bxor(w0, x0, y0)
+                w[j - 32.0] + bxor(t1, u1, v1) + w[j - 14.0] + bxor(w1, x1, y1),
+                w[j - 31.0] + bxor(t0, u0, v0) + w[j - 13.0] + bxor(w0, x0, y0)
 
-            w[j], w[j + 1] = carry64(r1, r0)
+            w[j], w[j + 1.0] = carry64(r1, r0)
         end
 
         -- Block function.
@@ -1750,13 +1761,13 @@ local function digest(data)
         local f1, f0 = h51, h50
         local g1, g0 = h61, h60
         local h1, h0 = h71, h70
-        for j = 1, 160, 2 do
-            local t1 = shr(e1, 14) + shl(e0, 18)
-            local t0 = shr(e0, 14) + shl(e1, 18)
-            local u1 = shr(e1, 18) + shl(e0, 14)
-            local u0 = shr(e0, 18) + shl(e1, 14)
-            local v0 = shr(e1, 9) + shl(e0, 23)
-            local v1 = shr(e0, 9) + shl(e1, 23)
+        for j = 1.0, 160.0, 2.0 do
+            local t1 = shr(e1, 14.0) + shl(e0, 18.0)
+            local t0 = shr(e0, 14.0) + shl(e1, 18.0)
+            local u1 = shr(e1, 18.0) + shl(e0, 14.0)
+            local u0 = shr(e0, 18.0) + shl(e1, 14.0)
+            local v0 = shr(e1, 9.0) + shl(e0, 23.0)
+            local v1 = shr(e0, 9.0) + shl(e1, 23.0)
             local s11 = bxor(t1, u1, v1)
             local s10 = bxor(t0, u0, v0)
 
@@ -1764,14 +1775,14 @@ local function digest(data)
             local ch0 = bxor(band(e0, f0), band(bnot(e0), g0))
 
             local temp11 = h1 + s11 + ch1 + K[j] + w[j]
-            local temp10 = h0 + s10 + ch0 + K[j + 1] + w[j + 1]
+            local temp10 = h0 + s10 + ch0 + K[j + 1.0] + w[j + 1.0]
 
-            local w1 = shr(a1, 28) + shl(a0, 4)
-            local w0 = shr(a0, 28) + shl(a1, 4)
-            local x0 = shr(a1, 2) + shl(a0, 30)
-            local x1 = shr(a0, 2) + shl(a1, 30)
-            local y0 = shr(a1, 7) + shl(a0, 25)
-            local y1 = shr(a0, 7) + shl(a1, 25)
+            local w1 = shr(a1, 28.0) + shl(a0, 4.0)
+            local w0 = shr(a0, 28.0) + shl(a1, 4.0)
+            local x0 = shr(a1, 2.0) + shl(a0, 30.0)
+            local x1 = shr(a0, 2.0) + shl(a1, 30.0)
+            local y0 = shr(a1, 7.0) + shl(a0, 25.0)
+            local y1 = shr(a0, 7.0) + shl(a1, 25.0)
             local s01 = bxor(w1, x1, y1)
             local s00 = bxor(w0, x0, y0)
 
@@ -1831,11 +1842,11 @@ local unpack = unpack or table.unpack
 --- @field [3] number[] Preprocessed 2Z.
 --- @field [4] number[] Preprocessed 2DT.
 
-local D = fp.mul(fp.num(-121665), fp.invert(fp.num(121666)))
-local K = fp.kmul(D, 2)
+local D = fp.mul(fp.num(-121665.0), fp.invert(fp.num(121666.0)))
+local K = fp.kmul(D, 2.0)
 
 --- @type EdPoint
-local O = {fp.num(0), fp.num(1), fp.num(1), fp.num(0)}
+local O = {fp.num(0.0), fp.num(1.0), fp.num(1.0), fp.num(0.0)}
 local G = nil
 
 --- Doubles a point.
@@ -1931,7 +1942,7 @@ local function scale(P1)
     local zInv = fp.invert(P1z)
     local P3x = fp.mul(P1x, zInv)
     local P3y = fp.mul(P1y, zInv)
-    local P3z = fp.num(1)
+    local P3z = fp.num(1.0)
     local P3t = fp.mul(P3x, P3y)
     return {P3x, P3y, P3z, P3t}
 end
@@ -1943,8 +1954,8 @@ local function encode(P1)
     P1 = scale(P1)
     local P1x, P1y = unpack(P1)
     local y = fp.encode(P1y)
-    local xBit = fp.canonicalize(P1x)[1] % 2
-    return y:sub(1, -2) .. string.char(y:byte(-1) + xBit * 128)
+    local xBit = fp.canonicalize(P1x)[1.0] % 2.0
+    return y:sub(1.0, -2.0) .. string.char(y:byte(-1.0) + xBit * 128.0)
 end
 
 --- Decodes a point.
@@ -1953,16 +1964,16 @@ end
 local function decode(str)
     local P3y = fp.decode(str)
     local a = fp.square(P3y)
-    local b = fp.sub(a, fp.num(1))
+    local b = fp.sub(a, fp.num(1.0))
     local c = fp.mul(a, D)
-    local d = fp.add(c, fp.num(1))
+    local d = fp.add(c, fp.num(1.0))
     local P3x = fp.sqrtDiv(b, d)
     if not P3x then return nil end
-    local xBit = fp.canonicalize(P3x)[1] % 2
-    if xBit ~= B32.extract(str:byte(-1), 7) then
+    local xBit = fp.canonicalize(P3x)[1.0] % 2.0
+    if xBit ~= B32.extract(str:byte(-1.0), 7.0) then
         P3x = fp.carry(fp.neg(P3x))
     end
-    local P3z = fp.num(1)
+    local P3z = fp.num(1.0)
     local P3t = fp.mul(P3x, P3y)
     return {P3x, P3y, P3z, P3t}
 end
@@ -1975,20 +1986,20 @@ G = decode("Xfffffffffffffffffffffffffffffff") --[[@as EdPoint, G is valid]]
 --- @return number[]
 local function signedRadixW(bits, w)
     -- TODO Find a more elegant way of doing this.
-    local wPow = 2 ^ w
-    local wPowh = wPow / 2
+    local wPow = 2.0 ^ w
+    local wPowh = wPow / 2.0
     local out = {}
-    local acc = 0
-    local mul = 1
-    for i = 1, #bits do
+    local acc = 0.0
+    local mul = 1.0
+    for i = 1.0, #bits do
         acc = acc + bits[i] * mul
-        mul = mul * 2
-        while i == #bits and acc > 0 or mul > wPow do
+        mul = mul * 2.0
+        while i == #bits and acc > 0.0 or mul > wPow do
             local rem = acc % wPow
             if rem >= wPowh then rem = rem - wPow end
             acc = (acc - rem) / wPow
             mul = mul / wPow
-            out[#out + 1] = rem
+            out[#out + 1.0] = rem
         end
     end
     return out
@@ -2000,10 +2011,10 @@ end
 --- @return NsPoint[][]
 local function radixWTable(P, w)
     local out = {}
-    for i = 1, math.ceil(256 / w) do
+    for i = 1.0, math.ceil(256.0 / w) do
         local row = {niels(P)}
-        for j = 2, 2 ^ w / 2 do
-            P = add(P, row[1])
+        for j = 2.0, 2.0 ^ w / 2.0 do
+            P = add(P, row[1.0])
             row[j] = niels(P)
         end
         out[i] = row
@@ -2013,7 +2024,7 @@ local function radixWTable(P, w)
 end
 
 --- The radix logarithm of the precomputed table for G.
-local G_W = 5
+local G_W = 5.0
 
 --- The precomputed multiplication table for G.
 local G_TABLE = radixWTable(G, G_W)
@@ -2028,28 +2039,28 @@ local G_TABLE = radixWTable(G, G_W)
 --- @return number[]
 local function wNaf(bits, w)
     -- TODO Find a more elegant way of doing this.
-    local wPow = 2 ^ w
-    local wPowh = wPow / 2
+    local wPow = 2.0 ^ w
+    local wPowh = wPow / 2.0
     local out = {}
-    local acc = 0
-    local mul = 1
-    for i = 1, #bits do
+    local acc = 0.0
+    local mul = 1.0
+    for i = 1.0, #bits do
         acc = acc + bits[i] * mul
-        mul = mul * 2
-        while i == #bits and acc > 0 or mul > wPow do
-            if acc % 2 == 0 then
-                acc = acc / 2
-                mul = mul / 2
-                out[#out + 1] = 0
+        mul = mul * 2.0
+        while i == #bits and acc > 0.0 or mul > wPow do
+            if acc % 2.0 == 0.0 then
+                acc = acc / 2.0
+                mul = mul / 2.0
+                out[#out + 1.0] = 0.0
             else
                 local rem = acc % wPow
                 if rem >= wPowh then rem = rem - wPow end
                 acc = acc - rem
-                out[#out + 1] = rem
+                out[#out + 1.0] = rem
             end
         end
     end
-    while out[#out] == 0 do out[#out] = nil end
+    while out[#out] == 0.0 do out[#out] = nil end
     return out
 end
 
@@ -2060,8 +2071,8 @@ end
 local function WNAFTable(P, w)
     local dP = double(P)
     local out = {niels(P)}
-    for i = 3, 2 ^ w, 2 do
-        out[i] = niels(add(dP, out[i - 2]))
+    for i = 3.0, 2.0 ^ w, 2.0 do
+        out[i] = niels(add(dP, out[i - 2.0]))
     end
     return out
 end
@@ -2072,11 +2083,11 @@ end
 local function mulG(bits)
     local sw = signedRadixW(bits, G_W)
     local R = O
-    for i = 1, #sw do
+    for i = 1.0, #sw do
         local b = sw[i]
-        if b > 0 then
+        if b > 0.0 then
             R = add(R, G_TABLE[i][b])
-        elseif b < 0 then
+        elseif b < 0.0 then
             R = sub(R, G_TABLE[i][-b])
         end
     end
@@ -2088,14 +2099,14 @@ end
 --- @param bits number[] The scalar multiplicand little-endian bits.
 --- @return EdPoint
 local function mul(P, bits)
-    local naf = wNaf(bits, 5)
-    local tbl = WNAFTable(P, 5)
+    local naf = wNaf(bits, 5.0)
+    local tbl = WNAFTable(P, 5.0)
     local R = O
-    for i = #naf, 1, -1 do
+    for i = #naf, 1.0, -1.0 do
         local b = naf[i]
-        if b == 0 then
+        if b == 0.0 then
             R = double(R)
-        elseif b > 0 then
+        elseif b > 0.0 then
             R = add(R, tbl[b])
         else
             R = sub(R, tbl[-b])
@@ -2120,12 +2131,12 @@ end)()
 -- ---- Guild Squads API (RFC 8032 Ed25519 on ccryptolib's field/group code) ----
 do
   local fq, ed, sha512 = M.fq, M.edwards25519, M.sha512
-  local IDENT = "\1" .. string.rep("\0", 31)
+  local IDENT = "\1" .. string.rep("\0", 31.0)
   -- L = 2^252 + 27742317777372353535851937790883648493, little-endian bytes
-  local LBYTES = { 0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10 }
+  local LBYTES = { 237.0, 211.0, 245.0, 92.0, 26.0, 99.0, 18.0, 88.0, 214.0, 156.0, 247.0, 162.0, 222.0, 249.0, 222.0, 20.0,
+    0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 16.0 }
   local function scalarCanonical(s) -- s < L ?
-    for i = 32, 1, -1 do
+    for i = 32.0, 1.0, -1.0 do
       local a, b = s:byte(i), LBYTES[i]
       if a ~= b then return a < b end
     end
@@ -2137,19 +2148,19 @@ do
   end
   local function expand(sk)
     local h = sha512.digest(sk)
-    return fq.decodeClamped(h:sub(1, 32)), h:sub(33, 64)
+    return fq.decodeClamped(h:sub(1.0, 32.0)), h:sub(33.0, 64.0)
   end
   local E = {}
   E.sha512 = sha512.digest
   function E.publicKey(sk)
-    assert(type(sk) == "string" and #sk == 32, "secret key length must be 32")
+    assert(type(sk) == "string" and #sk == 32.0, "secret key length must be 32")
     local x = expand(sk)
     return ed.encode(ed.mulG(fq.bits(x)))
   end
   -- deterministic RFC 8032 5.1.6: r = H(prefix || M), R = rB, k = H(R || A || M), S = r + k*a mod L
   function E.sign(sk, pk, msg)
-    assert(type(sk) == "string" and #sk == 32, "secret key length must be 32")
-    assert(type(pk) == "string" and #pk == 32, "public key length must be 32")
+    assert(type(sk) == "string" and #sk == 32.0, "secret key length must be 32")
+    assert(type(pk) == "string" and #pk == 32.0, "public key length must be 32")
     assert(type(msg) == "string", "message must be a string")
     local x, prefix = expand(sk)
     local r = fq.decodeWide(sha512.digest(prefix .. msg))
@@ -2159,8 +2170,8 @@ do
   end
   -- strict: |sig| = 64, S < L, A canonical and not small-order, R not small-order, [S]B == R + [k]A
   function E.verify(pk, msg, sig)
-    if type(pk) ~= "string" or #pk ~= 32 or type(msg) ~= "string" or type(sig) ~= "string" or #sig ~= 64 then return false end
-    local rStr, sStr = sig:sub(1, 32), sig:sub(33)
+    if type(pk) ~= "string" or #pk ~= 32.0 or type(msg) ~= "string" or type(sig) ~= "string" or #sig ~= 64.0 then return false end
+    local rStr, sStr = sig:sub(1.0, 32.0), sig:sub(33.0)
     if not scalarCanonical(sStr) then return false end
     local A = ed.decode(pk)
     if not A or ed.encode(A) ~= pk or smallOrder(A) then return false end

@@ -66,6 +66,17 @@ do
     end
     band, bor, bxor = op(AND), op(OR), op(XOR)
   end
+  -- bit32.band/bor/bxor are variadic and sha512 calls them with 3 arguments
+  local function var(f2)
+    return function(a, b, c, ...)
+      local r = f2(a, b)
+      if c == nil then return r end
+      r = f2(r, c)
+      for i = 1, select("#", ...) do r = f2(r, (select(i, ...))) end
+      return r
+    end
+  end
+  band, bor, bxor = var(band), var(bor), var(bxor)
   B32 = {
     band = band, bor = bor, bxor = bxor,
     bnot = function(a) return T32 - 1 - a % T32 end,
@@ -82,4 +93,38 @@ ${fs.readFileSync(packGen, 'utf8')}end)()
 `);
 for (const [name, f] of Object.entries(mods)) out.push(`M.${name} = (function()\n${patch(name, rd(f))}\nend)()\n`);
 out.push(fs.readFileSync(path.join(__dirname, 'ed25519-api.lua'), 'utf8'));
-process.stdout.write(out.join(''));
+// Fengari (the test VM) has 32-bit integers: 0xf3bcc908 is negative and 65536*65536 == 0. Every numeric literal
+// outside strings and comments becomes a float (decimal with ".0"), so all arithmetic is IEEE double as in WoW's Lua 5.1.
+function floatLiterals(src) {
+  let o = '', i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (c === '-' && src[i + 1] === '-') {
+      const m = /^--\[(=*)\[/.exec(src.slice(i));
+      const end = m ? src.indexOf(']' + m[1] + ']', i) + m[1].length + 2 : (src.indexOf('\n', i) < 0 ? n : src.indexOf('\n', i));
+      o += src.slice(i, end); i = end; continue;
+    }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (src[j] !== c) { if (src[j] === '\\') j++; if (src[j] === '\n' || j >= n) throw new Error('bad string at ' + i); j++; }
+      o += src.slice(i, j + 1); i = j + 1; continue;
+    }
+    if (c === '[' && /^\[=*\[/.test(src.slice(i))) {
+      const eq = /^\[(=*)\[/.exec(src.slice(i))[1];
+      const end = src.indexOf(']' + eq + ']', i) + eq.length + 2;
+      o += src.slice(i, end); i = end; continue;
+    }
+    if (/[A-Za-z_]/.test(c)) { const m = /^[A-Za-z_0-9]+/.exec(src.slice(i))[0]; o += m; i += m.length; continue; }
+    if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src[i + 1] || ''))) {
+      const m = /^(0[xX][0-9a-fA-F]+|[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?\.?)/.exec(src.slice(i))[0];
+      if (/^0[xX]/.test(m)) { const v = parseInt(m, 16); if (v > 2 ** 53) throw new Error('hex too big ' + m); o += v + '.0'; }
+      else o += /[.eE]/.test(m) ? m : m + '.0';
+      i += m.length; continue;
+    }
+    if (c === '.' && src[i + 1] === '.') { const m = src[i + 2] === '.' ? '...' : '..'; o += m; i += m.length; continue; }
+    o += c; i++;
+  }
+  return o;
+}
+process.stdout.write(floatLiterals(out.join('')));
