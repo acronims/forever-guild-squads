@@ -334,6 +334,17 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) gets
     ok(nc <= S.CUBES_PICK, nc .. " cubes in a catching-up reply")
     local again = S.ReplyFor({ h = h, p2 = 2, nonce = 100, cu = 1 }, "New-Realm", nil, nil)
     ok(#again <= S.MAX_SAMPLE, "a second cu hello inside the cooldown gets the normal sample (" .. #again .. ")")
+    -- sec r3 M2: the cooldown is 10 min per requester (a modified client re-sending cu every ~40 s used to get a
+    -- 120-record urgent reply each time)
+    local realGT = GetTime
+    local t0 = realGT()
+    GetTime = function() return t0 + 45 end
+    local okL, late = pcall(S.ReplyFor, { h = h, p2 = 2, nonce = 102, cu = 1 }, "New-Realm", nil, nil)
+    GetTime = function() return t0 + 601 end
+    local okL2, later = pcall(S.ReplyFor, { h = h, p2 = 2, nonce = 103, cu = 1 }, "New-Realm", nil, nil)
+    GetTime = realGT
+    ok(okL and #late <= S.MAX_SAMPLE, "a cu hello 45 s later still gets the normal sample (" .. tostring(okL and #late) .. ")")
+    ok(okL2 and #later > S.MAX_SAMPLE, "after 10 min it gets the catch-up sample again (" .. tostring(okL2 and #later) .. ")")
     local other = S.ReplyFor({ h = h, p2 = 2, nonce = 101 }, "Zed-Realm", nil, nil)
     ok(#other <= S.MAX_SAMPLE, "no cu: the normal sample")
   end)

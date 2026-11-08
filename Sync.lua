@@ -29,9 +29,10 @@ local MAX_REPLY = 60          -- records per hello reply (1.0 / 1.1 requesters)
 Sync.MAX_SAMPLE = 30          -- v1.2: records per reply to a 1.2 requester (random sample of 2 of 8 cubes)
 Sync.CUBES, Sync.CUBES_PICK = 8, 2
 -- v1.2 AC3 arreglo 2: a requester catching up (cu = 1 in its hello) gets up to MAX_SAMPLE_CATCHUP records of its
--- 2 cubes, at most once per CATCHUP_COOLDOWN s per requester (a modified client flooding cu hellos gets MAX_SAMPLE)
+-- 2 cubes, at most once per CATCHUP_COOLDOWN s per requester (a modified client flooding cu hellos gets MAX_SAMPLE).
+-- sec r3 M2: 10 min (it was 25 s: with HELLO_MIN 20 s one name got a 120-record urgent reply every ~40 s)
 Sync.MAX_SAMPLE_CATCHUP = 120
-Sync.CATCHUP_COOLDOWN = 25
+Sync.CATCHUP_COOLDOWN = 600
 local bigReply = {}           -- requester -> GetTime() of the last catch-up sized reply
 Sync.SAMPLE_MIN_ONLINE = 8    -- v1.2 (AC1): the sample only with more online than this (p < 1); else MAX_REPLY + cursor
 -- v1.2: fine bucket hashes (h2) of the big kinds in a 1.2 hello; a 1.2 replier diffs on them, so it does not resend
