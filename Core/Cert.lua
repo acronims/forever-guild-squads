@@ -201,15 +201,30 @@ function C.evalAll(db, tdb, now, onDrop, onCert)
   end
 end
 
+-- fix/perf A3: do we hold (or have queued) the certificate of `issuer` with this n or a newer one
+function C.knows(db, issuer, n)
+  local cur = db.crt and db.crt[issuer]
+  if cur and type(n) == "number" and cur.n >= n then return true end
+  for _, q in ipairs(queue) do if q.c.i == issuer and type(n) == "number" and q.c.n >= n then return true end end
+  return false
+end
+
+-- fix/perf (runtime review A3): our certificate lists at most OWN_MAX keys, the most recently heard in person, so the
+-- D that carries it (~25 B per key) stays well under the 64 parts a receiver reassembles (500 keys ~ 52 parts)
+C.OWN_MAX = 500
 -- our own certificate. own = per-character holder { c = last certificate, key = joined entries, pk = signer (hex) }
 function C.own(own, tdb, me, sk, pk, now)
   T.st(tdb)
-  local heard = {}
+  local heard, list = {}, {}
   for name, k in pairs(tdb.keys) do
     if name ~= me and k.s == "strong" and not tdb.contested[name] and (k.seen or k.t or 0) >= now - C.WINDOW then
-      heard[name] = unhex(k.pk)
+      list[#list + 1] = { name, k.seen or k.t or 0, k.pk }
     end
   end
+  if #list > C.OWN_MAX then
+    table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
+  end
+  for i = 1, math.min(#list, C.OWN_MAX) do heard[list[i][1]] = unhex(list[i][3]) end
   local e = {}
   for name, k in pairs(heard) do e[#e + 1] = C.hash(name, k) end
   table.sort(e)

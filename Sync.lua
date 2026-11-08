@@ -341,20 +341,36 @@ function Sync.OwnManifest()
   db.own[me] = m
   return m
 end
+-- fix/perf (runtime review M2): what signs (a sign ~10 ms plus a hash per entry) waits for the end of combat and
+-- encounters, like the verifies (GuildSquads.lua sigFrame): re-checked every SIGN_RETRY s
+Sync.SIGN_RETRY = 5
+function Sync.SignBusy()
+  if InCombatLockdown and InCombatLockdown() then return true end
+  -- ns.encounterFn() gives the API function (C_InstanceEncounter in 16001), like the verify gate in GuildSquads.lua
+  local enc = ns.encounterFn and ns.encounterFn()
+  if type(enc) ~= "function" then return false end
+  local okE, v = pcall(enc)
+  return (okE and v) and true or false
+end
+local function whenIdle(fn)
+  if Sync.SignBusy() and ns.After then return ns.After(Sync.SIGN_RETRY, function() whenIdle(fn) end) end
+  fn()
+end
+Sync.WhenIdle = whenIdle
 Sync.MAN_DEBOUNCE = 5
 local manSent = {}
 local manQueued = false
 function Sync.QueueOwnManifest()
   if manQueued or not ns.After then return end
   manQueued = true
-  ns.After(Sync.MAN_DEBOUNCE, function()
+  ns.After(Sync.MAN_DEBOUNCE, function() whenIdle(function()
     manQueued = false
     local m, me = Sync.OwnManifest(), ns.me and ns.me()
     if not (m and me) then return end
     manSent["*|" .. me] = { n = m.n, t = GetTime and GetTime() or 0 }
     local w = { a = m.a, n = m.n, h = m.h, s = m.s }
     Comm.Send("D", { r = {}, m = { w } }, nil, nil, function() Sync.NoteManHeard(w) end)
-  end)
+  end) end)
 end
 -- `m` of a D message: the manifests of the authors of its records (ours or the last verified one we hold), one per
 -- author and destination every MAN_EVERY s or when its n changes
@@ -471,17 +487,56 @@ function Sync.QueueOwnCert()
   ownCache = nil
   if certQueued or not ns.After or not ns.certDB then return end
   certQueued = true
-  ns.After(Sync.CERT_DEBOUNCE, function()
+  ns.After(Sync.CERT_DEBOUNCE, function() whenIdle(function()
     certQueued = false
     local c = Sync.OwnCert()
     if not c or c.n == certSentN then return end
     certSentN = c.n
     Comm.Send("D", { r = {}, c = { i = c.i, n = c.n, e = c.e, s = c.s } })
-  end)
+  end) end)
 end
-function Sync.HelloCert()
+-- fix/perf (runtime review A3): the hello carries only a reference to our certificate (n and the first 12 chars of
+-- its signature). The whole certificate (~25 B per key heard in person) made a 400-key hello 64 parts, and Comm.Send
+-- drops those. Who lacks it asks (Sync.OnCertRef -> a whispered D with ca = 1); we answer a burst of asks with one
+-- GUILD send (Sync.CertAsked); a changed certificate still goes by GUILD (QueueOwnCert).
+function Sync.HelloCertRef()
   local c = Sync.OwnCert()
-  if c then certSentN = c.n; return { i = c.i, n = c.n, e = c.e, s = c.s } end
+  -- an empty certificate is never sent (RehelloCert, CertAsked): no reference either, nobody would ask for nothing
+  if c and type(c.s) == "string" and #c.e > 0 then return { n = c.n, h = c.s:sub(1, 12) } end
+end
+Sync.CERT_ASK_MIN = 60         -- one ask per issuer per minute; one GUILD answer per certificate n per minute
+Sync.CERT_ASK_DEBOUNCE = 3     -- the asks of a login burst get one GUILD send
+local certAskAt, certAskN, certAskQ, certAnsweredAt, certAnsweredN = {}, 0, false, nil, nil
+function Sync.OnCertRef(cr, from)
+  local C, db, T = ns.Cert, ns.certDB, ns.Trust
+  if not (C and db and T and ns.trustDB and type(cr) == "table" and type(cr.n) == "number" and type(from) == "string") then return end
+  if from == (ns.me and ns.me()) or not T.inPerson(ns.trustDB, from) or C.knows(db, from, cr.n) then return end
+  local t = serverNow() or 0
+  local last = certAskAt[from]
+  if last and t >= last and t - last < Sync.CERT_ASK_MIN then return end
+  if certAskN >= 2000 then certAskAt, certAskN = {}, 0 end
+  certAskAt[from], certAskN = t, certAskN + 1
+  local function ask() if not C.knows(db, from, cr.n) then Comm.Send("D", { r = {}, ca = 1 }, "WHISPER", from) end end
+  if ns.After then ns.After(1 + math.random() * 3, ask) else ask() end
+end
+function Sync.CertAsked(from)
+  if not ns.certDB or type(from) ~= "string" or from == (ns.me and ns.me()) then return end
+  if certQueued or certAskQ then return end      -- a GUILD send of it is already on its way
+  local c = Sync.OwnCert()
+  if not c or #c.e == 0 then return end
+  local t = serverNow() or 0
+  if certAnsweredN == c.n and certAnsweredAt and t >= certAnsweredAt and t - certAnsweredAt < Sync.CERT_ASK_MIN then
+    return Sync.RehelloCert(from)                -- answered by GUILD a moment ago: a whisper (rate-limited)
+  end
+  certAskQ = true
+  local function send()
+    certAskQ = false
+    local c2 = Sync.OwnCert()
+    if not c2 or #c2.e == 0 then return end
+    certAnsweredAt, certAnsweredN, certSentN = serverNow() or 0, c2.n, c2.n
+    Comm.Send("D", { r = {}, c = { i = c2.i, n = c2.n, e = c2.e, s = c2.s } })
+  end
+  if ns.After then ns.After(Sync.CERT_ASK_DEBOUNCE, function() whenIdle(send) end) else send() end
 end
 -- a 1.2 hello lists the certificates the requester holds (`cn`): 8-char tokens = 24-bit hash of the issuer + n mod
 -- 2^24 (base64), newest first, at most CN_MAX. A replier re-sends its own only if its token is not there (missing or
@@ -747,7 +802,7 @@ function Sync.Hello(again)
   end
   -- v1.2 annex F: our public key, learned strong by whoever hears it from us (WoW guarantees the sender)
   if ns.Trust and ns.myPk then local pk = ns.myPk(); if pk then msg.pk = ns.Trust.hex(pk) end end
-  msg.c = Sync.HelloCert()                          -- v1.2 annex G: our certificate
+  msg.cr = Sync.HelloCertRef()                      -- v1.2 annex G: a reference to our certificate (fix/perf A3)
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
   if ns.After then
@@ -948,6 +1003,7 @@ local function onHello(payload, sender)
     end
   end
   Sync.OfferCert(payload.c, from)
+  Sync.OnCertRef(payload.cr, from)
   -- only a fraction of the guild answers, after random jitter, to avoid a reply storm. Officers always answer a
   -- 1.0 / 1.1 requester (their relays are the trusted ones there); a 1.2 requester gets them as one more node.
   local online = ns.onlineCount and ns.onlineCount() or 1
@@ -1010,6 +1066,7 @@ local function onRecords(payload, sender, channel)
   end
   learnKeys(payload, from)
   Sync.OfferCert(payload.c, from)
+  if payload.ca and channel == "WHISPER" then Sync.CertAsked(from) end
   offerManifests(payload, from)
   for i = 1, math.min(#payload.r, 20) do
     local rec = payload.r[i]

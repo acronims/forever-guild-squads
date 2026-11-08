@@ -426,3 +426,129 @@ test("keys: sec r2 R4: one sender cannot fill the rotation queue (ROT_PER_SENDER
   nsB.Sync.QueueRotation("M1-R", ("ab"):rep(32), ("11"):rep(64), "Fox-R")
   eq(nsB.Sync.RotPending(), 1, "the share is freed once his rotations are verified")
 end)
+
+-- fix/perf (runtime review A3): the hello carried our whole certificate (~25 B per key heard in person): 400 keys =
+-- 64 parts and Comm.Send dropped the hello (no sync, no pk); 100 keys = 33 parts per hello. Now the hello carries a
+-- reference (cr = { n, h = 12 chars of the signature }); who lacks it asks (whispered D with ca) and the issuer sends
+-- it once by GUILD for a burst of asks. Cert.OWN_MAX caps the certificate (the most recently heard keys) so the D
+-- that carries it always fits the 64 parts.
+local function commParts(tag, p)
+  local cns = { Serialize = NS.Serialize, Chunk = NS.Chunk, Queue = NS.Queue }
+  loadmod("Comm.lua", cns)
+  return cns.Comm.Parts(tag, p)
+end
+local function helloOf(nsX)
+  local sent = {}
+  nsX.Comm.Send = function(tag, p, ch, to) sent[#sent + 1] = { tag, p, ch, to } end
+  nsX.After = function() end
+  nsX.Sync.Hello()
+  for _, m in ipairs(sent) do if m[1] == "H" then return m[2] end end
+end
+
+test("keys perf A3: the hello carries a reference to our certificate, not the certificate (400 keys heard in person)", function()
+  NS.Cert.resetQueue()
+  local skB = key("B")
+  local ns0 = wireNs("Bob-R", pkB, true)
+  ns0.mySk = function() return skB end
+  T.hearOwner(ns0.trustDB, "K0-R", E.sha512("a3 pk 0"):sub(1, 32), T0)
+  local p0 = commParts("H", helloOf(ns0))
+  local nsB = wireNs("Bob-R", pkB, true)
+  nsB.mySk = function() return skB end
+  for i = 1, 400 do T.hearOwner(nsB.trustDB, ("K%d-R"):format(i), E.sha512("a3 pk " .. i):sub(1, 32), T0) end
+  local h = helloOf(nsB)
+  ok(h ~= nil, "hello sent")
+  eq(h.c, nil, "no certificate in the hello")
+  local own = nsB.Sync.OwnCert()
+  ok(own and #own.e == 400, "the certificate lists the 400 keys")
+  ok(type(h.cr) == "table" and h.cr.n == own.n and h.cr.h == own.s:sub(1, 12), "the hello carries n and a hash of it")
+  local p400 = commParts("H", h)
+  local old = {}
+  for k, v in pairs(h) do old[k] = v end
+  old.cr, old.c = nil, { i = own.i, n = own.n, e = own.e, s = own.s }
+  print(("  A3 measure: hello parts with 1 key %d; with 400 keys %d (the 1.2 hello with c would be %d)"):format(p0, p400, commParts("H", old)))
+  ok(p400 <= p0 + 1, ("hello with 400 keys: %d parts, with 1 key: %d (it was ~+41)"):format(p400, p0))
+end)
+
+test("keys perf A3: the certificate is capped at Cert.OWN_MAX (most recent keys) and its D fits 64 parts", function()
+  NS.Cert.resetQueue()
+  local C = NS.Cert
+  ok(type(C.OWN_MAX) == "number" and C.OWN_MAX <= C.MAX_ENTRIES, "Cert.OWN_MAX <= what a receiver takes")
+  local skB = key("B")
+  local nsB = wireNs("Bob-R", pkB, true)
+  nsB.mySk = function() return skB end
+  local N = C.OWN_MAX + 20
+  for i = 1, N do T.hearOwner(nsB.trustDB, ("Q%d-R"):format(i), E.sha512("a3 cap " .. i):sub(1, 32), T0 - N + i) end
+  local own = nsB.Sync.OwnCert()
+  eq(#own.e, C.OWN_MAX, "capped")
+  local set = {}
+  for _, x in ipairs(own.e) do set[x] = true end
+  ok(set[C.hash("Q" .. N .. "-R", E.sha512("a3 cap " .. N):sub(1, 32))], "the newest key is listed")
+  ok(not set[C.hash("Q1-R", E.sha512("a3 cap 1"):sub(1, 32))], "the oldest is not")
+  local parts = commParts("D", { r = {}, c = { i = own.i, n = own.n, e = own.e, s = own.s } })
+  ok(parts <= 64, "the D with the capped certificate: " .. parts .. " parts")
+end)
+
+test("keys perf A3: who lacks the certificate of a hello's sender asks for it; the sender answers a burst once by GUILD", function()
+  NS.Cert.resetQueue()
+  local skA, skB = key("A"), key("B")
+  local nsA, sentA = wireNs("Ali-R", pkA, true)
+  nsA.mySk = function() return skA end
+  T.hearOwner(nsA.trustDB, "Cid-R", E.sha512("a3 cid"):sub(1, 32), T0)
+  local nsB, sentB = wireNs("Bob-R", pkB, true)
+  nsB.mySk = function() return skB end
+  local own = nsA.Sync.OwnCert()
+  local hello = { h = {}, p2 = 2, pk = T.hex(pkA), cr = { n = own.n, h = own.s:sub(1, 12) } }
+  nsB.Sync.OnMessage("H", hello, "Ali-R")
+  local ask
+  for _, m in ipairs(sentB) do if m[1] == "D" and m[2].ca and m[3] == "WHISPER" and m[4] == "Ali-R" then ask = m[2] end end
+  ok(ask ~= nil, "Bob lacks Ali's certificate: he asks her by whisper")
+  nsA.Sync.OnMessage("D", ask, "Bob-R", "WHISPER")
+  nsA.Sync.OnMessage("D", ask, "Eve-R", "WHISPER")
+  local guild
+  local n = 0
+  for _, m in ipairs(sentA) do if m[1] == "D" and m[2].c and m[3] == nil then n = n + 1; guild = m[2] end end
+  eq(n, 1, "one GUILD send of the certificate for the burst of asks")
+  nsB.Sync.OnMessage("D", guild, "Ali-R", "GUILD")
+  for _ = 1, 5 do if NS.Cert.pending() > 0 then nsB.Sync.SigStep() end end
+  ok(NS.Cert.holds(nsB.certDB, "Ali-R"), "Bob holds Ali's certificate")
+  for k in pairs(sentB) do sentB[k] = nil end
+  nsB.Sync.OnMessage("H", hello, "Ali-R")
+  for _, m in ipairs(sentB) do ok(not (m[1] == "D" and m[2].ca), "the next hello with the same reference: no ask") end
+end)
+
+-- fix/perf (runtime review M2): the timers that sign (QueueOwnCert 30 s, QueueOwnManifest 5 s, the answer to a
+-- certificate ask) fired in combat and encounters; only the verifies were paused. Now they wait (Sync.SIGN_RETRY s)
+-- until combat / the encounter is over. Counted with a wrapper on Ed25519.sign.
+test("keys perf M2: no signature in combat or an encounter; it is signed and sent once they are over", function()
+  NS.Cert.resetQueue()
+  local skB = key("B")
+  local nsB, sentB = wireNs("Bob-R", pkB, true)
+  nsB.mySk = function() return skB end
+  local timers = {}
+  nsB.After = function(_, fn) timers[#timers + 1] = fn end
+  local function run() local t = timers; timers = {}; for _, fn in ipairs(t) do fn() end end
+  local realSign, signs = E.sign, 0
+  E.sign = function(...) signs = signs + 1; return realSign(...) end
+  local realCombat, enc = rawget(_G, "InCombatLockdown"), false
+  local okR, err = pcall(function()
+    InCombatLockdown = function() return true end
+    T.hearOwner(nsB.trustDB, "Ali-R", pkA, T0)
+    nsB.Sync.QueueOwnCert()
+    run()
+    eq(signs, 0, "in combat: not signed")
+    ok(#timers == 1, "re-scheduled")
+    InCombatLockdown = function() return false end
+    nsB.encounterFn = function() return function() return enc end end   -- like ns.encounterFn: gives the API function
+    enc = true
+    run()
+    eq(signs, 0, "in an encounter: not signed")
+    enc = false
+    run()
+    eq(signs, 1, "after: signed once")
+    local n = 0
+    for _, m in ipairs(sentB) do if m[1] == "D" and m[2].c then n = n + 1 end end
+    eq(n, 1, "and sent")
+  end)
+  E.sign, InCombatLockdown = realSign, realCombat
+  if not okR then error(err, 0) end
+end)
