@@ -838,7 +838,12 @@ function S16(seed) {
 // S16b (annex G, AF7): 2 alts known in person by the honest clients certify the SAME fake key for Z (Mb11). Mb10
 // met Z in person and certifies his real key: with that honest certificate against, Z's key is "disputed" and
 // nothing new of Z is applied. When Z comes online (in person), his own records apply and the fake ones are dropped.
-function S16b(seed) {
+// S16c (QA D12): the same without Mb10 (no honest certificate against). The 2 alts' certificates make the fake key
+// "cert" on the honest clients and the fake profile IS applied (the documented limit of annex G); when Z logs in
+// in person his key wins, what the fake key signed is dropped (ns.OnKeyReplaced) and his own profile applies.
+function S16b(seed) { return s16bRun(seed, true); }
+function S16c(seed) { return s16bRun(seed, false); }
+function s16bRun(seed, withWit) {
   const sim = new Sim({ seed });
   const { check, checks, pass } = checker();
   makeGuild(sim, 1, 12);
@@ -847,7 +852,7 @@ function S16b(seed) {
   const [h1, h2, wit] = ['Mb8', 'Mb9', 'Mb10'].map((n) => sim.client(n));
   const z = sim.client('Mb11');
   const ZED = full(sim, 'Mb11');
-  for (const c of [gm, h1, h2, wit, ...alts]) { c.login(); sim.run(5); }
+  for (const c of [gm, h1, h2, ...(withWit ? [wit] : []), ...alts]) { c.login(); sim.run(5); }
   check('GM settings written', gmSettings(gm));
   sim.run(60);
   for (const c of [gm, h1, h2, ...alts]) c.logout();
@@ -868,7 +873,7 @@ function S16b(seed) {
     local dbg = " w=" .. (cw and (#cw.e .. "@" .. cw.n) or "none")
     return tostring(s) .. "/" .. (db.contested[${luaStr(ZED)}] and "contested" or "-") .. "/c" .. nc .. "/" .. (p and (tostring(p.d.note) .. ":" .. tostring(NS.P2P.strengthOf(NS.state, p))) or "nil") .. dbg end)()`)[0];
   const pendZ = (c) => c.val(`(function() local n = 0 for kid, byId in pairs(NS.state.p2p and NS.state.p2p.pend or {}) do for _, e in pairs(byId) do if e.r.a == ${luaStr(ZED)} then n = n + 1 end end end return n end)()`)[0];
-  const before = [h1, h2].map(keyView).concat(['wit:' + keyView(wit), 'pendZ:' + [h1, h2].map(pendZ).join('/')]);
+  const before = [h1, h2].map(keyView).concat([withWit ? 'wit:' + keyView(wit) : 'wit:-', 'pendZ:' + [h1, h2].map(pendZ).join('/')]);
   const FTS = sim.epoch + Math.round(sim.t) + 200;
   // both alts: the same fake key for Z, a fake profile of Z signed with it, and a certificate (signed with the alt's
   // own key, known in person) that lists hash12(Z | fake key) next to the keys the alt heard in person
@@ -890,15 +895,24 @@ function S16b(seed) {
   sim.run(60);
   for (let n = 0; n < 50; n++) for (const c of [h1, h2]) c.step();
   const after = [h1, h2].map(keyView);
-  check('2 alts + 1 honest certificate against: Z disputed on the honest clients', after.every((x) => /contested/.test(x) || /^disputed/.test(x)), after.join(','));
-  check('nothing fake of Z applied (no "fantasma")', after.every((x) => !/fantasma/.test(x)), after.join(','));
+  if (withWit) {
+    check('2 alts + 1 honest certificate against: Z disputed on the honest clients', after.every((x) => /contested/.test(x) || /^disputed/.test(x)), after.join(','));
+    check('nothing fake of Z applied (no "fantasma")', after.every((x) => !/fantasma/.test(x)), after.join(','));
+  } else {
+    check('2 alts, nobody against: the fake key is certified and the fake profile applied (annex G limit)', after.every((x) => /^cert\//.test(x) && /fantasma/.test(x)), after.join(','));
+  }
   // Z online with Mb8 and Mb9: in person wins
-  z.login(); sim.run(10); z.run('return A.SaveProfile({ note = "realz2" })'); sim.run(90);
+  z.login(); sim.run(90);
+  for (let n = 0; n < 200; n++) for (const c of [h1, h2]) c.step();
+  // QA D12: before Z writes anything new, his key heard in person alone must drop what the fake key signed
+  const mid = [h1, h2].map(keyView);
+  check('Z in person, before any new record: the fake profile is dropped', mid.every((x) => x.startsWith('strong/') && !/fantasma/.test(x)), mid.join(','));
+  z.run('return A.SaveProfile({ note = "realz2" })'); sim.run(90);
   for (let n = 0; n < 200; n++) for (const c of [h1, h2]) c.step();
   const fin = [h1, h2].map(keyView);
-  check('Z in person: his key strong and his own profile applied, the fake dropped', fin.every((x) => x.startsWith('strong/') && /realz2:strong/.test(x)), fin.join(','));
+  check('Z in person: his key strong and his own profile applied, the fake dropped', fin.every((x) => x.startsWith('strong/') && /realz2:strong/.test(x) && !/fantasma/.test(x)), fin.join(','));
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { zpk0, zpk1, before, after, fin, t: Math.round(sim.t), ...sim.stats } };
+  return { pass: pass(), checks, metrics: { zpk0, zpk1, before, after, mid, fin, t: Math.round(sim.t), ...sim.stats } };
 }
 
 // S13 (AC8): channel load. 40 clients (GM, 2 officers, 37 members) with 200 profiles + 20 squads on disk, 15 min
@@ -1187,4 +1201,4 @@ function S18(seed) {
   return { pass: pass(), checks, metrics: { keys, certHeld, verified, total, sqVerified, sqTotal, maxOnline, sessions, t: Math.round(sim.t), ...sim.stats } };
 }
 
-module.exports = { S18, S8g, S15, S16, S16b, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+module.exports = { S18, S8g, S15, S16, S16b, S16c, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
