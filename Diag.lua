@@ -89,6 +89,14 @@ function G.Report()
     extra[#extra + 1] = ("keys own=%s strong=%d weak=%d pend=%d contested=%d suspects=%d alerts=%s"):format(
       (ns.myPk and ns.myPk()) and "yes" or "no", st, wk, pend, c, sus, table.concat(db.alerts or {}, ","))
   end
+  if ns.Sig and ns.sigDB then -- v1.2 point 8: manifests verified / queued / rejected, keys by strength, keys replaced
+    local c = ns.Sig.counts(ns.sigDB)
+    local st, wk = 0, 0
+    if ns.Trust and ns.trustDB then st, wk = ns.Trust.counts(ns.trustDB) end
+    local rep = ns.trustDB and ns.trustDB.n and ns.trustDB.n.replaced or 0
+    extra[#extra + 1] = ("sig verified=%d pending=%d rejected=%d keys(strong/weak)=%d/%d replaced=%d"):format(
+      c.verified or 0, c.pending or 0, c.rejected or 0, st, wk, rep)
+  end
   if ns.Catalog and ns.Catalog.debugLine then extra[#extra + 1] = ns.Catalog.debugLine() end -- GM catalog
   if ns.RosterDiag then extra[#extra + 1] = ns.RosterDiag() end -- am I in the roster cache (surnames)
   return D.report(db, extra)

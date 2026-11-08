@@ -179,3 +179,9 @@ Se quita la clave de dev de todo el diseño (ver el cambio al final del Anexo F 
 - AF3 en espera de la decisión de BRO (punto 2): no se toca el diseño de claves por 2 caminos.
 - Unidad completa **308/308** (EXIT 0), gates OK, wow-secret-lint 0/0 (también cubre 68e70d3, que no se había pasado).
 - **Retoma por:** recoger s8m1 (hacia las 03:55); luego S16 rehecho (AF2), diag del punto 8, H2 y la deuda «[1.1 quorum]».
+
+### 8-nov 03:2x — /gsq diag, punto 8 (mitad de firmas)
+- Línea nueva en `/gsq diag`: `sig verified= pending= rejected= keys(strong/weak)=a/b replaced=` (Sig.counts + Trust.counts + `n.replaced`). Smoke check en sigwire_spec (cliente completo de zload): **rojo 23/24 → verde 24/24**.
+- Unidad completa **309/309** (EXIT 0), gates OK.
+- Falta del punto 8: `p2 proto= sample= suppressed= auth-pend= seals=` (no existe aún en el código).
+- **Retoma por:** recoger s8m1 (hacia las 03:55; `gsq-logs/s8m1.log` con «EXIT n»; partes vs 5601; borrar el contenedor); la línea `p2 proto=…` del punto 8; S16 rehecho (AF2: 2, 3 y 5 alts sin perfil/squad/ajuste/repudiate falso; el legítimo llega; hoy S16 todavía mide el quórum de la 1.1); H2; deuda «[1.1 quorum]». AF3 sigue en espera de BRO.

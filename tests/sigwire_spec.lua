@@ -114,3 +114,11 @@ test("sigwire: a new own key (/gsq trust newkey) re-signs the same records with 
   ok(E.verify(pkN, G.statement(m2[1]), T.unhex(m2[1].s)), "signed with the new key")
   ok(not E.verify(pkA, G.statement(m2[1]), T.unhex(m2[1].s)), "not with the old one")
 end)
+
+SMOKE_CHECKS = SMOKE_CHECKS or {}
+-- full client (zload fake WoW): /gsq diag carries the signatures line of point 8 (annex F)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: /gsq diag sig line (verified/pending/rejected, keys strong/weak, replaced)", function(c)
+  local rep = c.ns.DiagGlue.Report()
+  ok(type(rep) == "string" and rep:find("sig verified=%d+ pending=%d+ rejected=%d+ keys%(strong/weak%)=%d+/%d+ replaced=%d+"),
+    "diag sig line")
+end }
