@@ -79,8 +79,8 @@ function T.entropy()
 end
 
 T.MIN_SAMPLES = 64             -- samples the pool needs before we create our key
+-- `db` here is the per-character holder of our key (only `me` is written), not the guild's trust db
 function T.ensureOwn(db, pool)
-  T.st(db)
   if db.me and validPk(T.unhex(db.me.pk)) and T.unhex(db.me.sk) then return T.unhex(db.me.sk), T.unhex(db.me.pk) end
   if not pool or pool.n < T.MIN_SAMPLES then return nil end
   local sk = pool.seed()

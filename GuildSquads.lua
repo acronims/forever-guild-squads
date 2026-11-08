@@ -144,6 +144,12 @@ local function selectGuild()
   local g, migrated = M.guildDB(root, key, function(n) return rosterCache[ns.fullName(n) or ""] ~= nil end)
   ns.gdb, ns.guildKey = g, key
   g.ann = nil -- announced hashes are not used
+  -- v1.2 annex F: the keys we learned for this guild's members (TOFU strong / weak with quorum)
+  if ns.Trust then
+    g.trust = type(g.trust) == "table" and g.trust or {}
+    ns.trustDB = ns.Trust.st(g.trust)
+    pcall(ns.Trust.expire, ns.trustDB, (GetServerTime and GetServerTime()) or 0)
+  end
   local saved = type(g.records) == "table" and g.records or {}
   -- v1.1: pending (unverified) versions, relay provenance and repudiation counts, before the records
   if ns.P2P then pcall(ns.P2P.import, ns.state, g.p2p) end
@@ -163,6 +169,7 @@ local function unloadGuild()
   saveDB()
   ns.debug("guild partition " .. tostring(ns.guildKey) .. " unloaded")
   ns.gdb, ns.guildKey, ns.rosterReady = nil, nil, false
+  ns.trustDB = nil
   ns.state = M.newState()
   for _, fn in ipairs(ns.guildUnloadHooks) do pcall(fn) end
   if ns.UI then ns.UI.Dirty() end
@@ -609,6 +616,35 @@ function saveDB()
 end
 
 -------------------------------------------------------------------------------
+-- v1.2 annex F: our own ed25519 key, per character (GuildSquadsDB.ownKeys[name] = { me = {sk, pk} }), created once
+-- the entropy pool has T.MIN_SAMPLES samples: debugprofilestop() at every event and frame, GetTime, GetServerTime,
+-- cursor position, the player GUID and math.random. The pool stops sampling once the key exists.
+local pool = ns.Trust and ns.Trust.entropy()
+local ownPk
+local function sample(tag)
+  if not pool or ownPk then return end
+  local cx, cy
+  if GetCursorPosition then cx, cy = GetCursorPosition() end
+  pool.add(tag, debugprofilestop and debugprofilestop() or 0, GetTime and GetTime() or 0,
+    GetServerTime and GetServerTime() or 0, cx, cy, UnitGUID and UnitGUID("player") or "", math.random(1, 2147483646))
+end
+function ns.myPk()
+  if ownPk then return ownPk end
+  if not (ns.Trust and db and ns.me) then return nil end
+  local me = ns.me()
+  if not me then return nil end
+  db.ownKeys = type(db.ownKeys) == "table" and db.ownKeys or {}
+  local holder = type(db.ownKeys[me]) == "table" and db.ownKeys[me] or {}
+  local ok, _, pk = pcall(ns.Trust.ensureOwn, holder, pool)
+  if ok and pk then db.ownKeys[me] = holder; ownPk = pk end
+  return ownPk
+end
+function ns.mySk()
+  if not ns.myPk() then return nil end
+  return ns.Trust.own(db.ownKeys[ns.me()])
+end
+
+-------------------------------------------------------------------------------
 -- events
 local f = CreateFrame("Frame")
 f:RegisterEvent("ADDON_LOADED")
@@ -618,7 +654,13 @@ f:RegisterEvent("GUILD_ROSTER_UPDATE")
 f:RegisterEvent("PLAYER_LEVEL_UP")
 f:RegisterEvent("PLAYER_GUILD_UPDATE")
 local rosterQueued = false
+f:SetScript("OnUpdate", function()
+  if ownPk or not pool then f:SetScript("OnUpdate", nil); return end
+  sample("f")
+  if pool.n >= ns.Trust.MIN_SAMPLES and db and ns.myPk() then f:SetScript("OnUpdate", nil) end
+end)
 f:SetScript("OnEvent", function(_, ev, arg1)
+  sample(ev)
   if ev == "ADDON_LOADED" and arg1 == ADDON then
     if math.randomseed then math.randomseed(math.floor((GetTime() * 1000) % 2147483647)) end  -- not in the 1.60.1 API dump
     loadDB()
@@ -671,6 +713,16 @@ SlashCmdList.GUILDSQUADS = function(msg)
     db.minimap = db.minimap or {}
     db.minimap.hide = false
     if ns.Minimap then ns.Minimap.Show() end
+  elseif cmd == "trust" then
+    -- /gsq trust reset <name>: forget a member's key (he lost his SavedVariables); learned again from him in person
+    local sub, who = (msg or ""):match("^%S+%s+(%S+)%s*(%S*)")
+    if sub == "reset" and who and who ~= "" and ns.Trust and ns.trustDB then
+      local name = (ns.fullName and ns.fullName(who)) or who
+      ns.Trust.reset(ns.trustDB, name)
+      print_((L.TRUST_RESET or "Clave olvidada: %s"):format(name))
+    else
+      print_(L.TRUST_USAGE or "/gsq trust reset <nombre>")
+    end
   elseif cmd == "help" then print_(L.HELP)
   elseif cmd == "news" or cmd == "novedades" then
     ns.UI.Open(); ns.UI.ShowGuide("news")

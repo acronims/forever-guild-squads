@@ -81,6 +81,14 @@ function G.Report()
   if ns.P2P and ns.state then -- v1.1: unverified versions, verified by quorum/captain, repudiations, blocked relayers
     extra[#extra + 1] = ns.P2P.diagLine(ns.state, (GetServerTime and GetServerTime()) or 0)
   end
+  if ns.Trust and ns.trustDB then -- v1.2 annex F: keys learned (strong in person / weak with quorum), alerts
+    local db = ns.trustDB
+    local st, wk, pend, sus = ns.Trust.counts(db)
+    local c = 0
+    for _ in pairs(db.contested or {}) do c = c + 1 end
+    extra[#extra + 1] = ("keys own=%s strong=%d weak=%d pend=%d contested=%d suspects=%d alerts=%s"):format(
+      (ns.myPk and ns.myPk()) and "yes" or "no", st, wk, pend, c, sus, table.concat(db.alerts or {}, ","))
+  end
   if ns.Catalog and ns.Catalog.debugLine then extra[#extra + 1] = ns.Catalog.debugLine() end -- GM catalog
   if ns.RosterDiag then extra[#extra + 1] = ns.RosterDiag() end -- am I in the roster cache (surnames)
   return D.report(db, extra)

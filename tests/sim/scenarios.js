@@ -624,8 +624,19 @@ function s11core(seed, withGm) {
   check('100 % of the squads reached every client (verified or pending) after 3 passes', sqTotal > 0 && sqArrived === sqTotal, `${sqArrived}/${sqTotal} ${JSON.stringify(sq3)}`);
   if (withGm) check('GM online all along, no officer', !!gm.online && !sim.clients.Of1, '');
   else check('no GM / officer ever online', !sim.clients.Gm && !sim.clients.Of1, '');
+  // annex F wiring: every client made its own key, keys are distinct, and they travel (strong in person, weak by quorum)
+  const keys = {};
+  for (const c of cs) {
+    c.login();
+    const v = c.run('local pk = NS.myPk and NS.myPk(); local s, w, p = NS.Trust.counts(NS.trustDB or {}); return pk and NS.Trust.hex(pk) or "", s, w, p');
+    keys[c.name] = { pk: String(v[0]).slice(0, 8), strong: v[1], weak: v[2], pend: v[3] };
+    c.logout();
+  }
+  const pks = Object.values(keys).map((k) => k.pk);
+  check('annex F: every client has its own key, all distinct', pks.every((x) => x.length === 8) && new Set(pks).size === pks.length, JSON.stringify(keys));
+  check('annex F: every client learned >= 1 key in person', Object.values(keys).every((k) => k.strong >= 1), JSON.stringify(keys));
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { arrived, total, verified, sqArrived, sqTotal, sqVerified, after2, after3, sq2, sq3, sessions, t: Math.round(sim.t), ...sim.stats } };
+  return { pass: pass(), checks, metrics: { keys, arrived, total, verified, sqArrived, sqTotal, sqVerified, after2, after3, sq2, sq3, sessions, t: Math.round(sim.t), ...sim.stats } };
 }
 function S11(seed) { return s11core(seed, false); }
 function S15(seed) { return s11core(seed, true); }

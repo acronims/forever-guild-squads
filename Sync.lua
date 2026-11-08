@@ -138,6 +138,49 @@ end
 -- a record version already waiting in our send queue is not queued again for the next
 -- hello (otherwise 30 logins would queue 30 copies of the same records: ~470 messages, 8 minutes of backlog per officer)
 local queued = {}             -- id -> version string waiting in the send queue
+-- v1.2 annex F: the strong keys of the authors of a batch (`ks`, hex), our own included. Weak keys are never
+-- relayed (a relayer vouches only for keys heard in person); one copy per author and destination every KEY_EVERY s.
+Sync.KEY_EVERY = 600
+local keySent = {}
+function Sync.KeysFor(batch, to)
+  local T, db = ns.Trust, ns.trustDB
+  if not (T and db) then return nil end
+  local now, me, ks = GetTime and GetTime() or 0, ns.me and ns.me(), nil
+  for _, r in ipairs(batch) do
+    local a = r.a
+    local pk
+    if a == me then pk = ns.myPk and ns.myPk()
+    else local k, s = T.keyOf(db, a); if s == "strong" then pk = k end end
+    local tag = (to or "*") .. "|" .. tostring(a)
+    if pk and not (ks and ks[a]) and (not keySent[tag] or now - keySent[tag] >= Sync.KEY_EVERY) then
+      keySent[tag] = now
+      ks = ks or {}
+      ks[a] = T.hex(pk)
+    end
+  end
+  return ks
+end
+-- `ks` of a D message: only for authors of records in it and roster members; the sender itself = in person
+local function learnKeys(payload, from)
+  local T, db = ns.Trust, ns.trustDB
+  if not (T and db and type(payload.ks) == "table") then return end
+  local authors, now = {}, (ns.serverTime and ns.serverTime()) or (GetServerTime and GetServerTime()) or 0
+  for i = 1, math.min(#payload.r, 20) do local r = payload.r[i]; if type(r) == "table" then authors[r.a] = true end end
+  for a in pairs(authors) do
+    local h = payload.ks[a]
+    if type(a) == "string" and type(h) == "string" and a ~= (ns.me and ns.me()) and (a == from or (ns.roster and ns.roster(a))) then
+      local pk = T.unhex(h)
+      if pk then
+        if a == from then Sync.OnOwnerKey(a, T.hearOwner(db, a, pk, now)) else T.hearRelayed(db, a, pk, from, now) end
+      end
+    end
+  end
+end
+-- what hearOwner said; "replaced" will drop what the old weak key signed (manifests, annex F)
+function Sync.OnOwnerKey(name, res, old)
+  if res == "replaced" and ns.OnKeyReplaced then ns.OnKeyReplaced(name, old) end
+end
+
 local function sendRecords(list, to, urgent)
   -- group a few records per message; Comm chunks large payloads
   local batch = {}
@@ -145,11 +188,13 @@ local function sendRecords(list, to, urgent)
     local ids = {}
     for i, r in ipairs(batch) do ids[i] = { r.id, vkey(r) }; queued[r.id] = vkey(r) end
     local function done() for _, x in ipairs(ids) do if queued[x[1]] == x[2] then queued[x[1]] = nil end end end
-    if Comm.Send("D", { r = batch }, to and "WHISPER" or nil, to, done, urgent) == false then done() end
+    local msg = { r = batch, ks = Sync.KeysFor(batch, to) }
+    if Comm.Send("D", msg, to and "WHISPER" or nil, to, done, urgent) == false then done() end
     batch = {}
   end
   for _, b in ipairs(Sync.PackRecords(list)) do batch = b; flush() end
 end
+Sync.SendRecords = sendRecords
 -- v1.2 AC5: records go Sync.PACK per D message (the receiver reads at most 20); Comm chunks it in 255-byte parts,
 -- so fewer, fuller messages waste fewer half-empty last parts than the old 3 per message
 Sync.PACK = 8
@@ -292,6 +337,8 @@ function Sync.Hello(again)
     msg.h2 = h2
     if catchup and again then msg.cu = 1 end      -- AC3 arreglo 2: bigger samples while catching up
   end
+  -- v1.2 annex F: our public key, learned strong by whoever hears it from us (WoW guarantees the sender)
+  if ns.Trust and ns.myPk then local pk = ns.myPk(); if pk then msg.pk = ns.Trust.hex(pk) end end
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
   if ns.After then
@@ -475,6 +522,13 @@ local function onHello(payload, sender)
     ns.ProgressGlue.OnSummaries(payload.ws, sender)
   end
   if ns.HallGlue then ns.HallGlue.OnHello(payload.rh, sender) end
+  if ns.Trust and ns.trustDB and type(payload.pk) == "string" and from ~= (ns.me and ns.me()) then
+    local pk = ns.Trust.unhex(payload.pk)
+    if pk then
+      local now = (ns.serverTime and ns.serverTime()) or (GetServerTime and GetServerTime()) or 0
+      Sync.OnOwnerKey(from, ns.Trust.hearOwner(ns.trustDB, from, pk, now))
+    end
+  end
   -- only a fraction of the guild answers, after random jitter, to avoid a reply storm. Officers always answer a
   -- 1.0 / 1.1 requester (their relays are the trusted ones there); a 1.2 requester gets them as one more node.
   local online = ns.onlineCount and ns.onlineCount() or 1
@@ -520,6 +574,7 @@ local function onRecords(payload, sender)
   if type(payload) ~= "table" or type(payload.r) ~= "table" then return end
   local from = (ns.fullName and ns.fullName(sender)) or sender
   local t = GetTime and GetTime() or 0
+  learnKeys(payload, from)
   for i = 1, math.min(#payload.r, 20) do
     local rec = payload.r[i]
     if not M.validShape(rec) then

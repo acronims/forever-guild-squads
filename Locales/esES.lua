@@ -110,6 +110,8 @@ L.IMPORTED = "Importados %d registros (%d rechazados)."
 L.SYNCED = "Guild Squads: sincronizado (%d registros, %d pendientes de verificar)"
 L.OLD_PEERS = "Guild Squads: %d miembros de la hermandad usan una versión antigua y no se sincronizan hasta que actualicen"
 L.SYNC_SENT = "Petición de sincronización enviada a la guild."
+L.TRUST_RESET = "Clave olvidada: %s. Se volverá a aprender de ese jugador en persona."
+L.TRUST_USAGE = "/gsq trust reset <nombre>: olvida la clave de un miembro (si perdió sus datos guardados)."
 L.SYNC_COOLDOWN = "Ya se pidió una sincronización hace menos de un minuto. Prueba otra vez en un momento."
 
 -- UI

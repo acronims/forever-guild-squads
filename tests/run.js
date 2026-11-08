@@ -42,6 +42,7 @@ const ORDER = [
   'p2p_spec.lua',
   'ed25519_spec.lua',
   'trust_spec.lua',
+  'keys_wire_spec.lua',
   'counters_spec.lua',
   'observations_spec.lua',
   'races_spec.lua',
