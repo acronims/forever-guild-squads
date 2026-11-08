@@ -163,6 +163,39 @@ test("keys: a 1.2 replier re-sends its certificate by WHISPER to the requester (
   eq(#certsSent(), nsB.Sync.CERT_REHELLO_MAX + 1, "1.0/1.1 hello: nothing")
 end)
 
+test("keys: no certificate whisper while our own GUILD broadcast is pending (s8t9: the login burst changes it on every hello); after it, whispers resume", function()
+  NS.Cert.resetQueue()
+  local skB = key("B")
+  local _, pkE = key("E")
+  local now = T0
+  local nsB, sentB = wireNs("Bob-R", pkB, true)
+  local pending = {}
+  nsB.After = function(_, fn) pending[#pending + 1] = fn end
+  nsB.serverTime = function() return now end
+  nsB.mySk = function() return skB end
+  local function certsSent()
+    local out = {}
+    for _, m in ipairs(sentB) do if m[1] == "D" and m[2].c then out[#out + 1] = { ch = m[3], to = m[4] } end end
+    return out
+  end
+  T.hearOwner(nsB.trustDB, "Ali-R", pkA, now)
+  -- Eve logs in: her hello is the first time Bob hears her in person, so Bob's certificate changes and its GUILD
+  -- broadcast is queued; Eve is online now and gets that one: no whisper on top
+  now = now + 5
+  nsB.Sync.OnMessage("H", { h = {}, p2 = 2, pk = T.hex(pkE) }, "Eve-R")
+  eq(#certsSent(), 0, "broadcast pending: no whisper")
+  now = now + nsB.Sync.CERT_DEBOUNCE
+  local fns = pending; pending = {}
+  for _, fn in ipairs(fns) do fn() end
+  local cs = certsSent()
+  ok(#cs == 1 and cs[1].ch == nil, "the queued broadcast goes by GUILD")
+  -- later, someone who was offline when it changed says hello (nothing changes for Bob): whispered as before
+  now = now + 5
+  nsB.Sync.OnMessage("H", { h = {}, p2 = 2 }, "Gm-R")
+  cs = certsSent()
+  ok(#cs == 2 and cs[2].ch == "WHISPER" and cs[2].to == "Gm-R", "no broadcast pending: whispered")
+end)
+
 test("keys: the 1.2 hello lists the certificates we hold (cn); a replier re-sends its own only if the requester lacks it or holds an older n", function()
   NS.Cert.resetQueue()
   local skB = key("B")

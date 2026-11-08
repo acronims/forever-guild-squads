@@ -358,7 +358,7 @@ Sync.CERT_DEBOUNCE = 30
 -- the <=8 repliers) we also WHISPER it to the requester (not by GUILD: s8t6/s8t7, the GUILD copy re-verified keys
 -- and unparked records on every client and nearly doubled the S8 cable), at most once per requester per
 -- CERT_REHELLO s and at most CERT_REHELLO_MAX per window (a flood of hellos from many names costs <= 10 D per minute);
--- an empty certificate is not re-sent.
+-- an empty certificate is not re-sent, nor while our own GUILD broadcast of a change is pending.
 Sync.CERT_REHELLO = 60
 Sync.CERT_REHELLO_MAX = 10
 local certQueued, certSentN, certRehelloAt, certRehelloTo, certRehelloN = false, nil, nil, {}, 0
@@ -430,6 +430,9 @@ function Sync.RehelloCert(to)
   local now = serverNow() or 0
   if not certRehelloAt or now - certRehelloAt >= Sync.CERT_REHELLO then certRehelloAt, certRehelloTo, certRehelloN = now, {}, 0 end
   if certRehelloTo[to] or certRehelloN >= Sync.CERT_REHELLO_MAX then return end
+  -- our GUILD broadcast of a changed certificate is pending: the requester is online and gets that one (s8t9: in a
+  -- login burst every hello heard in person changes the certificate, and whispering each version doubled the cable)
+  if certQueued then return end
   local c = Sync.OwnCert()
   if not c or #c.e == 0 then return end
   certRehelloTo[to], certRehelloN = true, certRehelloN + 1
