@@ -151,3 +151,14 @@ test("sig rules D3: a cert key applies profiles and squads, never a repudiate no
   ok(not ap(s, set, "Z-R"), "settings signed by a cert key are not applied")
   eq(s.settings.d.squadsEnabled, true)
 end)
+
+test("sig rules QA r2 N1: a squad relayed under a cert key is applied (annex G: cert = strong for profiles and squads)", function()
+  local s = newState()
+  local sq = { k = "squad", id = "A", a = "Cap-R", ts = T0 + 40, sq = 1, d = { name = "Alfa", captain = "Cap-R", members = { "Cap-R" } } }
+  local pc = prof("Cap-R", T0 + 41, { note = "cap" })
+  sign(s, "Cap-R", 1, { sq, pc }, "cert")
+  local okS, why = ap(s, sq, "Z-R")
+  ok(okS, "the squad signed by a cert key is applied (" .. tostring(why) .. ")")
+  ok(s.squads["A"] ~= nil, "the squad is in the state")
+  ok(ap(s, pc, "Z-R"), "and the profile too")
+end)
