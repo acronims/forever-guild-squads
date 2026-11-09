@@ -85,5 +85,6 @@ workspace). Since 2.0 (`docs/SPEC-v2.0-identidad.md`) that full name is the **id
   exact `Name Surname` of an online client (anything else gets the `CHAT_MSG_SYSTEM` error). A member handle with a
   space gives the surname (`sim.addMember('Kas Pitas', 5)`); `sim.idOf(handle)` is its identity, `sim.whisperLog`
   every whisper and where it went. S20 (with a self-test of that server), S21 (two `Kas` on one realm) and S22
-  (connected realms) cover it, and `tests/sim/run.js` fails when any «No hay ningún jugador» line reaches a chat
-  (`SYSSHOWN total=`).
+  (connected realms) cover it, and `tests/sim/run.js` fails when any «No hay ningún jugador» line reaches the chat
+  of a client of this build (`SYSSHOWN total=`). The older builds that S14 and S17 mix in (1.0.1, 1.1) whisper
+  `Name Surname-Realm` in WoW Forever and show that line themselves: it is printed apart (`old=`) and does not fail.

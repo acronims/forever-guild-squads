@@ -205,11 +205,18 @@ class Client {
   fire(ev, ...args) { callG(this.L, 'SIM_step', this.sim.t); callG(this.L, 'SIM_fire', ev, ...args); this.after(); }
   step() { callG(this.L, 'SIM_step', this.sim.t); this.after(); }
   // 1.2.2: a CHAT_MSG_SYSTEM line through the chat filters; counted in SIM_SYSSHOWN when no filter hides it
-  // 2.0 (AC8): every line shown is also counted for the whole run (Sim.sysShownTotal, printed by tests/sim/run.js)
+  // 2.0 (AC8): every line shown in the chat of a client of the build under test is also counted for the whole run
+  // (Sim.sysShownTotal, printed by tests/sim/run.js; any line fails the run). A client loaded from an older ref
+  // (opts.code: the 1.0.1 / 1.1 of S14 and S17 have no Comm.SystemFilter and whisper «Name Surname-Realm» in WoW
+  // Forever) is the old build's own line: reported apart (Sim.sysShownOld, stats.sysShownOld), never hidden.
   systemMessage(msg) {
     callG(this.L, 'SIM_step', this.sim.t);
     const r = callG(this.L, 'SIM_system', msg);
-    if (Number(r[0]) === 1) { this.sim.stats.sysShown = (this.sim.stats.sysShown || 0) + 1; Sim.sysShownTotal++; }
+    if (Number(r[0]) === 1) {
+      this.sim.stats.sysShown = (this.sim.stats.sysShown || 0) + 1;
+      if (this.code) { this.sim.stats.sysShownOld = (this.sim.stats.sysShownOld || 0) + 1; Sim.sysShownOld++; }
+      else Sim.sysShownTotal++;
+    }
     this.after();
   }
   after() {
@@ -434,6 +441,7 @@ Sim.parts = (name) => {
 // the mode of a Sim built without opts.forever: a WoW Forever realm (2.0, AC7). GSQ_SIM_FOREVER=0 or run.js --realm
 // give the 1.2.x world back
 Sim.FOREVER_DEFAULT = process.env.GSQ_SIM_FOREVER !== '0';
-Sim.sysShownTotal = 0;          // «No hay ningún jugador…» lines shown in any chat of any client, whole process
+Sim.sysShownTotal = 0;          // «No hay ningún jugador…» lines shown in a chat of the build under test, whole process
+Sim.sysShownOld = 0;            // the same lines on clients of an older ref (opts.code), whole process: reported only
 
 module.exports = { Sim, luaStr, mulberry32, sourcesAt };

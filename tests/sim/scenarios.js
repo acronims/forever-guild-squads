@@ -1123,8 +1123,13 @@ function S17(seed) {
   check('the reloaded 1.2 client (Mb1) also writes it, with the old members it heard (1-4)', mb1n.length === 1 && mb1n[0] >= 1 && mb1n[0] <= 4, mb1.replace(/\n/g, ' / '));
   const oldOld = [];
   for (const o of olds) for (const p of olds) if (o !== p && own(cs[o], cs[p]) !== 'soy ' + p) oldOld.push(`${o}<-${p}`);
+  // 2.0 (AC8): no server «No hay ningún jugador» line in the chat of a client of this build. The 1.0.1 / 1.1 ones
+  // whisper «Name Surname-Realm» in WoW Forever and show it (their own bug): measured only (sysShownOld)
+  const shownNew = news.map((n) => `${n}:${cs[n].val('SIM_SYSSHOWN')[0]}`);
+  check('no client of this build shows a «No hay ningún jugador» line (SIM_SYSSHOWN = 0 on each)', news.every((n) => Number(cs[n].val('SIM_SYSSHOWN')[0]) === 0), shownNew.join(','));
+  const shownOld = olds.map((o) => `${o}:${cs[o].val('SIM_SYSSHOWN')[0]}`);
   errorsCheck(sim, check);
-  return { pass: pass(), checks, metrics: { ref: REF, ref11: REF11, oldAmongThemselvesMissing: oldOld, oldPeers: cnt, ...sim.stats } };
+  return { pass: pass(), checks, metrics: { ref: REF, ref11: REF11, oldAmongThemselvesMissing: oldOld, oldPeers: cnt, shownOld, ...sim.stats } };
 }
 
 // S8g (v1.2 AC0/AC2/AC3/AC5): the S13 guild (200 members: GM, 2 officers, 197 members; 200 profiles + 20 squads on
