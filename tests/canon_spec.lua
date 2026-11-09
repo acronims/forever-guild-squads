@@ -269,6 +269,27 @@ test("A1 keys: a relayed key, a manifest or a rotation under an alias is never k
   ok(n == 0, "a fresh client counts 0 aliases: " .. tostring(n))
 end)
 
+-- D3 of the reviewer, the same input (a D from Bob Stone with only `ks`), with the assertion turned around: the probe
+-- asserted the hole (`ok(db.pend[alias] ~= nil, "candidate key held under the alias")`, true on 29d314f), so on the
+-- fix that probe fails because nothing is held. Here: nothing held under «Ann-<realm>» nor under «kas pitas» (an alias
+-- of me), and the refusal is counted (alias=N)
+test("A1 (D3 as the reviewer sent it): a relayed `ks` for «Ann-<realm>» / «kas pitas» leaves no candidate, counted", function()
+  local ns, env, fire, diag = boot(F())
+  local db = ns.trustDB
+  local pk = string.rep("ab", 32)
+  local alias = "Ann-" .. MY
+  local n0 = aliasCount(diag)          -- checked at the end: the key first (the reviewer's probe)
+  ns.Sync.OnMessage("D", { r = { { k = "profile", id = alias, a = alias, ts = 1000050, sq = 1, d = { note = "ghost" } } }, ks = { [alias] = pk } }, "Bob Stone", "GUILD")
+  eq(db.pend[alias], nil, "candidate key under " .. alias); eq(db.keys[alias], nil, "key under " .. alias)
+  eq(db.pend["Ann Oak"], nil, "nothing moved to the identity either")
+  local me2 = "kas pitas"
+  ns.Sync.OnMessage("D", { r = { { k = "profile", id = me2, a = me2, ts = 1000050, sq = 1, d = { note = "ghost of me" } } }, ks = { [me2] = pk } }, "Bob Stone", "GUILD")
+  eq(db.pend[me2], nil, "candidate key under an alias of me"); eq(db.keys[me2], nil, "key under an alias of me")
+  local n1, out = aliasCount(diag)
+  eq(n0, 0, "a fresh client counts no alias")
+  ok(n1 and n1 >= 2, "refusals counted (the key and the record of each message): " .. tostring(out:match("id mode[^\n]*")))
+end)
+
 test("A1 W envelope: only my exact identity is the recipient", function()
   local ns = boot(F())
   ok(ns.Comm.ForMe("Kas Pitas"), "my identity")
