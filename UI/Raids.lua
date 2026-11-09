@@ -149,6 +149,7 @@ local function makeSlot(parent)
   b.bg = b:CreateTexture(nil, "BACKGROUND"); b.bg:SetAllPoints(); b.bg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
   b.role = b:CreateTexture(nil, "ARTWORK"); b.role:SetSize(14, 14); b.role:SetPoint("LEFT", 1, 0)
   b.text = W.Label(b, "", "GameFontHighlightSmall"); b.text:SetPoint("LEFT", 17, 0); b.text:SetWidth(84)
+  if b.text.SetWordWrap then b.text:SetWordWrap(false) end   -- 2.0: «Name Surname» truncated, one line
   if b.text.SetJustifyH then b.text:SetJustifyH("LEFT") end
   if b.RegisterForClicks then b:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
   b:SetScript("OnClick", function(self)
@@ -240,6 +241,7 @@ local function makeAddRow(parent)
   r.plus:SetPoint("RIGHT", -2, 0)
   r.role = r:CreateTexture(nil, "ARTWORK"); r.role:SetSize(14, 14); r.role:SetPoint("LEFT", 2, 0)
   r.text = W.Label(r, "", "GameFontHighlightSmall"); r.text:SetPoint("LEFT", 20, 0); r.text:SetWidth(180)
+  if r.text.SetWordWrap then r.text:SetWordWrap(false) end   -- 2.0: «Name Surname» truncated, one line
   if r.text.SetJustifyH then r.text:SetJustifyH("LEFT") end
   return r
 end
