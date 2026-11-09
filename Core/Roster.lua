@@ -795,9 +795,14 @@ function R.invite(api, d, names, me)
   end
   local cap = (raid and 40 or 5) - size
   for _, n in ipairs(todo) do
-    if res.invited < cap and call(api.invite, n) then res.invited = res.invited + 1; pend[n] = t end
+    if res.invited < cap then
+      local okI, sent = call(api.invite, n)
+      -- 2.0: api.invite answers false when the name has no target (Raids.lua): not invited, counted apart
+      if okI and sent == false then res.noTarget = (res.noTarget or 0) + 1
+      elseif okI then res.invited = res.invited + 1; pend[n] = t end
+    end
   end
-  res.remaining = #todo - res.invited + (res.pending or 0)
+  res.remaining = #todo - res.invited - (res.noTarget or 0) + (res.pending or 0)
   if raid and val(api.isRaid, false) then res.sub = R.placeSubgroups(api, d) end
   return res
 end

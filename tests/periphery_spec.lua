@@ -29,7 +29,7 @@ local function env20(opts)
   env.strsplit = function(sep, s) local out = {} for p in (s .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do out[#out + 1] = p end return table.unpack(out) end
   env.strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
   env.date, env.time = os.date, os.time
-  local rec = { printed = {}, texts = {}, invited = {}, whispers = {}, popups = {}, scripts = {}, frames = {} }
+  local rec = { printed = {}, texts = {}, invited = {}, whispers = {}, popups = {}, scripts = {}, frames = {}, chat = {} }
   local function note(s) if type(s) == "string" then rec.texts[#rec.texts + 1] = s end end
   env.print = function(...)
     local t = {} for i = 1, select("#", ...) do t[#t + 1] = tostring((select(i, ...))) end
@@ -131,6 +131,7 @@ local function env20(opts)
   env.C_Texture = { GetAtlasInfo = function() return nil end }
   env.C_PartyInfo = { InviteUnit = function(n) rec.invited[#rec.invited + 1] = n end, ConvertToRaid = function() end }
   env.issecretvalue = function(v) return v == SECRET end
+  env.ChatFrameUtil = { OpenChat = function(t) rec.chat[#rec.chat + 1] = t end }
   env.GuildSquadsDB = nil
   return env, rec
 end
@@ -167,15 +168,20 @@ local function hasDash(list)
   return nil
 end
 local function sorted(list) local t = {} for i, v in ipairs(list) do t[i] = v end table.sort(t) return table.concat(t, ",") end
--- my squad with Kas Mora (and Bob Stone) as members, through the typed-name path (A.AddMember)
+-- my squad with Kas Mora (and Bob Stone) as members: invited through the typed-name path (A.AddMember), then their
+-- profile points at the squad (they accepted; M.isMember needs both sides)
+local function accepted(ns, n, sid)
+  ns.state.profiles[n] = { k = "profile", id = n, a = n, ts = 1, sq = 1, d = { squad = sid } }
+end
 local function squad(ns, extra)
-  local okS, whyS = ns.Actions.CreateSquad({ name = "Los Kas", tags = {} })
+  local okS, whyS = ns.Actions.CreateSquad({ name = "Los Lobos", tags = {} })
   ok(okS, "create squad: " .. tostring(whyS))
   local sid = ns.Actions.MySquadId()
   ok(sid, "in my squad")
   for _, n in ipairs(extra or { "Kas Mora" }) do
     local okA, whyA = ns.Actions.AddMember(sid, n)
     ok(okA, "add " .. n .. ": " .. tostring(whyA))
+    accepted(ns, n, sid)
   end
   return sid
 end
@@ -259,19 +265,23 @@ test("2.0 /gsq trust reset Kas Mora forgets «Kas Mora» (the rest of the line),
   env.SlashCmdList.GUILDSQUADS("trust reset Nadie Nunca")          -- not in the guild
   ok(db.keys["Cid Oak"], "Cid Oak kept")
   local out = table.concat(rec.printed, "\n", before + 1)
-  ok(out:find("Nadie Nunca", 1, true), "the error names the typed full name: " .. out)
+  ok(out:find(ns.L.TYPED_AMBIGUOUS:format("Kas"), 1, true), "ambiguous first name: asks for the surname: " .. out)
+  ok(out:find(ns.L.TYPED_NOT_MEMBER:format("Nadie Nunca"), 1, true), "the error names the typed full name: " .. out)
+  eq(#rec.printed - before, 2, "one line per refused name")
 end)
 
 test("2.0 typed names: AddMember / Reject take «kas mora» as «Kas Mora»; unknown -> error with the full name (§3 #16)", function()
   local ns, _, rec = boot({})
   local sid = squad(ns, {})
   ok(ns.Actions.AddMember(sid, "  kas mora "), "typed in lower case")
+  accepted(ns, "Kas Mora", sid)
   eq(table.concat(ns.Model.members(ns.state, sid), ","), "Kas Pitas,Kas Mora", "members")
   local before = #rec.printed
   local okN, whyN = ns.Actions.AddMember(sid, "Nadie Nunca")
   ok(not okN, "unknown name refused"); eq(whyN, "notGuildMember")
-  local out = table.concat(rec.printed, "\n", before + 1)
-  ok(out:find("Nadie Nunca", 1, true), "the error shows the full typed name: " .. out)
+  eq(#rec.printed - before, 1, "one error line (the caller's repeat is skipped)")
+  ok(rec.printed[before + 1]:find(ns.L.TYPED_NOT_MEMBER:format("Nadie Nunca"), 1, true), "the error shows the full typed name: "
+     .. tostring(rec.printed[before + 1]))
   ok(not ns.Actions.AddMember(sid, "Kas"), "an ambiguous first name is refused")
   ok(ns.Actions.Reject(sid, "cid oak", "req"), "reject typed")
   ok(ns.Model.isRejected(ns.state, sid, "Cid Oak", "req"), "rejection stored under «Cid Oak»")
@@ -358,8 +368,14 @@ test("2.0 /gsq diag: «id mode=forever me=Kas Pitas surname=yes» and the identi
   env.SlashCmdList.GUILDSQUADS("diag")
   ok(type(shown) == "string", "diag shown")
   ok(shown:find("id mode=forever me=Kas Pitas surname=yes", 1, true), "id line:\n" .. shown)
+  -- [apis] lines: "  <section> OK: a b c | NO: d e"
+  local present = {}
+  for line in shown:gmatch("[^\n]+") do
+    local okPart = line:match("^%s+%a+ OK: (.-) | NO:")
+    if okPart then for n in okPart:gmatch("%S+") do present[n] = true end end
+  end
   for _, api in ipairs({ "RegionalUniqueNamesEnabled", "UnitNameUnmodified", "UnitFullName" }) do
-    ok(shown:find(api .. "=yes", 1, true), api .. " probed")
+    ok(present[api], api .. " probed and present")
   end
   ok(not shown:find("Kas-", 1, true), "no «Kas-…» in the report")
 end)
@@ -400,25 +416,41 @@ test("2.0 UI: squad screens, member menu and confirmations show «Kas Pitas» an
   ns.UI.Open("mysquad")
   for _, key in ipairs(ns.UI.order) do ns.UI.Select(key) end
   ns.UI.Select("mysquad")
-  -- member menu of Kas Mora (Panels.lua:134-143): title + confirm texts
+  -- member menu of Kas Mora (right click on her slot card, Panels.lua:144-159): title + confirm texts
   local W, menus = ns.W, {}
   local origMenu = W.Menu
   W.Menu = function(owner, items) menus[#menus + 1] = items; return origMenu(owner, items) end
-  for _, s in ipairs(rec.scripts) do
-    if s[2] == "OnClick" and rawget(s[1], "member") == "Kas Mora" then pcall(s[3], s[1], "RightButton") end
+  local slot
+  for _, f in ipairs(rec.frames) do
+    local nm = rawget(f, "name")
+    local t = type(nm) == "table" and rawget(nm, "_text")
+    if type(t) == "string" and t:find("Kas Mora", 1, true) and rawget(f, "_OnClick") then slot = f end
   end
+  ok(slot, "Kas Mora's slot card")
+  rawget(slot, "_OnClick")(slot, "RightButton")
+  eq(#menus, 1, "member menu opened")
   local texts = textsSince(rec, n0)
-  for _, items in ipairs(menus) do
-    for _, it in ipairs(items) do texts[#texts + 1] = it.text; if it.confirm then texts[#texts + 1] = it.confirm end end
+  local byText = {}
+  for _, it in ipairs(menus[1]) do
+    texts[#texts + 1] = it.text; byText[it.text] = it
+    if it.confirm then texts[#texts + 1] = it.confirm end
   end
+  eq(menus[1][1].text, "Kas Mora", "menu title")
+  ok(find(texts, ns.L.CONFIRM_KICK:format("Kas Mora")), "kick confirmation names Kas Mora")
   ok(find(texts, "Kas Pitas"), "Kas Pitas shown")
-  ok(find(texts, "Kas Mora"), "Kas Mora shown")
   eq(bareKas(texts), nil, "a text with «Kas» alone")
   eq(find(texts, "Kas-"), nil, "a text with «Kas-…»")
+  -- «Invite to party» and «Whisper» use her target «Kas Mora» (Panels.lua:33-53), never the key with «-»
+  local n1 = #rec.invited
+  byText[ns.L.INVITE_PARTY].func()
+  eq(rec.invited[n1 + 1], "Kas Mora", "invite to party target")
+  byText[ns.L.WHISPER].func()
+  eq(rec.chat[#rec.chat], "/w Kas Mora ", "whisper opens the chat with the full name")
 end)
 
 test("2.0 UI: feedback, unverified / disputed tooltips and the call show the full names (§7)", function()
   local ns, _, rec = boot({})
+  ok(ns.Actions.SaveSettings({ squadsEnabled = true, bench = 1, minCreateRank = 4, officerRanks = { 1 }, banned = {} }), "bench on")
   local sid = squad(ns, { "Kas Mora", "Bob Stone" })
   local n0 = #rec.texts
   ns.Actions.MoveToBench(sid, "Kas Mora")

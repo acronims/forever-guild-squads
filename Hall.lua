@@ -159,21 +159,25 @@ function H.OnRoster(cache)
   end
 end
 
+-- 2.0: witnesses are identities («Name Surname» in Forever, ns.id / ns.idFromUnit). The raid roster gives
+-- «Name Surname-Realm»; a party unit gives (name, surname): 1.2.x read that surname as a realm («Kas-Pitas»), so a
+-- kill in a group never matched the squad. nil (no unit, secret name, surname not cached and ambiguous) is skipped.
 local function groupNames()
-  local out = { ns.me() }
+  local me = ns.me()
+  local out = { me }
   local inRaid = IsInRaid and select(2, pcall(IsInRaid)) == true
   if inRaid and GetRaidRosterInfo and GetNumGroupMembers then
     local okN, n = pcall(GetNumGroupMembers)
     for i = 1, (okN and type(n) == "number") and math.min(n, 40) or 0 do
       local okR, name = pcall(GetRaidRosterInfo, i)
-      if okR and type(name) == "string" and ns.charKey(name) ~= ns.me() then out[#out + 1] = ns.charKey(name) end
+      local id = okR and ns.id(name)
+      if id and id ~= me then out[#out + 1] = id end
     end
-  elseif UnitName then
+  else
     for i = 1, 4 do
-      local okU, name, realm = pcall(UnitName, "party" .. i)
+      local okU, id = pcall(ns.idFromUnit, "party" .. i)
       -- party names can be secret in restricted instances; skip them instead of comparing
-      if okU and issecretvalue and (issecretvalue(name) or issecretvalue(realm)) then okU = false end
-      if okU and type(name) == "string" then out[#out + 1] = ns.fullName((realm and realm ~= "") and (name .. "-" .. realm) or name) end
+      if okU and type(id) == "string" and not (issecretvalue and issecretvalue(id)) then out[#out + 1] = id end
     end
   end
   return out
@@ -378,7 +382,7 @@ function H.SampleCounters()
     end
     local g = ns.ProgressGlue
     if g.OverlordPresent and g.OverlordPresent() and g.OverlordEnabled() then
-      local okN, short = call(UnitName, "player")
+      local okN, short = call(UnitName, "player")   -- id-ok: Overlord keys its captures by the first name (SPEC §1)
       local caps = Pr.overlordCaptures(g.Overlord(), okN and short or ns.me())
       if caps then report("caps", nil, caps, R.CAPS_STEPS) end
     end
@@ -412,7 +416,8 @@ end
 --   a GM/officer are trusted (and confirm what we hold as unverified).
 function H.OnObs(payload, sender, relayed, sentAt)
   if not rdb or type(payload) ~= "table" then return end
-  local from = ns.fullName(sender)
+  local from = ns.id(sender)   -- 2.0: nil = nobody (not in the roster, or a bare first name two characters share)
+  if not from then return end
   local officer = relayerTrusted(from)
   local t = now()
   local limit = t + 300
@@ -450,7 +455,7 @@ end
 H.REPLY_BACKLOG = 40
 function H.OnHello(rh, sender)
   if not rdb then return end
-  local from = ns.fullName(sender)
+  local from = ns.id(sender)
   if not (from and ns.roster(from)) then return end
   rdb.hello[from] = now()
   if type(rh) ~= "table" or not H.Enabled() then return end
@@ -571,7 +576,7 @@ local function clock() return (GetTime and GetTime()) or now() end
 local function claimKey(key) return tostring(key):sub(1, 120) end
 function H.OnClaim(payload, sender, sentAt)
   if type(payload) ~= "table" or type(payload.k) ~= "string" then return end
-  local from = ns.fullName(sender)
+  local from = ns.id(sender)
   if not (from and ns.roster(from)) then return end
   -- a claim that waited in its sender's queue (BG, instance) is stale and does not count
   if type(sentAt) == "number" and math.abs(now() - sentAt) > Cel.CLAIM_HOLD + 3 then return end

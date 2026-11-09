@@ -202,7 +202,7 @@ function G.OnLevelUp(level)
   return addLocal({ t = "level", who = ns.me(), ts = now(), sid = sid, lv = level })
 end
 
--- names of everyone in my party/raid (full names)
+-- identities of everyone in my party/raid (2.0: «Name Surname» in Forever; see Hall.lua groupNames)
 local function groupNames()
   local out = {}
   local inRaid = IsInRaid and select(2, pcall(IsInRaid)) == true
@@ -210,16 +210,14 @@ local function groupNames()
     local okN, n = pcall(GetNumGroupMembers)
     for i = 1, (okN and type(n) == "number") and math.min(n, 40) or 0 do
       local okR, name = pcall(GetRaidRosterInfo, i)
-      if okR and type(name) == "string" then out[ns.charKey(name)] = true end
+      local id = okR and ns.id(name)
+      if id then out[id] = true end
     end
-  elseif UnitName then
+  else
     for i = 1, 4 do
-      local okU, name, realm = pcall(UnitName, "party" .. i)
+      local okU, id = pcall(ns.idFromUnit, "party" .. i)
       -- party names can be secret in restricted instances; skip them instead of comparing
-      if okU and issecretvalue and (issecretvalue(name) or issecretvalue(realm)) then okU = false end
-      if okU and type(name) == "string" then
-        out[ns.fullName((realm and realm ~= "") and (name .. "-" .. realm) or name)] = true
-      end
+      if okU and type(id) == "string" and not (issecretvalue and issecretvalue(id)) then out[id] = true end
     end
   end
   return out
@@ -358,7 +356,7 @@ function G.SampleCounters(reason)
       pdb.pending.hk or 0, tostring(reason))) end
   end
   if G.OverlordPresent() and G.OverlordEnabled() then
-    local okN, short = call(UnitName, "player")
+    local okN, short = call(UnitName, "player")   -- id-ok: Overlord keys its captures by the first name (SPEC §1)
     local caps = Pr.overlordCaptures(G.Overlord(), okN and short or ns.me())
     if caps then
       local d
@@ -384,7 +382,8 @@ G.trustedRelayer = trustedRelayer
 G.FUTURE_RETRY = 1800
 function G.OnEvents(payload, sender)
   if type(payload) ~= "table" or type(payload.e) ~= "table" then return end
-  local from = ns.fullName(sender)
+  local from = ns.id(sender)   -- 2.0: nil = nobody (not in the roster, or a bare first name two characters share)
+  if not from then return end
   local relayOK = trustedRelayer(from)
   local any = false
   for i = 1, math.min(#payload.e, 20) do
@@ -460,7 +459,8 @@ function G.OnHello(ec, sender)
   if theirs ~= nil or not ec["~t"] then
     if (theirs or 0) >= own then mine = {} end
   else mine = {} end
-  local to = ns.fullName(sender)
+  local to = ns.id(sender)
+  if not to then return end
   -- a GM/officer also relays the events of other authors the peer lacks (trusted relay, max 60)
   if trustedRelayer(ns.me()) then
     local want, by = seasonsWanted(), {}
@@ -518,7 +518,7 @@ end
 local asked = {}
 function G.OnSummaries(ws, sender)
   if type(ws) ~= "table" or not G.Enabled() then return end
-  local from = ns.fullName(sender)
+  local from = ns.id(sender)
   if not (from and trustedRelayer(from)) then return end
   local n = 0
   for w, v in pairs(ws) do
@@ -537,7 +537,7 @@ end
 local sqGate = {}
 function G.OnSummaryRequest(payload, sender)
   if type(payload) ~= "table" or type(payload.w) ~= "string" or not G.Enabled() then return end
-  local from = ns.fullName(sender)
+  local from = ns.id(sender)
   if not (from and ns.roster(from)) then return end
   local m = Pr.storedSummary(store.events, payload.w)
   -- <= 1 SQ / 30 s per sender, and never the same summary twice to the same requester
@@ -567,7 +567,7 @@ local function cleanSums(s)
 end
 function G.OnSummary(payload, sender)
   if type(payload) ~= "table" or type(payload.w) ~= "string" or type(payload.n) ~= "number" then return end
-  local from = ns.fullName(sender)
+  local from = ns.id(sender)
   if not (from and trustedRelayer(from)) then return end
   local sums = cleanSums(payload.s)
   if not sums or not Pr.parseSeason(payload.w) then return end

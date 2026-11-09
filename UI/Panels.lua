@@ -48,7 +48,9 @@ local function whisper(name)
 end
 local function inviteGroup(name)
   if inCombat() then ns.print(L.IN_COMBAT); return end
-  if C_PartyInfo and C_PartyInfo.InviteUnit then pcall(C_PartyInfo.InviteUnit, name) end
+  -- 2.0: the whisper target («Name Surname» in Forever), never the «Name-Realm» key the server does not find
+  local target = ns.whisperTarget and ns.whisperTarget(name)
+  if target and C_PartyInfo and C_PartyInfo.InviteUnit then pcall(C_PartyInfo.InviteUnit, target) end
 end
 
 local function squadCtx(id)
@@ -1338,7 +1340,11 @@ local function listEdit(f, x, y, w, h, label, field, max, maxLen, norm)
   return ctl(eb)
 end
 local function buildRaids(f)
-  st.rlList = listEdit(f, 12, -6, 250, 120, L.S_RL_LIST, "rlList", 20, 48, function(n) return (ns.charKey or ns.fullName)(n) end)
+  -- 2.0: one identity per line («kas pitas» -> «Kas Pitas» by the roster; not a guild member -> dropped), up to 64 bytes
+  st.rlList = listEdit(f, 12, -6, 250, 120, L.S_RL_LIST, "rlList", 20, 64, function(n)
+    local id = ns.id(n)
+    return (id and ns.roster(id)) and id or nil
+  end)
   check(f, 8, -160, L.S_OFF_EDIT, "offEdit")
   st.rutil = listEdit(f, 300, -6, 360, 120, L.S_RUTIL, "rutil", 30, 60, nil)
   local n = W.Label(f, L.S_RAIDS_NOTE); n:SetPoint("TOPLEFT", 12, -196); n:SetWidth(640); n:SetTextColor(0.7, 0.7, 0.7)

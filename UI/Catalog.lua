@@ -211,8 +211,9 @@ function UI.CatalogGrantFlow(owner)
       W.Menu(owner, items)
     else
       W.Prompt(L.CAT_GRANT_WHO, function(text)
-        local name = (ns.charKey or ns.fullName)(((text or ""):gsub("^%s+", ""):gsub("%s+$", "")))
-        if not (name and ns.roster(name)) then ns.ShowError("notGuildMember"); return end
+        local typed = ((text or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+        local name = ns.id(typed)   -- 2.0: «kas pitas» -> «Kas Pitas» (roster); nil = nobody
+        if not (name and ns.roster(name)) then ns.TypedNameError(typed); return end
         reason(b, name, ns.shortName(name))
       end, L.CAT_OK, 48)
     end

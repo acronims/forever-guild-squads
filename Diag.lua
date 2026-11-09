@@ -75,6 +75,8 @@ function G.Report()
     -- 1.2.2: whispers the server did not find (hidden), characters on the other variant / marked, GUILD envelopes,
     -- and the 1.2.0 surname keys dropped at load
     if ns.Comm.WhisperDiag then extra[#extra + 1] = ns.Comm.WhisperDiag() .. " swept=" .. tostring(ns.sweptSurnames or 0) end
+    -- 2.0: "proto v=3 old=N" (1.x clients heard, Comm.lua)
+    if ns.Comm.ProtoDiag then extra[#extra + 1] = ns.Comm.ProtoDiag() end
   end
   if ns.Sync and ns.Sync.stats then -- refused / malformed records
     local y = ns.Sync.stats
