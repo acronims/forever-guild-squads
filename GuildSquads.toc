@@ -22,6 +22,7 @@ Core\Serialize.lua
 Core\Permissions.lua
 Core\Chunk.lua
 Core\Queue.lua
+Core\Identity.lua
 Core\Model.lua
 Core\Match.lua
 Core\Logo.lua
