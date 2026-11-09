@@ -856,10 +856,11 @@ function ns.myPk()
     -- a key made now: our records may already be out unsigned (published while the pool was still sampling). Sign
     -- and send our manifest (MAN_DEBOUNCE s later) so the ones who log in after us can verify them when relayed.
     if fresh and ns.Sync and ns.Sync.QueueOwnManifest then ns.Sync.QueueOwnManifest() end
-    -- 2.0 (SPEC-v2.0 §5 step 2): the key of a new identity made after a hello already went out without it: one hello
-    -- now (heard in person the key is strong for everyone online, who then verify the manifest n = 1), not 10-20 min
-    -- later in the next anti-entropy hello
-    if fresh and ns.Sync and ns.Sync.helloWithoutKey and ns.rosterReady and ns.Sync.Hello then
+    -- 2.0 (SPEC-v2.0 §5 step 2): in forever mode the key of the identity is only made after the migration (selectGuild),
+    -- so it can be born after a hello already went out without it: one hello now (heard in person the key is strong
+    -- for everyone online, who then verify the manifest n = 1), not 10-20 min later in the next anti-entropy hello.
+    -- Realm mode keeps the 1.2.2 behaviour (the key in the next hello).
+    if fresh and ns.ID_MODE == "forever" and ns.Sync and ns.Sync.helloWithoutKey and ns.rosterReady and ns.Sync.Hello then
       ns.Sync.helloWithoutKey = nil
       local hello = function() pcall(ns.Sync.Hello) end
       if ns.After and ns.Sync.WhenIdle then ns.After(1, function() ns.Sync.WhenIdle(hello) end) else hello() end
