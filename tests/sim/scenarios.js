@@ -1251,7 +1251,8 @@ function S18(seed) {
 // between both; names on the reader's own realm come without "-Realm" in the roster and in CHAT_MSG_ADDON).
 function s19run(seed, connected, check) {
   const tag = connected ? '[connected realms]' : '[one realm]';
-  const sim = new Sim(connected ? { seed, realm: 'RealmB', guildRealm: 'RealmB', bareSameRealm: true } : { seed });
+  // connected realms: names of the reader's own realm come bare, a sender on the other realm with its surname
+  const sim = new Sim(connected ? { seed, realm: 'RealmB', guildRealm: 'RealmB', bareSameRealm: true, surnameSenders: true } : { seed });
   const realmOf = (n) => {
     if (!connected) return sim.realm;
     if (n === 'Mb1' || n === 'Mb3') return 'RealmA';
@@ -1342,6 +1343,8 @@ function s19run(seed, connected, check) {
     tAll !== null, (tAll === null ? 'not after 600 s ' : tAll + ' s ') + JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].hold + ' man=' + st[c.name].man]))));
   check(`S19${tag}: still the same model at the end (${Math.round(sim.t - tLast)} s after the last login)`, sim.converged(), '');
   check(`S19${tag}: ns.peerCount() = 3 on each 1.2 client`, cs.every((c) => st[c.name].peers === '3'), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].peers]))));
+  check(`S19${tag}: every 1.2 client holds the certificates of the other 2`, cs.every((c) => st[c.name].crt === 2), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].crt]))));
+  check(`S19${tag}: whispers to a name that is not a character (surname in it) = 0`, !sim.stats.badWhisper, `${sim.stats.badWhisper || 0}${sim.badWhisperTo ? ' (first: ' + sim.badWhisperTo + ')' : ''}`);
   check(`S19${tag}: the 5 old clients are counted as old peers (OldPeerCount = 5) on each`, cs.every((c) => st[c.name].old === 5), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].old]))));
   return { sim, metrics: { tConv, tAll, rosterOnline, squadId, st, t: Math.round(sim.t), ...sim.stats } };
 }

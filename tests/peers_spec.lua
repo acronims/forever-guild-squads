@@ -152,3 +152,44 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.1: /gsq diag has the peers line (n, hea
     ok(out:find("[roster] me=Ann-Realm found=yes entries=3 surnames=0 online=3 realms=Realm:3", 1, true), "roster realms")
   end)
 end }
+
+-- 1.2.1 (BRO's chat, 9-nov: «No hay ningún jugador con el nombre Magic Essency-CAMWOWEU4Realm6PvP», repeated, with
+-- the names of guildmates on 1.2): WoW Forever gives the roster surname in the sender of CHAT_MSG_ADDON too ("Cid
+-- Essency", "Cid Essency-Realm"). A sender is the character key ("Cid-Realm": the author of his records, the roster
+-- key, the name a whisper reaches): his key is pinned under it, every whisper goes to it, our own echo is ours.
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.1: a sender with a surname is the character: key, roster, whisper target, own echo", function(c)
+  local ns = c.ns
+  local S, Comm, T = ns.Sync, ns.Comm, ns.Trust
+  eq(ns.fullName("Cid Essency"), "Cid-Realm", "bare name + surname")
+  eq(ns.fullName("Cid Essency-Realm"), "Cid-Realm", "surname before the realm")
+  eq(ns.fullName("Cid-Realm Essency"), "Cid-Realm", "surname after the realm")
+  eq(ns.fullName("Cid"), "Cid-Realm", "a name without surname as before")
+  ok(ns.roster("Cid Essency") ~= nil, "the roster finds a sender with a surname")
+  ok(ns.isSelf("Ann Essency"), "our own echo with a surname is ours")
+  ok(Comm.ChannelOk("WHISPER", "Cid Essency-Realm"), "a whisper from a member with a surname is accepted")
+  -- the last line of defence: Comm.Send never whispers a name with a surname
+  local q = Comm.queue
+  local origPush, got = q.pushMessage, nil
+  q.pushMessage = function(_, parts) got = parts[1] and parts[1].target; return true end
+  local okQ, errQ = pcall(Comm.Send, "D", { r = {}, z = 1 }, "WHISPER", "Cid Essency-Realm")
+  q.pushMessage = origPush
+  ok(okQ, tostring(errQ)); eq(got, "Cid-Realm", "Comm.Send whispers the character key")
+  local origSend, origAfter = Comm.Send, ns.After
+  local wh = {}
+  Comm.Send = function(_, _, ch, to, onSent) if ch == "WHISPER" then wh[#wh + 1] = tostring(to) end if onSent then onSent() end return true end
+  ns.After = function(_, fn) fn() end
+  local okAll, err = pcall(function()
+    at(GetTime() + 600000, function()
+      -- a hello from "Cid Essency" with his key and a reference to his certificate (we lack it: we ask by whisper)
+      S.OnMessage("H", { h = {}, p2 = 2, nonce = 99, pk = T.hex(string.rep("\7", 32)), cr = { n = 777, h = "abcdefabcdef" } }, "Cid Essency", "GUILD")
+      local _, s = T.keyOf(ns.trustDB, "Cid-Realm")
+      eq(s, "strong", "Cid's key pinned under Cid-Realm")
+      ok(T.keyOf(ns.trustDB, "Cid Essency-Realm") == nil, "nothing pinned under the name with the surname")
+      ok(#wh >= 1, "the certificate ask (and the rest of the reply) was whispered: " .. #wh)
+      for _, to in ipairs(wh) do eq(to, "Cid-Realm", "whisper target") end
+    end)
+  end)
+  Comm.Send, ns.After = origSend, origAfter
+  if ns.trustDB then T.reset(ns.trustDB, "Cid-Realm"); T.reset(ns.trustDB, "Cid Essency-Realm") end
+  if not okAll then error(err, 0) end
+end }

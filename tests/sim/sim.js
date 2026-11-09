@@ -233,6 +233,13 @@ class Sim {
     // names on the reader's own realm (roster rows and CHAT_MSG_ADDON senders without "-Realm")
     this.guildRealm = opts.guildRealm || null;
     this.bareSameRealm = !!opts.bareSameRealm;
+    // 1.2.1 (BRO's rule, 9-nov): in WoW Forever every character has a surname. The roster gives "Name Surname-Realm"
+    // (default here, surnames: false for the old form); UnitName and CHAT_MSG_ADDON give the bare name. With
+    // surnameSenders, a sender on another realm comes as "Name Surname-Realm" (BRO's chat: «No hay ningún jugador con
+    // el nombre Magic Essency-CAMWOWEU4Realm6PvP» = a whisper to that form). A whisper to a name that is not a
+    // character (a surname in it) is never delivered and counted in stats.badWhisper (first one in badWhisperTo).
+    this.surnames = opts.surnames !== false;
+    this.surnameSenders = !!opts.surnameSenders;
     this.present = new Set();                     // roster members online WITHOUT a client of this addon
     this.guild = opts.guild || 'Forever';
     this.epoch = opts.epoch || 1795000000;      // run second 0 in server time
@@ -252,9 +259,16 @@ class Sim {
   addMember(name, rank, level, realm) { this.roster.push({ name, rank, level: level || 60, realm: realm || null }); this.markRoster(); }
   // 1.2.1: a member online in the roster that runs no client of this build (no addon, or an old one, BRO's guild)
   setPresent(name, on) { if (on) this.present.add(name); else this.present.delete(name); this.markRoster(); }
+  surnameOf(name) { return 'Ap' + name.toLowerCase(); }
   rosterName(r, readerRealm) {
     const realm = r.realm || this.realm;
+    if (this.surnames) return r.name + ' ' + this.surnameOf(r.name) + '-' + realm;
     return (this.bareSameRealm && realm === readerRealm) ? r.name : r.name + '-' + realm;
+  }
+  senderName(from, to) {
+    if (this.bareSameRealm && from.realm === to.realm) return from.name;
+    if (this.surnameSenders && from.realm !== to.realm) return from.name + ' ' + this.surnameOf(from.name) + '-' + from.realm;
+    return from.full;
   }
   setRank(name, rank) { for (const r of this.roster) if (r.name === name) r.rank = rank; this.markRoster(); }
   removeMember(name) { this.roster = this.roster.filter((r) => r.name !== name); this.markRoster(); }
@@ -274,6 +288,10 @@ class Sim {
       const short = target.replace(/-.*$/, '');
       const c = this.clients[short];
       if (c && c.online) targets.push(c);
+      else if (!this.roster.some((r) => r.name === short)) {
+        this.stats.badWhisper = (this.stats.badWhisper || 0) + 1;
+        if (!this.badWhisperTo) this.badWhisperTo = target;
+      }
     }
     for (const to of targets) {
       if (this.loss > 0 && this.rand() < this.loss) { this.stats.lost++; continue; }
@@ -281,7 +299,7 @@ class Sim {
       let at = this.t + this.latency[0] + this.rand() * (this.latency[1] - this.latency[0]);
       if (this.lastAt[key] && at < this.lastAt[key]) at = this.lastAt[key];
       this.lastAt[key] = at;
-      const sender = (this.bareSameRealm && from.realm === to.realm) ? from.name : from.full;
+      const sender = this.senderName(from, to);
       this.queue.push({ t: at, seq: ++this.seq, to, toGen: to.L, prefix, msg, channel, sender });
     }
     this.queue.sort((a, b) => a.t - b.t || a.seq - b.seq);

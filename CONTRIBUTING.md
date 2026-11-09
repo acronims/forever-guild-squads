@@ -46,3 +46,17 @@ Maintainers only, step by step in [docs/en/RELEASE.md](docs/en/RELEASE.md): anno
 
 ## License
 By contributing you agree your work is released under the MIT license ([LICENSE](LICENSE)).
+
+## WoW Forever names
+
+In WoW Forever every character has a name **and a surname**. `GetGuildRosterInfo`, the raid roster and names typed by
+the player come as `Name Surname-Realm`; `UnitName` and the sender of `CHAT_MSG_ADDON` give the bare `Name` (a sender
+on a connected realm can come with the surname too). The key of a character is always `Name-Realm`:
+
+- every author, roster, trust, signature, certificate and `ks` / `cert` name, and every `WHISPER` target, goes through
+  `ns.charKey(name)` or `ns.fullName(name)` (both drop the surname through `Model.charName`, 1.2.1);
+- never whisper a name built for display (`ns.displayName`) or read raw from the roster: the server answers «No hay
+  ningún jugador con el nombre …» and the message is lost. `Comm.Send` drops a surname from a `WHISPER` target as the
+  last line of defence;
+- the simulator gives every roster member a surname by default (`tests/sim/sim.js`, `surnames`); S19 also sends the
+  surname in the sender of a member on another realm.

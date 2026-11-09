@@ -122,6 +122,12 @@ function Comm.Send(tag, payload, channel, target, onSent, urgent, skip)
   -- the same record version published twice while comms are locked) is not queued again (the stamp is not part of
   -- the key)
   local ch = channel or "GUILD"
+  -- 1.2.1: a whisper reaches "Name-Realm", never "Name Surname-Realm" (WoW Forever roster form; the server answers
+  -- «No hay ningún jugador con el nombre ...» and the message is lost). Every caller passes a character key already;
+  -- this is the last line of defence.
+  if ch == "WHISPER" and type(target) == "string" and target:find(" ", 1, true) and ns.charKey then
+    target = ns.charKey(target) or target
+  end
   local key = ch .. "|" .. tostring(target or "") .. "|" .. S.escape(S.encode({ v = Comm.PROTO, t = tag, p = payload }))
   if Comm.queue.pending and Comm.queue:pending(key) then
     Comm.queue.deduped = (Comm.queue.deduped or 0) + 1

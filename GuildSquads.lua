@@ -34,8 +34,14 @@ local function myRealm()
   return realm or ""
 end
 
+-- 1.2.1 (BRO 9-nov: «No hay ningún jugador con el nombre Magic Essency-CAMWOWEU4Realm6PvP», over and over, with the
+-- names of guildmates on 1.2): in WoW Forever every character has a name and a surname. GetGuildRosterInfo, the raid
+-- roster and typed names give "Name Surname-Realm"; UnitName and CHAT_MSG_ADDON give "Name" (the sender of a member
+-- on a connected realm came with the surname). The key of a character (author, roster, trust, signatures,
+-- certificates, whisper target) is always "Name-Realm": a name with a space goes through M.charName, like charKey.
 function ns.fullName(name)
   if type(name) ~= "string" or name == "" then return nil end
+  if name:find(" ", 1, true) then return (M.charName(name, myRealm())) end
   if name:find("-", 1, true) then return name end
   return name .. "-" .. myRealm()
 end
