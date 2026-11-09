@@ -58,14 +58,21 @@ the player come as `Name Surname-Realm`; `UnitName` gives the bare `Name` and th
   `ns.fullName(name)` (both drop the surname through `Model.charName`, 1.2.1). Signed data never changes form;
 - **identity without the surname, `WHISPER` target with it** (BRO's test in the game, 1.2.2): the server only
   delivers a whisper to the full name with the surname, «Kas Pitas» («Kas» or «Kas-Realm» give «No hay ningún jugador
-  con el nombre …», shown as «Kas Realm»). Callers pass the character key to `Comm.Send(…, "WHISPER", key)`;
-  `ns.whisperTarget(key)` builds the target from the roster entry: `Name Surname` on your realm, `Name Surname-Realm`
-  on another one. Never build a whisper target anywhere else, and never sign, index or key anything with it;
+  con el nombre …», shown as «Kas Realm»; `Name Surname-Realm` fails too: the full name is unique in the region,
+  research in `agents/research-surnames.md` of the dev workspace). Callers pass the character key to
+  `Comm.Send(…, "WHISPER", key)`; `ns.whisperTarget(key)` builds `Name Surname` from the roster entry, for any realm
+  (the suffixed form is only the other variant tried once). Never build a whisper target anywhere else, and never
+  sign, index or key anything with it;
+- a sender `Name Surname` without the realm (how WoW Forever gives it) takes the realm of the roster entry with that
+  name and surname. Known limit until the 1.3 (identity `Name Surname`, PROTO 3): two members of one realm with the
+  same first name share `Name-Realm`; that key is ambiguous (`ns.isAmbiguous`): out of the roster, their messages
+  dropped, nothing whispered, `[roster] … ambiguous=` in the diag;
 - a server «not found» for a name whispered in the last 5 s is hidden (`Comm.SystemFilter` on `CHAT_MSG_SYSTEM`,
   matched through `ERR_CHAT_PLAYER_NOT_FOUND_S`), the message goes again once with the other variant (with / without
   the realm suffix) and then the character is marked for 10 min: what went to him by whisper travels over `GUILD` in a
-  `W` envelope with the recipient key, and only he handles it. A character missing from the roster is never
-  whispered (envelope); one offline in the roster gets nothing;
+  `W` envelope with the recipient key, and only he handles it (`Sync.WHISPER_GUILD_FALLBACK`; false = nothing more).
+  A character missing from the roster is never whispered (envelope); one offline in the roster gets nothing. The
+  visible guild chat is only written by the GM's celebrations (`celOn`, off by default; a test checks it);
 - the simulator gives every roster member a surname by default (`tests/sim/sim.js`, `surnames`); S19 also sends the
   surname in the sender of a member on another realm. Its server only delivers a whisper to `Name Surname[-Realm]`
   (`whisperMember`, `whisperSuffix`) and answers anything else with the `CHAT_MSG_SYSTEM` error; S19 fails if one of
