@@ -19,7 +19,7 @@ function gmSettings(gm, extra) {
   const r = gm.run(`return A.SaveSettings({ ${SETTINGS}${extra ? ', ' + extra : ''} })`);
   return r[0] === true;
 }
-const full = (sim, n) => n + '-' + sim.realm;
+const full = (sim, n) => sim.idOf(n);   // 2.0: the identity in the sim's mode (forever «Mb1 Apmb1», realm «Mb1-Realm»)
 function errorsCheck(sim, check) {
   const n = sim.errors();
   check('caught Lua errors = 0', n === 0, n === 0 ? 0 : n + ': ' + sim.errorText().slice(0, 400));
@@ -628,6 +628,7 @@ function keyAudit(cs, names) {
     c.logout();
   }
   const realPk = {}; for (const n of names) realPk[n] = keys[n].full;
+  for (const c of cs) realPk[c.full] = keys[c.name].full;   // 2.0: held keys are keyed by identity («Mb1 Apmb1»)
   const fakes = [];
   for (const n of names) for (const e of keys[n].held.split(';').filter(Boolean)) {
     const [who, pk, st] = e.split('=');
@@ -1263,7 +1264,7 @@ function s19run(seed, connected, check) {
     if (n === 'Mb2' || n === 'Gm') return 'RealmB';
     return (Number(n.replace(/^\D+/, '')) || 0) % 2 ? 'RealmA' : 'RealmB';
   };
-  const fullOf = (n) => n + '-' + realmOf(n);
+  const fullOf = (n) => sim.idOf(n);   // 2.0: forever «Mb1 Apmb1»; realm «Mb1-<its realm>» (as before)
   const roster = ['Gm', 'Of1', 'Of2', 'Of3', 'Of4'];
   for (let i = 1; i <= 295; i++) roster.push('Mb' + i);
   roster.forEach((n) => sim.addMember(n, n === 'Gm' ? 0 : (n.startsWith('Of') ? 1 : 5), 60, realmOf(n)));
@@ -1369,4 +1370,191 @@ function S19(seed) {
 }
 
 
-module.exports = { S19, S18, S8g, S15, S16, S16b, S16c, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+// ---- 2.0: identity «Name Surname» in WoW Forever (docs/SPEC-v2.0-identidad.md §8) ---------------------------
+// what every client holds of `ids` (identities): profile note "soy <handle>" + presence ("v" verified, "u" pending,
+// "-" missing), how many of `ids` it holds a certificate of, and its identity, mode, peers and shown server lines
+function idState(c, authors) {
+  const list = authors.map((a) => `{ ${luaStr(a.id)}, ${luaStr('soy ' + a.name)} }`).join(',');
+  const v = c.run(`local X, out, crt = NS.P2P, {}, 0
+    for _, e in ipairs({ ${list} }) do
+      local p = NS.state.profiles[e[1]]
+      local u = X and X.unverified(NS.state, "profile", e[1])
+      out[#out + 1] = (p and p.d.note == e[2]) and "v" or ((u and u.r.d.note == e[2]) and "u" or "-")
+      local q = NS.state.presence and NS.state.presence[e[1]]
+      local uq = X and X.unverified(NS.state, "presence", e[1])
+      out[#out + 1] = q and "v" or (uq and "u" or "-")
+      if e[1] ~= NS.me() and NS.certDB and NS.certDB.crt and NS.certDB.crt[e[1]] then crt = crt + 1 end
+    end
+    return table.concat(out), crt, tostring(NS.me()), tostring(NS.ID_MODE), NS.peerCount and NS.peerCount() or -1,
+      SIM_SYSSHOWN, SIM_SYSLAST`);
+  return { hold: String(v[0]), crt: Number(v[1]), me: String(v[2]), mode: String(v[3]), peers: Number(v[4]),
+           shown: Number(v[5]), last: String(v[6] || '') };
+}
+// the 1.2.2 build for the red runs of S20-S22 (GSQ_REF122=v1.2.2: every client runs that build; needs the git
+// history). Unset: this build.
+const REF122 = process.env.GSQ_REF122 || '';
+let code122 = null;
+const refCode = () => (REF122 ? (code122 = code122 || sourcesAt(REF122)) : null);
+// run `clients` (logged in, staggered) until every one holds the same model, every authorial record verified and the
+// certificates of every other one (<= max s). Each client writes its profile; `squadOf` (a handle) also a squad.
+function idConverge(sim, cs, squadOf, max) {
+  for (const c of cs) {
+    c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`);
+    if (c.name === squadOf) { sim.run(5); c.run('return A.CreateSquad({ name = "Squad 2.0", icon = 1, color = 1, border = 1, tags = {}, open = true })'); }
+    sim.run(2 + sim.rand() * 3);
+  }
+  const t0 = sim.t, authors = cs.map((c) => ({ name: c.name, id: c.full }));
+  const allV = 'v'.repeat(authors.length * 2);
+  let tAll = null, st = {};
+  while (sim.t - t0 < max) {
+    sim.run(10);
+    for (const c of cs) st[c.name] = idState(c, authors);
+    if (sim.converged() && cs.every((c) => st[c.name].hold === allV && st[c.name].crt === cs.length - 1)) { tAll = sim.t - t0; break; }
+  }
+  for (const c of cs) st[c.name] = idState(c, authors);
+  return { tAll, st, authors, allV };
+}
+const byName = (cs, f) => JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, f(c)])));
+const sumStat = (sim, k) => sim.stats[k] || 0;
+
+// S20 (AC2): a WoW Forever realm, 5 clients of this build. The fake first proves its server (so a green is not
+// empty): a whisper to «N», «N-R», «N A-R», «n a» or to an offline «N A» is not delivered and the server answers each
+// one with «No hay ningún jugador con el nombre X.»; one to «N A» of an online client is delivered. Then every client
+// writes its profile (Mb1 a squad): <= 600 s later the 5 hold the same model, 100 % of the records verified on all of
+// them and each one the certificates of the other 4; no whisper the server refuses, none with a dash, 0 lines shown.
+function S20(seed) {
+  const sim = new Sim({ seed, forever: true });
+  const { check, checks, pass } = checker();
+  const code = refCode();
+  makeGuild(sim, 1, 3);
+  sim.addMember('Off1', 5);                     // in the roster, never online
+  const cs = sim.roster.filter((r) => r.name !== 'Off1').map((r) => sim.client(r.name, code ? { code } : {}));
+  for (const c of cs) { c.login(); sim.run(2 + sim.rand() * 3); }
+  sim.run(20);
+  // the fake WoW, forever: the client APIs
+  const api = (c) => c.val(`(function() local a, b = UnitName("player"); local x, y = UnitNameUnmodified("player")
+      local f1, f2 = UnitFullName("player"); local r = GetGuildRosterInfo(1)
+      return table.concat({ tostring(RegionalUniqueNamesEnabled()), tostring(a), tostring(b), tostring(x), tostring(y),
+        tostring(f1), tostring(f2), tostring(r) }, "|") end)()`)[0];
+  const apis = Object.fromEntries(cs.map((c) => [c.name, String(api(c))]));
+  const gmRow = 'Gm Apgm-' + sim.realm;
+  check('fake forever: RegionalUniqueNamesEnabled() true, UnitName / UnitNameUnmodified («N», «A»), roster «N A-R»',
+    cs.every((c) => apis[c.name].startsWith(`true|${c.first}|${c.surname}|${c.first}|${c.surname}|`) && apis[c.name].endsWith('|' + gmRow)), JSON.stringify(apis));
+  const forms = cs.map((c) => apis[c.name].split('|').slice(5, 7).join('|'));
+  check('fake forever: UnitFullName in its two forms («N A», "") and («N», «A»), alternating per client',
+    forms.some((f, i) => f === `${cs[i].full}|`) && forms.some((f, i) => f === `${cs[i].first}|${cs[i].surname}`), JSON.stringify(forms));
+  // the server of the fake (self-test): a probe sender outside the clients (its answers reach nobody's chat)
+  const probe = { name: 'Probe', first: 'Probe', surname: 'Approbe', guild: sim.guild, full: 'Probe Approbe', realm: sim.realm };
+  const bad = ['Mb1', 'Mb1-' + sim.realm, 'Mb1 Apmb1-' + sim.realm, 'mb1 apmb1', 'Off1 Apoff1'];
+  const err0 = sumStat(sim, 'sysErrors'), log0 = sim.whisperLog.length, del0 = sim.whisperDelivered.length;
+  for (const t of bad) sim.post(probe, 'GSQPROBE', 'x', 'WHISPER', t);
+  sim.post(probe, 'GSQPROBE', 'x', 'WHISPER', 'Mb1 Apmb1');
+  sim.run(2);
+  const probeLog = sim.whisperLog.slice(log0);
+  check('fake self-test: «N», «N-R», «N A-R», «n a» and an offline «N A» are not delivered: 5 server errors',
+    probeLog.slice(0, 5).every((w) => w.to === null) && sumStat(sim, 'sysErrors') - err0 === 5, JSON.stringify(probeLog) + ' errors=' + (sumStat(sim, 'sysErrors') - err0));
+  const got = sim.whisperDelivered.slice(del0).filter((w) => w.prefix === 'GSQPROBE');
+  check('fake self-test: «N A» of an online client is delivered, once, to that client, with the sender «N A»',
+    probeLog[5] && probeLog[5].to === 'Mb1' && got.length === 1 && got[0].to === 'Mb1' && got[0].sender === 'Probe Approbe',
+    JSON.stringify(probeLog[5]) + ' delivered=' + JSON.stringify(got));
+  const bw0 = sumStat(sim, 'badWhisper'), dw0 = sumStat(sim, 'dashWhisper'), se0 = sumStat(sim, 'sysErrors');
+  // the addon: identity «N A» on every client
+  check('every client: ID_MODE forever and ns.me() = «Name Surname»', cs.every((c) => String(c.val('NS.ID_MODE')[0]) === 'forever' &&
+    String(c.val('NS.me()')[0]) === c.full), byName(cs, (c) => String(c.val('NS.me()')[0])));
+  const { tAll, st, allV } = idConverge(sim, cs, 'Mb1', 600);
+  check('5 clients: same model, 100 % of the records verified on all and the certificates of the other 4, <= 600 s',
+    tAll !== null, (tAll === null ? 'not after 600 s ' : tAll + ' s ') + byName(cs, (c) => st[c.name].hold + ' crt=' + st[c.name].crt) + ' want ' + allV);
+  check('ns.peerCount() = 5 on each', cs.every((c) => st[c.name].peers === 5), byName(cs, (c) => st[c.name].peers));
+  check('whispers the server refuses (badWhisper) = 0', sumStat(sim, 'badWhisper') - bw0 === 0, `${sumStat(sim, 'badWhisper') - bw0}${sim.badWhisperTo ? ' (first ever: ' + sim.badWhisperTo + ')' : ''}`);
+  const whispers = sim.whisperLog.slice(log0 + 6);
+  check('the addon whispered (non-empty run) and every target is «N A» of a client', whispers.length > 0 && whispers.every((w) => cs.some((c) => c.full === w.target)),
+    whispers.length + ' ' + JSON.stringify(whispers.filter((w) => !cs.some((c) => c.full === w.target)).slice(0, 3)));
+  check('whisper targets with a dash = 0', sumStat(sim, 'dashWhisper') - dw0 === 0, sumStat(sim, 'dashWhisper') - dw0);
+  check('server errors after the self-test = 0 and SIM_SYSSHOWN = 0 on each', sumStat(sim, 'sysErrors') - se0 === 0 && cs.every((c) => st[c.name].shown === 0),
+    `errors=${sumStat(sim, 'sysErrors') - se0} shown=${byName(cs, (c) => st[c.name].shown)}`);
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { tAll, ref: REF122 || 'this build', whispers: whispers.length, st, t: Math.round(sim.t), ...sim.stats } };
+}
+
+// S21 (AC3): two «Kas» on the same realm, «Kas Pitas-R» and «Kas Mora-R», both on this build, plus 3 clients. Two
+// profiles and two distinct keys everywhere (trust.keys has «Kas Pitas» and «Kas Mora», each the real key of its
+// owner); Kas Pitas's squad has Kas Pitas as captain and not Kas Mora; no whisper for Kas Pitas ever reaches Kas Mora
+// (and the other way round) in the delivery log; both show apart (ns.displayName). GSQ_REF122=<the 1.2.2>: the
+// same run with that build, expected RED (both «Kas» are the key «Kas-R»).
+function S21(seed) {
+  const sim = new Sim({ seed, forever: true });
+  const { check, checks, pass } = checker();
+  const code = refCode();
+  for (const [n, rank] of [['Gm', 0], ['Kas Pitas', 5], ['Kas Mora', 5], ['Mb1', 5], ['Mb2', 5]]) sim.addMember(n, rank);
+  const cs = sim.roster.map((r) => sim.client(r.name, code ? { code } : {}));
+  for (const c of cs) { c.login(); sim.run(2 + sim.rand() * 3); }
+  sim.run(20);
+  const pit = sim.clients['Kas Pitas'], mora = sim.clients['Kas Mora'];
+  check('identities «Kas Pitas» and «Kas Mora»', String(pit.val('NS.me()')[0]) === 'Kas Pitas' && String(mora.val('NS.me()')[0]) === 'Kas Mora',
+    String(pit.val('NS.me()')[0]) + ' / ' + String(mora.val('NS.me()')[0]));
+  const { tAll, st, allV } = idConverge(sim, cs, 'Kas Pitas', 600);
+  check('5 clients: same model, every record verified and the certificates of the other 4, <= 600 s', tAll !== null,
+    (tAll === null ? 'not after 600 s ' : tAll + ' s ') + byName(cs, (c) => st[c.name].hold + ' crt=' + st[c.name].crt) + ' want ' + allV);
+  // keys: what each client holds for the two Kas, against their own keys
+  const own = (c) => String(c.val('NS.myPk and NS.myPk() and NS.Trust.hex(NS.myPk()) or ""')[0]);
+  const pkP = own(pit), pkM = own(mora);
+  const held = (c) => c.val(`(function() local k = NS.trustDB and NS.trustDB.keys or {}
+      local p, m = k["Kas Pitas"], k["Kas Mora"]
+      return (p and p.pk or "-") .. "|" .. (m and m.pk or "-") end)()`)[0];   // trust keys are stored in hex
+  const heldBy = Object.fromEntries(cs.map((c) => [c.name, String(held(c))]));
+  check('two distinct keys, «Kas Pitas» and «Kas Mora», each the real one of its owner, on every other client',
+    pkP !== '' && pkM !== '' && pkP !== pkM && cs.filter((c) => c !== pit && c !== mora).every((c) => heldBy[c.name] === pkP + '|' + pkM),
+    `pitas=${pkP.slice(0, 8)} mora=${pkM.slice(0, 8)} ` + JSON.stringify(Object.fromEntries(Object.entries(heldBy).map(([k, v]) => [k, v.split('|').map((x) => x.slice(0, 8)).join('|')]))));
+  check('each Kas holds the other one\'s real key', heldBy['Kas Pitas'].split('|')[1] === pkM && heldBy['Kas Mora'].split('|')[0] === pkP, '');
+  const profiles = (c) => c.val('(function() local p = NS.state.profiles; return (p["Kas Pitas"] and p["Kas Pitas"].d.note or "-") .. "|" .. (p["Kas Mora"] and p["Kas Mora"].d.note or "-") end)()')[0];
+  check('two profiles on every client (soy Kas Pitas | soy Kas Mora)', cs.every((c) => String(profiles(c)) === 'soy Kas Pitas|soy Kas Mora'), byName(cs, (c) => String(profiles(c))));
+  const squad = (c) => c.val(`(function() local sid = NS.Model.squadOf(NS.state, "Kas Pitas"); local r = sid and NS.state.squads[sid]
+      if not r then return "-" end
+      return r.d.captain .. "|" .. tostring(NS.Model.isMember(NS.state, sid, "Kas Mora")) .. "|" .. tostring(NS.Model.squadOf(NS.state, "Kas Mora")) end)()`)[0];
+  check('Kas Pitas captains his squad and Kas Mora is not in it (captain nor member), on every client',
+    cs.every((c) => String(squad(c)) === 'Kas Pitas|false|nil'), byName(cs, (c) => String(squad(c))));
+  const toP = sim.whisperLog.filter((w) => w.target === 'Kas Pitas'), toM = sim.whisperLog.filter((w) => w.target === 'Kas Mora');
+  check('delivery log: whispers for each Kas reached him (non-empty) and none for Kas Pitas reached Kas Mora, nor the other way',
+    toP.some((w) => w.to === 'Kas Pitas') && toM.some((w) => w.to === 'Kas Mora') && toP.every((w) => w.to !== 'Kas Mora') && toM.every((w) => w.to !== 'Kas Pitas'),
+    `toPitas=${toP.length} (to Mora: ${toP.filter((w) => w.to === 'Kas Mora').length}) toMora=${toM.length} (to Pitas: ${toM.filter((w) => w.to === 'Kas Pitas').length})`);
+  const shown = (c) => String(c.val('NS.displayName("Kas Pitas") .. "|" .. NS.displayName("Kas Mora")')[0]);
+  check('both show apart: displayName «Kas Pitas» | «Kas Mora» on every client', cs.every((c) => shown(c) === 'Kas Pitas|Kas Mora'), byName(cs, shown));
+  check('whispers the server refuses = 0 and with a dash = 0', !sim.stats.badWhisper && !sim.stats.dashWhisper,
+    `bad=${sim.stats.badWhisper || 0} dash=${sim.stats.dashWhisper || 0}${sim.badWhisperTo ? ' (first: ' + sim.badWhisperTo + ')' : ''}`);
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { tAll, ref: REF122 || 'this build', whispers: sim.whisperLog.length, st, t: Math.round(sim.t), ...sim.stats } };
+}
+
+// S22 (AC4): connected realms on WoW Forever. The guild on RealmB; members on RealmA and RealmB, one «Mb2» on each
+// realm with a different surname. The 5 converge (records verified, certificates of the other 4) in <= 600 s, no
+// whisper carries a dash (never «-Realm», also across realms), ns.peerCount() = 5 on each and the diag says
+// realms=RealmB:3,RealmA:2.
+function S22(seed) {
+  const sim = new Sim({ seed, forever: true, realm: 'RealmB', guildRealm: 'RealmB' });
+  const { check, checks, pass } = checker();
+  const code = refCode();
+  const who = [['Gm', 0, 'RealmB'], ['Mb1', 5, 'RealmA'], ['Mb2 Uno', 5, 'RealmA'], ['Mb2 Dos', 5, 'RealmB'], ['Mb3', 5, 'RealmB']];
+  for (const [n, rank, realm] of who) sim.addMember(n, rank, 60, realm);
+  const cs = who.map(([n, , realm]) => sim.client(n, code ? { realm, code } : { realm }));
+  for (const c of cs) { c.login(); sim.run(2 + sim.rand() * 3); }
+  sim.run(20);
+  check('identities without the realm, the two Mb2 apart', byName(cs, (c) => String(c.val('NS.me()')[0])) ===
+    JSON.stringify({ Gm: 'Gm Apgm', Mb1: 'Mb1 Apmb1', 'Mb2 Uno': 'Mb2 Uno', 'Mb2 Dos': 'Mb2 Dos', Mb3: 'Mb3 Apmb3' }), byName(cs, (c) => String(c.val('NS.me()')[0])));
+  const { tAll, st, allV } = idConverge(sim, cs, 'Mb1', 600);
+  check('5 clients on 2 realms: same model, every record verified and the certificates of the other 4, <= 600 s', tAll !== null,
+    (tAll === null ? 'not after 600 s ' : tAll + ' s ') + byName(cs, (c) => st[c.name].hold + ' crt=' + st[c.name].crt) + ' want ' + allV);
+  check('ns.peerCount() = 5 on each', cs.every((c) => st[c.name].peers === 5), byName(cs, (c) => st[c.name].peers));
+  const across = sim.whisperLog.filter((w) => sim.clients[w.from] && w.to && sim.clients[w.from].realm !== sim.clients[w.to].realm);
+  check('whispers across realms reached «N A» (non-empty), none with a dash, none refused', across.length > 0 && !sim.stats.dashWhisper && !sim.stats.badWhisper,
+    `across=${across.length} dash=${sim.stats.dashWhisper || 0} bad=${sim.stats.badWhisper || 0}`);
+  const diag = (c) => String(c.val('NS.RosterDiag()')[0]);
+  check('diag: realms=RealmB:3,RealmA:2 and mode=forever on each', cs.every((c) => diag(c).includes('realms=RealmB:3,RealmA:2') && diag(c).includes('id mode=forever me=' + c.full + ' surname=yes')),
+    diag(cs[0]).replace(/\n/g, ' / '));
+  check('SIM_SYSSHOWN = 0 on each', cs.every((c) => st[c.name].shown === 0), byName(cs, (c) => st[c.name].shown));
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { tAll, ref: REF122 || 'this build', across: across.length, st, t: Math.round(sim.t), ...sim.stats } };
+}
+
+module.exports = { S20, S21, S22, S19, S18, S8g, S15, S16, S16b, S16c, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+// 2.0: the scenarios of feat/2.0-proto (S23, S17v2) live in scenarios_b.js; hooked here when the file exists
+if (require('fs').existsSync(require('path').join(__dirname, 'scenarios_b.js'))) Object.assign(module.exports, require('./scenarios_b.js'));

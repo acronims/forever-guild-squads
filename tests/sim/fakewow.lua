@@ -64,16 +64,49 @@ GetCursorPosition = function() return 300, 300 end
 GetZoneText = function() return SIM_ZONE or "Los Baldíos" end
 GetSubZoneText = function() return "" end
 GetRealZoneText = GetZoneText
+-- 2.0 (SPEC-v2.0-identidad AC2): CFG.forever = a WoW Forever client. RegionalUniqueNamesEnabled() is true, UnitName /
+-- UnitNameUnmodified give (Name, Surname) (the 2nd value is the surname, not the realm), UnitFullName gives one of
+-- the two measured forms (CFG.fullForm 1: ("Name Surname", ""), 2: ("Name", "Surname"); the driver alternates them per
+-- client), the roster and the raid roster give «Name Surname-Realm». Without CFG.forever: the 1.2.x client (UnitName
+-- = the bare name, the 2nd value of a unit of another realm = its realm), RegionalUniqueNamesEnabled absent.
+local FOREVER = CFG.forever == true
+local ME = CFG.id or (CFG.name .. "-" .. CFG.realm)       -- this client's identity in the group lists (SIM_GROUP)
+if FOREVER then RegionalUniqueNamesEnabled = function() return true end end
+-- a group entry ("Name Surname" identity, "Name Surname-Realm" or the 1.2 "Name-Realm") -> name, 2nd value
+local function unitParts(n)
+  if FOREVER then
+    local id = n:match("^([^-]+)") or n
+    local first, sur = id:match("^(%S+) (.+)$")
+    if first then return first, sur end
+    return id, nil
+  end
+  local s, r = n:match("^([^-]+)-(.+)$")
+  return s, r
+end
+local function isMe(n) return n == ME or n == CFG.name .. "-" .. CFG.realm or (FOREVER and (n:match("^([^-]+)") == ME)) end
 UnitName = function(unit)
-  if unit == "player" then return CFG.name end
+  if unit == "player" then
+    if FOREVER then return CFG.name, CFG.surname end
+    return CFG.name
+  end
   local i = type(unit) == "string" and tonumber(unit:match("^party(%d)$"))
   if i and SIM_GROUP and not SIM_GROUP.raid then
     local others = {}
-    for _, n in ipairs(SIM_GROUP) do if n ~= CFG.name .. "-" .. CFG.realm then others[#others + 1] = n end end
+    for _, n in ipairs(SIM_GROUP) do if not isMe(n) then others[#others + 1] = n end end
     local n = others[i]
-    if n then local s, r = n:match("^([^-]+)-(.+)$"); return s, r end
+    if n then return unitParts(n) end
   end
   return nil
+end
+UnitNameUnmodified = UnitName
+UnitFullName = function(unit)
+  local a, b = UnitName(unit)
+  if not a then return nil end
+  if FOREVER then
+    if CFG.fullForm == 1 then return a .. (b and (" " .. b) or ""), "" end
+    return a, b
+  end
+  return a, b or CFG.realm
 end
 UnitClass = function() return "Warrior", "WARRIOR" end
 UnitLevel = function() return SIM_LEVEL or 20 end
@@ -99,10 +132,18 @@ C_GuildInfo = { GuildRoster = function() SIM_ROSTER_REQ = true end }
 IsInGroup = function() return SIM_GROUP ~= nil and #SIM_GROUP > 1 end
 IsInRaid = function() return SIM_GROUP ~= nil and SIM_GROUP.raid == true end
 GetNumGroupMembers = function() return SIM_GROUP and #SIM_GROUP or 0 end
+-- forever: the raid roster gives «Name Surname-Realm» (the guild roster row of that identity)
+local function rosterForm(n)
+  if not FOREVER or n:find("-", 1, true) then return n end
+  for _, r in ipairs(SIM_ROSTER or {}) do
+    if r[1]:sub(1, #n + 1) == n .. "-" then return r[1] end
+  end
+  return n
+end
 GetRaidRosterInfo = function(i)
   local n = SIM_GROUP and SIM_GROUP[i]
   if not n then return nil end
-  return n, (i == 1) and 2 or 0, math.floor((i - 1) / 5) + 1, 60, "Warrior", "WARRIOR", "", true
+  return rosterForm(n), (i == 1) and 2 or 0, math.floor((i - 1) / 5) + 1, 60, "Warrior", "WARRIOR", "", true
 end
 local function inGroupShort(n)
   if not SIM_GROUP or type(n) ~= "string" then return false end
@@ -111,7 +152,7 @@ local function inGroupShort(n)
 end
 UnitInRaid = function(n) return (SIM_GROUP and SIM_GROUP.raid and inGroupShort(n)) and 1 or nil end
 UnitInParty = function(n) return (SIM_GROUP and not SIM_GROUP.raid and inGroupShort(n)) and true or false end
-UnitIsGroupLeader = function() return SIM_GROUP ~= nil and SIM_GROUP[1] == CFG.name .. "-" .. CFG.realm end
+UnitIsGroupLeader = function() return SIM_GROUP ~= nil and SIM_GROUP[1] ~= nil and isMe(SIM_GROUP[1]) end
 UnitIsGroupAssistant = function() return false end
 IsInInstance = function() if SIM_INST then return true, SIM_INST[2] end return false, "none" end
 GetInstanceInfo = function()
