@@ -576,3 +576,7 @@ Orden: (2) primero, porque es pequeño. Después, (1) con un S8 detached en el M
 - 8-nov 21:05: **VERIFICADO**. La API pública lista el **9515287** (GuildSquads-1.2.0.zip) con `status 4`, `releaseType 1`, `gameVersions ["1.60.1"]`. La 1.2.0 ya es pública en CurseForge.
 - Tag `v1.2.0` (anotado, eae0f6f) **solo en local**: release.yml (environment `release`, RELEASE_ENABLED = true) subiría un 1.2.0 duplicado si BRO aprueba el despliegue. Se empuja junto con RELEASE_ENABLED=false, o se deja para la 1.2.1.
 - A mano (BRO): pegar CURSEFORGE.md en la descripción del proyecto.
+
+## 9-nov 02:4x — 1.2.1 PUBLICADA en CurseForge (fichero 9519956, release, gameVersion 17053), commit 366b2a9, CI verde (42544272877 / 42544269825)
+Causas encontradas con el diag y una captura de BRO en el juego (informe: wt/agents/hotfix-121.md): (1) apellidos de WoW Forever. ns.fullName dejaba «Nombre Apellido-Reino» y se usaba como clave y como destino de WHISPER, así que los susurros fallaban, no llegaba ni un manifiesto ni un certificado y salía spam de «No hay ningún jugador…». (2) Las respuestas y el muestreo contaban a toda la guild online, no a los pares 1.2 (ns.peerCount). Escenario S19 nuevo (300 miembros, 60 online y 3 con la 1.2, reinos conectados y apellidos). El tag v1.2.1 está solo en local (el mismo motivo que la 1.2.0).
+Pendiente para la 1.2.2: limpiar al cargar las claves guardadas con apellido por la 1.2.0 (inflan `keys strong=`; no casan con nada) y el gate de WHISPER en gates.js.
