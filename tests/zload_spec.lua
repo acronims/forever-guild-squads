@@ -645,7 +645,7 @@ test("smoke: hall of fame, detection, annulment, export, celebrations, settings,
   -- open the tab: every filter, a detail
   ns.UI.Open("hall"); eq(ns.UI.Current(), "hall")
   local hs = ns.UI.HallState()
-  for _, cat in ipairs({ "level", "class", "race", "dungeon", "raid", "pvp", "other" }) do
+  for _, cat in ipairs({ "level", "class", "race", "dungeon", "raid", "pvp" }) do
     click(hs.chips[cat]); eq(hs.cat, cat); eq(ns.UI.Current(), "hall")
   end
   click(hs.chips.level)

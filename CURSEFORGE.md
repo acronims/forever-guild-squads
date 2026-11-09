@@ -30,7 +30,7 @@ It is tested outside the game with a mocked client and a multi-client simulator;
 - A "This wipe" panel in My squad and a "How is it scored?" button.
 
 **Hall of Fame**
-- Races in the guild: Top 100 to each level milestone, Top 10 per class and per race, first kills of every boss, full dungeon and raid clears, full PvE content (Top 3), honorable kills, battlegrounds, professions and exalted reputations. PvP rank races are not available on the 1.60.1 client (hidden automatically) and Legacy Points races stay as "pending data" there (the client has no API for them).
+- Races in the guild: Top 100 to each level milestone, Top 10 per class and per race, first kills of every boss, full dungeon and raid clears, full PvE content (Top 3), honorable kills, battlegrounds, professions and exalted reputations. PvP rank races are not available on the 1.60.1 client (hidden automatically).
 - Each entry shows the realm time and how it was confirmed (exact, approximate, witnesses or reported by the player). The guild master can annul an entry with a reason; the history is kept.
 
 **Achievements**

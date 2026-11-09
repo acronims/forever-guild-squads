@@ -205,7 +205,8 @@ test("races: PvP rank races per season, class rank 14, counters 'reported by the
   ok(not R.add(R.newStore(), { t = "cnt", who = "Ann-R", by = "Bob-R", ts = 1, k = "hk", n = 5 }), "counters only from the player")
   -- API missing in the client: pending data without errors
   local nd = R.compute(R.newStore(), { now = T0, nodata = { prof = true, rep = true, legacy = true } })
-  eq(nd["prof.*"].state, "nodata"); eq(nd["rep.*"].state, "nodata"); eq(nd["legacy.100"].state, "nodata")
+  eq(nd["prof.*"].state, "nodata"); eq(nd["rep.*"].state, "nodata")
+  eq(nd["legacy.100"], nil, "1.2.2: no Legacy Points race in WoW Forever (tests/hall_others_spec.lua)")
 end)
 
 test("sync: paginated diff of observations + closed races, migration of legacy SavedVariables", function()

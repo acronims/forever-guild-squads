@@ -65,10 +65,9 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "default achievements, races, states and cat
   for _, n in ipairs(R.BG_STEPS) do add("pvp.bg." .. n) end
   for _, n in ipairs(R.CAPS_STEPS) do add("wpvp.caps." .. n) end
   for _, n in ipairs(R.PROF_STEPS) do add("prof.alchemy." .. n) end
-  for _, n in ipairs(R.LEGACY_STEPS) do add("legacy." .. n) end
   for _, id in ipairs(Cat.knownIds(ns.HallGlue.Races())) do if Cat.isRaceId(id) and not Cat.isCustom(id) then add(id) end end
   local badges = Cat.badges()
-  ok(#ids > 300 and #badges >= 30, "families expanded: " .. #ids .. " races, " .. #badges .. " badges")
+  ok(#ids >= 300 and #badges >= 30, "families expanded: " .. #ids .. " races, " .. #badges .. " badges")
 
   local function bad(s, raw)
     return type(s) ~= "string" or s == "" or s == raw or s:find("%u%u+_[%w_]+") ~= nil or s:find("%%[sd]") ~= nil

@@ -67,10 +67,9 @@ In dungeons the **group** that kills the boss competes; the participants and the
 |---|---|---|---|
 | `prof.<PROFESSION>.<N>` | First to reach N in each profession | Top 10 | `GetProfessions`/`GetProfessionInfo`, `C_SkillInfo`. N = 150, 225, 300 |
 | `rep.<FACTION>.exalted` | First to reach Exalted with each faction | Top 10 | `C_Reputation` or `GetFactionInfo` |
-| `legacy.<N>` | First to earn N Legacy Points | Top 10 | N = 100, 500, 1,000. The 1.60.1 client has no API for them: the race shows as "pending data" |
 | `squad.full60` | First **squads** with all 5 starters at 60 | Top 10 | guild roster |
 
-If the API does not exist in the client, the race stays *pending data*, with no error.
+If the API does not exist in the client, the race stays *pending data*, with no error. In the Hall of Fame these races are listed under the **Level** filter (since 1.2.2 there is no "Other" filter). WoW Forever has no Legacy Points, so 1.2.2 dropped the `legacy.<N>` races: old observations, closed Tops and GM catalog records for them still load and are ignored.
 
 ## 6. Achievements (dated badges with progress)
 

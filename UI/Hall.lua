@@ -1,5 +1,5 @@
 -- Guild Squads (MIT) - UI/Hall.lua
--- "Salón de la fama" tab: centred filter chips (Nivel · Clase · Raza · Mazmorras · Bandas · PvP · Otros) +
+-- "Salón de la fama" tab: centred filter chips (Nivel · Clase · Raza · Mazmorras · Bandas · PvP) +
 -- export on the top row (nothing under the portrait), race list with state and n/N, detail with first/second/third
 -- place medals, time and mark (exacta / aprox. / testigos / informado por el jugador), tooltip with participants
 -- and support, GM right-click "Anular entrada (motivo)" with confirmation. Plus "Mis logros" (profile grid).
@@ -7,10 +7,10 @@ local _, ns = ...
 local L, W, UI, M, P, Pr, R, Content = ns.L, ns.W, ns.UI, ns.Model, ns.Permissions, ns.Progress, ns.Races, ns.Content
 local ICONS = "Interface\\Icons\\"
 
-local FILTERS = { "level", "class", "race", "dungeon", "raid", "pvp", "other" }
+-- 1.2.2: no "Otros" chip (its Legacy-points races are gone; squad.full60, professions and reputations are in Nivel)
+local FILTERS = { "level", "class", "race", "dungeon", "raid", "pvp" }
 local F_ICON = { level = ICONS .. "Spell_ChargePositive", class = ICONS .. "INV_Misc_Book_09", race = ICONS .. "INV_Misc_Head_Human_01",
-                 dungeon = ICONS .. "INV_Misc_Key_03", raid = ICONS .. "INV_Misc_Head_Dragon_01", pvp = ICONS .. "INV_Sword_27",
-                 other = ICONS .. "INV_Misc_Note_01" }
+                 dungeon = ICONS .. "INV_Misc_Key_03", raid = ICONS .. "INV_Misc_Head_Dragon_01", pvp = ICONS .. "INV_Sword_27" }
 local MEDAL = { "|cffffd100", "|cffc0c0c0", "|cffcd7f32" } -- 1st / 2nd / 3rd
 local hall = { cat = "level", sel = nil }
 local function H() return ns.HallGlue end
@@ -66,7 +66,6 @@ function UI.RaceTitle(id)
   n = id:match("^wpvp%.caps%.(%d+)$"); if n then return L.RT_CAPS:format(tonumber(n)) end
   local pf, pn = id:match("^prof%.([^.]+)%.(%d+)$"); if pf then return L.RT_PROF:format(pf:gsub("_", " "), tonumber(pn)) end
   local rf = id:match("^rep%.([^.]+)%.exalted$"); if rf then return L.RT_REP:format((rf:gsub("_", " "))) end
-  n = id:match("^legacy%.(%d+)$"); if n then return L.RT_LEGACY:format(tonumber(n)) end
   if id == "squad.full60" then return L.RT_FULL60 end
   if id == "prof.*" then return L.RT_PROF_ANY end
   if id == "rep.*" then return L.RT_REP_ANY end
@@ -90,7 +89,7 @@ local function chip(parent, cat)
   b.bg = b:CreateTexture(nil, "BACKGROUND"); b.bg:SetAllPoints()
   b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetSize(20, 20); b.icon:SetPoint("LEFT", 3, 0); b.icon:SetTexture(F_ICON[cat])
   b.text = W.Label(b, L["HF_" .. cat], "GameFontHighlightSmall"); b.text:SetPoint("LEFT", b.icon, "RIGHT", 4, 0)
-  b:SetWidth(math.min(74, W.num(b.text:GetStringWidth(), 44) + 28)) -- 7 chips + export fit centred (<= 580 px)
+  b:SetWidth(math.min(74, W.num(b.text:GetStringWidth(), 44) + 28)) -- 6 chips + export fit centred (<= 580 px)
   function b:SetOn(v)
     if v then self.bg:SetColorTexture(0.6, 0.45, 0.1, 0.95); self.text:SetTextColor(1, 1, 1); self.icon:SetDesaturated(false)
     else self.bg:SetColorTexture(0.1, 0.1, 0.1, 0.9); self.text:SetTextColor(0.6, 0.6, 0.6); self.icon:SetDesaturated(true) end

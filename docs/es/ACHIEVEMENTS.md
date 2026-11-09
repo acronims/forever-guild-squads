@@ -67,10 +67,9 @@ En mazmorras compite el **grupo** que mata al jefe; se apuntan los participantes
 |---|---|---|---|
 | `prof.<PROFESIÓN>.<N>` | Primeros en llegar a N en cada profesión | Top 10 | `GetProfessions`/`GetProfessionInfo`, `C_SkillInfo`. N = 150, 225, 300 |
 | `rep.<FACCIÓN>.exalted` | Primeros en llegar a Exaltado con cada facción | Top 10 | `C_Reputation` o `GetFactionInfo` |
-| `legacy.<N>` | Primeros en conseguir N puntos de Legado (Legacy Points) | Top 10 | N = 100, 500, 1.000. El cliente 1.60.1 no tiene API para ellos: la carrera se muestra como «pendiente de datos» |
 | `squad.full60` | Primeros **squads** con los 5 titulares al 60 | Top 10 | roster de la guild |
 
-Si la API no existe en el cliente, la carrera queda *pendiente de datos*, sin error.
+Si la API no existe en el cliente, la carrera queda *pendiente de datos*, sin error. En el Salón de la fama estas carreras salen en el filtro **Nivel** (desde la 1.2.2 no hay filtro «Otros»). WoW Forever no tiene puntos de Legado (Legacy Points), así que la 1.2.2 quitó las carreras `legacy.<N>`: las observaciones, los Top cerrados y los registros del catálogo del GM que las nombran siguen cargando y se ignoran.
 
 ## 6. Logros (insignias con fecha y progreso)
 

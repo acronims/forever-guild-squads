@@ -7,7 +7,8 @@
 --   lv:   { t="lv", who, by, ts, src="self"|"roster", lv, cls?, race? }   milestone level reached (10..60)
 --   kill: { t="kill", who=by, by, ts, inst, iid?, it, enc?, boss?, gs?, pres={names}, sqm={"name>sid"} }
 --   bg:   { t="bg", who=by, by, ts, inst (map), win=1|0, pres, sqm }
---   cnt:  { t="cnt", who=by, by, ts, k="hk"|"caps"|"prof"|"rep"|"legacy"|"pvprank", key?, n, cls?, sea? }
+--   cnt:  { t="cnt", who=by, by, ts, k="hk"|"caps"|"prof"|"rep"|"pvprank"|"legacy" (retired, see R.RETIRED_CNT), key?, n,
+--           cls?, sea? }
 -- RaceEntry (computed / frozen): { key, pos, ts, mark, chars={}, squads={}, sup={}, wit, mixed?, ex? }
 -- No economy fields anywhere (see the schema test).
 local _, ns = ...
@@ -31,13 +32,18 @@ R.HK_STEPS = { 100, 1000, 5000 }
 R.BG_STEPS = { 10, 50, 100 }
 R.CAPS_STEPS = { 10, 100 }
 R.PROF_STEPS = { 150, 225, 300 }
-R.LEGACY_STEPS = { 100, 500, 1000 }
 R.PVP_RANKS = { 5, 10, 12, 14 }
 R.EXALTED = 8
 R.ADOPT_DAYS = 14
 R.ADOPT_GOAL = 0.8
 R.CNT_KINDS = { hk = true, caps = true, prof = true, rep = true, legacy = true, pvprank = true }
-R.CATS = { "level", "class", "race", "dungeon", "raid", "pvp", "other" }
+-- 1.2.2: WoW Forever has no Legacy Points, so the legacy.<N> races left the catalog. A "legacy" counter is still a
+-- valid record (1.2.1 peers and SavedVariables: same wire format, same sync hashes) but it is never scored, listed
+-- or shown, and a closed legacy Top or a GM catalog record for one stays inert.
+R.RETIRED_CNT = { legacy = true }
+function R.retired(id) return type(id) == "string" and id:find("^legacy%.") ~= nil end
+-- filters of the Salón de la fama (1.2.2: no "other"; profession, reputation and squad.full60 races are in "level")
+R.CATS = { "level", "class", "race", "dungeon", "raid", "pvp" }
 R.LIVE_PAST, R.LIVE_FUTURE = 600, 300   -- a live level report must be dated inside [now-600, now+300] (receiver clock)
 R.QUIET = 600               -- a race is not frozen until 10 min after the last observation received
 R.MAX_DYN = 300             -- races created on the fly (keys taken from the data) per compute
@@ -405,7 +411,7 @@ end
 -------------------------------------------------------------------------------
 -- race registry
 function R.def(id, defs)
-  local size, cat, season = 10, "other", nil
+  local size, cat, season = 10, "level", nil
   if id:find("^lvl%.all%.") then size, cat = 100, "level"
   elseif id:find("^lvl%.class%.") then cat = "class"
   elseif id:find("^lvl%.race%.") then cat = "race"
@@ -578,7 +584,7 @@ end
 -- compute
 -- ctx = { now, isFinal(instKey, bossSlug, bossName) -> bool, bossesOf(instKey) -> {slugs}, trusted(name) -> bool,
 --         inGuild(name) -> bool, squads() -> { sid = {titulares} }, annul = { [race] = { [key] = {reason,by,ts} } },
---         nodata = { prof = true, rep = true, legacy = true }, season = "1", classes = {CLASS...} }
+--         nodata = { prof = true, rep = true }, season = "1", classes = {CLASS...} }
 local function instOf(ev)
   local e = Content and Content.match(ev.inst, ev.it, ev.iid)
   local kind = (ev.it == "raid" or (e and e.kind == "raid")) and "raid" or "dungeon"
@@ -628,7 +634,8 @@ function R.compute(store, ctx)
 
   local byType = { lv = {}, kill = {}, bg = {}, cnt = {} }
   for _, ev in pairs(store.obs) do
-    if ev.uv and ev.t ~= "cnt" then info.unverified = (info.unverified or 0) + 1   -- never scored
+    if ev.t == "cnt" and R.RETIRED_CNT[ev.k] then   -- retired counter (legacy): kept, never scored or counted
+    elseif ev.uv and ev.t ~= "cnt" then info.unverified = (info.unverified or 0) + 1   -- never scored
     else table.insert(byType[ev.t], ev) end
   end
   local cntScored, cntUnv = R.scoredCounters(byType.cnt)
@@ -817,7 +824,6 @@ function R.compute(store, ctx)
     local function c() return { key = ev.who, ts = ev.ts, mark = "self", chars = { ev.who }, squads = {}, sup = {}, name = ev.who } end
     if ev.k == "hk" then for _, n in ipairs(R.HK_STEPS) do if ev.n >= n then cand("pvp.hk." .. n, c()) end end
     elseif ev.k == "caps" then for _, n in ipairs(R.CAPS_STEPS) do if ev.n >= n then cand("wpvp.caps." .. n, c()) end end
-    elseif ev.k == "legacy" then for _, n in ipairs(R.LEGACY_STEPS) do if ev.n >= n then cand("legacy." .. n, c()) end end
     elseif ev.k == "prof" then
       local sk = slug(ev.key)
       for _, n in ipairs(R.PROF_STEPS) do if ev.n >= n then dyn("prof." .. sk .. "." .. n, c(), one(ev.by), R.PROF_OK[sk]) end end
@@ -844,7 +850,6 @@ function R.compute(store, ctx)
   for _, n in ipairs(R.CAPS_STEPS) do race("wpvp.caps." .. n) end
   for _, n in ipairs(R.PVP_RANKS) do race("pvp.rank." .. n .. ".s" .. slug(ctx.season or "1")) end
   local nd = ctx.nodata or {}
-  if nd.legacy then for _, n in ipairs(R.LEGACY_STEPS) do nodata("legacy." .. n) end end
   if nd.prof then nodata("prof.*") end
   if nd.rep then nodata("rep.*") end
   -- every custom race exists (open n/N) from its definition; without the API it is "pending data"
@@ -1338,7 +1343,9 @@ end
 -- unverified observations, newest first: { { id, ev } }
 function R.unverifiedList(store)
   local out = {}
-  for id, ev in pairs(store.obs or {}) do if ev.uv then out[#out + 1] = { id = id, ev = ev } end end
+  for id, ev in pairs(store.obs or {}) do
+    if ev.uv and not (ev.t == "cnt" and R.RETIRED_CNT[ev.k]) then out[#out + 1] = { id = id, ev = ev } end
+  end
   table.sort(out, function(a, b) if a.ev.ts ~= b.ev.ts then return a.ev.ts > b.ev.ts end return a.id < b.id end)
   return out
 end

@@ -90,7 +90,7 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
 - A full resync of a large guild takes minutes by design (throttle).
 - Forever encounter/instance IDs are unknown: instances match by name and learn the ID when seen.
 - The 1.60.1 client has no `UnitPVPRank`: PvP rank achievements and races are not shown there.
-- There is no Legacy Points API in 1.60.1 either: those races stay as "pending data".
+- WoW Forever has no Legacy Points: since 1.2.2 there are no Legacy Points races (old data is kept and ignored).
 - Forever raids open on 9-Dec-2026: until then the Raids category shows the "Raids open on 9-Dec" notice.
 - The Forever client has been seen not reading SavedVariables back on login: run `/gsq export` now and then and keep the text (`/gsq import` restores it).
 - No squad chat.

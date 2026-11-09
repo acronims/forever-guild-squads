@@ -45,6 +45,7 @@ function C.grants() local s = st(); return (type(s) == "table" and type(s.achgra
 function C.validId(id)
   return type(id) == "string" and id ~= "" and #id <= C.ID_MAX and not id:find("[|~;,%s%c]") and true or false
 end
+-- "legacy." stays a race prefix (1.2.2 retired those races): a GM record for one written by 1.2.1 is still valid
 local RACE_PREFIX = { "lvl.", "dng.", "raid.", "full.", "pvp.", "wpvp.", "prof.", "rep.", "legacy.", "squad." }
 function C.isCustom(id) return type(id) == "string" and id:sub(1, 3) == "gm." end
 -- a built-in race id (by prefix). Custom ids are races unless their metric is "manual".
@@ -243,14 +244,15 @@ function C.label(id, defs)
 end
 
 -- R.def decoration: effective size, label, off flag, custom category / scope
-local CAT_OF = { level = "level", boss = "dungeon", bg = "pvp", prof = "other", rep = "other" }
+-- (1.2.2: no "other" filter; profession / reputation races are listed under "level")
+local CAT_OF = { level = "level", boss = "dungeon", bg = "pvp", prof = "level", rep = "level" }
 function C.decorate(r, defs)
   local rec = (defs or C.defs())[r.id]
   r.base = r.size
   if not rec or not rec.d then return r end
   local d = rec.d
   if C.isCustom(r.id) then
-    local cat = CAT_OF[d.metric] or "other"
+    local cat = CAT_OF[d.metric] or "level"
     if d.metric == "level" and d.param then cat = d.param:match("^(%a+):") or "level" end
     if d.metric == "boss" then
       local b = ns.Content and ns.Content.bosses and ns.Content.bosses[d.param or ""]
@@ -328,10 +330,16 @@ function C.groupOf(id, defs)
 end
 
 -- every id the GM can manage: computed races (pseudo rows "prof.*"/"rep.*" excluded), every badge, every custom
--- definition. -> sorted list of ids. hide(id) -> true skips it (e.g. pvp.rank.* in WoW Forever)
+-- definition. -> sorted list of ids. hide(id) -> true skips it (e.g. pvp.rank.* in WoW Forever). Retired races
+-- (legacy.<N>, 1.2.2) are never offered, even when a saved record names them.
 function C.knownIds(races, defs, hide)
   local seen, out = {}, {}
-  local function add(id) if not seen[id] and not id:find("%*") and not (hide and hide(id)) then seen[id] = true; out[#out + 1] = id end end
+  local R = ns.Races
+  local function add(id)
+    if not seen[id] and not id:find("%*") and not (hide and hide(id)) and not (R and R.retired and R.retired(id)) then
+      seen[id] = true; out[#out + 1] = id
+    end
+  end
   for id in pairs(races or {}) do add(id) end
   for _, b in ipairs(C.badges()) do add(b.key) end
   for id in pairs(defs or C.defs()) do add(id) end

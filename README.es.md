@@ -90,7 +90,7 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
 - Una resincronización completa de una guild grande tarda minutos (throttle, por diseño).
 - Los IDs de encuentros/instancias de Forever no se conocen: las instancias se reconocen por nombre y aprenden el ID al verlo.
 - El cliente 1.60.1 no ofrece `UnitPVPRank`: ahí los logros y carreras de rango PvP no se muestran.
-- Tampoco hay API de Legacy Points en 1.60.1: esas carreras quedan como «pendiente de datos».
+- WoW Forever no tiene puntos de Legado (Legacy Points): desde la 1.2.2 no hay carreras de puntos de Legado (los datos antiguos se guardan y se ignoran).
 - Las bandas de Forever abren el 9-dic-2026: hasta entonces la categoría Bandas muestra el aviso «Las bandas abren el 9-dic».
 - Se ha visto que el cliente de Forever a veces no relee las SavedVariables al entrar: haz `/gsq export` de vez en cuando y guarda el texto (con `/gsq import` lo recuperas).
 - Sin chat de squad.
