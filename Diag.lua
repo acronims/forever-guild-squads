@@ -72,6 +72,9 @@ function G.Report()
   if ns.Comm then
     local s = ns.Comm.stats
     extra[#extra + 1] = ("comm sent=%d recv=%d failed=%d pending=%d badProto=%d tooBig=%d"):format(s.sent, s.recv, s.failed, ns.Comm.Pending(), s.badProto or 0, s.tooBig or 0)
+    -- 1.2.2: whispers the server did not find (hidden), characters on the other variant / marked, GUILD envelopes,
+    -- and the 1.2.0 surname keys dropped at load
+    if ns.Comm.WhisperDiag then extra[#extra + 1] = ns.Comm.WhisperDiag() .. " swept=" .. tostring(ns.sweptSurnames or 0) end
   end
   if ns.Sync and ns.Sync.stats then -- refused / malformed records
     local y = ns.Sync.stats

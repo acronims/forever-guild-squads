@@ -71,6 +71,7 @@ const REF_ALLOW = new Map([
   ['CANCEL', 'FrameXML GlobalStrings'],
   ['ACCEPT', 'FrameXML GlobalStrings'],
   ['CLOSE', 'FrameXML GlobalStrings'],
+  ['ERR_CHAT_PLAYER_NOT_FOUND_S', 'FrameXML GlobalStrings: the server answer to a whisper nobody gets (1.2.2 chat filter; type-checked)'],
   ['BINDING_HEADER_GUILDSQUADS', 'addon binding label (Bindings.xml)'],
   ['BINDING_NAME_GUILDSQUADS_TOGGLE', 'addon binding label (Bindings.xml)'],
 ]);

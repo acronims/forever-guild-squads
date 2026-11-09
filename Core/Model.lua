@@ -811,6 +811,39 @@ function M.charName(raw, realm)
   if not string.find(name, "-", 1, true) then name = name .. "-" .. tostring(realm or "") end
   return name, surname
 end
+-- 1.2.2 (BRO in the game, 9-nov 03:11): WoW Forever delivers a whisper only to the full name WITH the surname.
+-- «Kas Pitas» works; «Kas» (what the 1.2.1 sent, as «Kas-Realm», shown by the server as «Kas Realm») does not. The
+-- identity of a character stays "Name-Realm" (M.charName: author, signatures, certificates, indexes); the whisper
+-- target is built apart, from the key and the roster surname: "Name Surname" on my realm, "Name Surname-Realm" on
+-- another one. alt = the other variant (with / without the realm suffix), tried once when the first one fails.
+function M.whisperTarget(key, surname, myRealm, alt)
+  if type(key) ~= "string" or key == "" then return nil end
+  local short, realm = string.match(key, "^([^-]+)%-(.+)$")
+  if not short then short, realm = key, myRealm end
+  local full = (type(surname) == "string" and surname ~= "") and (short .. " " .. surname) or short
+  local suffix = type(realm) == "string" and realm ~= "" and realm ~= myRealm
+  if alt then suffix = not suffix end
+  if suffix and type(realm) == "string" and realm ~= "" then return full .. "-" .. realm end
+  return full
+end
+-- 1.2.2: the 1.2.0 keyed trust, manifests and certificates under "Name Surname-Realm" (the roster form): they never
+-- match a character again but inflate `keys strong=` and our own certificate. A character name has no space, so
+-- every saved name with one is such a leftover. g = a guild partition of GuildSquadsDB; returns how many went.
+function M.sweepSurnames(g)
+  if type(g) ~= "table" then return 0 end
+  local n = 0
+  local function sweep(t)
+    if type(t) ~= "table" then return end
+    local drop = {}
+    for name in pairs(t) do if type(name) == "string" and string.find(name, " ", 1, true) then drop[#drop + 1] = name end end
+    for _, name in ipairs(drop) do t[name] = nil; n = n + 1 end
+  end
+  local tr = type(g.trust) == "table" and g.trust or {}
+  sweep(tr.keys); sweep(tr.pend); sweep(tr.contested); sweep(tr.suspects)
+  sweep(type(g.sig) == "table" and g.sig.man or nil)
+  sweep(type(g.cert) == "table" and g.cert.crt or nil)
+  return n
+end
 function M.guildKey(name, realm)
   if type(name) ~= "string" or name == "" then return nil end
   return name .. "-" .. ((type(realm) == "string" and realm ~= "") and realm or "?")

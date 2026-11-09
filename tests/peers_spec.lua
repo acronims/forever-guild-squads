@@ -173,7 +173,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.1: a sender with a surname is the chara
   q.pushMessage = function(_, parts) got = parts[1] and parts[1].target; return true end
   local okQ, errQ = pcall(Comm.Send, "D", { r = {}, z = 1 }, "WHISPER", "Cid Essency-Realm")
   q.pushMessage = origPush
-  ok(okQ, tostring(errQ)); eq(got, "Cid-Realm", "Comm.Send whispers the character key")
+  -- 1.2.2: the target is the roster name of the character key (with the surname when the roster has one; none here)
+  ok(okQ, tostring(errQ)); eq(got, ns.whisperTarget("Cid-Realm"), "Comm.Send whispers the roster name of Cid-Realm")
   local origSend, origAfter = Comm.Send, ns.After
   local wh = {}
   Comm.Send = function(_, _, ch, to, onSent) if ch == "WHISPER" then wh[#wh + 1] = tostring(to) end if onSent then onSent() end return true end

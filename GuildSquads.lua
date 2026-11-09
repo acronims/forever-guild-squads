@@ -62,6 +62,17 @@ end
 
 function ns.shortName(name) return (name and name:match("^([^-]+)")) or tostring(name) end
 
+-- 1.2.2 (BRO in the game, 9-nov 03:11): the WHISPER target is the full name with the surname, «Kas Pitas» (on another
+-- realm «Kas Pitas-Realm»), built from the roster entry of the character; the identity stays ns.charKey / fullName.
+-- alt = the other variant (Comm tries it once when the server does not find the first one). nil when the character
+-- is not in the roster: Comm then routes the message over GUILD with the recipient (never a blind whisper).
+function ns.whisperTarget(name, alt)
+  local key = ns.fullName(name)
+  local r = key and rosterCache[key]
+  if not r then return nil end
+  return M.whisperTarget(key, r.surname, myRealm(), alt)
+end
+
 -- timers. C_Timer.After / C_Timer.NewTicker when the client has them; otherwise a frame OnUpdate that
 -- only runs while a timer is pending (the frame is hidden when the list is empty).
 local timers = {}
@@ -162,6 +173,9 @@ local function selectGuild()
   local g, migrated = M.guildDB(root, key, function(n) return rosterCache[ns.fullName(n) or ""] ~= nil end)
   ns.gdb, ns.guildKey = g, key
   g.ann = nil -- announced hashes are not used
+  -- 1.2.2: the 1.2.0 leftovers keyed "Name Surname-Realm" (trust, manifests, certificates) go before anything reads them
+  local swept = M.sweepSurnames(g)
+  if swept > 0 then ns.sweptSurnames = swept; ns.debug("1.2.0 surname keys dropped: " .. swept) end
   -- v1.2 annex F: the keys we learned for this guild's members (TOFU strong / weak with quorum)
   if ns.Trust then
     g.trust = type(g.trust) == "table" and g.trust or {}

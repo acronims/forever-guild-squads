@@ -233,7 +233,8 @@ test("call to squad: whisper to online members, cooldown, receiver anti-spam, ne
   for _ = 1, 600 do clock = clock + 1; ns.Comm.queue:pump(clock) end
   eq(ns.Comm.Pending(), 0, "queue drained")
   local toBob = false
-  for _, t in ipairs(whispers) do if t == "Bob-Realm" then toBob = true end end
+  -- 1.2.2: the whisper target is the roster name (the surname when there is one; this roster has none: "Bob")
+  for _, t in ipairs(whispers) do if t == ns.whisperTarget("Bob-Realm") then toBob = true end end
   ok(toBob, "whispered Bob")
   local shown = 0
   RaidNotice_AddMessage = function() shown = shown + 1 end

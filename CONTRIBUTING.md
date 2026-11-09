@@ -50,13 +50,23 @@ By contributing you agree your work is released under the MIT license ([LICENSE]
 ## WoW Forever names
 
 In WoW Forever every character has a name **and a surname**. `GetGuildRosterInfo`, the raid roster and names typed by
-the player come as `Name Surname-Realm`; `UnitName` and the sender of `CHAT_MSG_ADDON` give the bare `Name` (a sender
-on a connected realm can come with the surname too). The key of a character is always `Name-Realm`:
+the player come as `Name Surname-Realm`; `UnitName` gives the bare `Name` and the sender of `CHAT_MSG_ADDON` gives
+`Name` or `Name-Realm` without the surname (a sender on a connected realm can come with it). The key of a character
+(its identity) is always `Name-Realm`:
 
-- every author, roster, trust, signature, certificate and `ks` / `cert` name, and every `WHISPER` target, goes through
-  `ns.charKey(name)` or `ns.fullName(name)` (both drop the surname through `Model.charName`, 1.2.1);
-- never whisper a name built for display (`ns.displayName`) or read raw from the roster: the server answers «No hay
-  ningún jugador con el nombre …» and the message is lost. `Comm.Send` drops a surname from a `WHISPER` target as the
-  last line of defence;
+- every author, roster, trust, signature, certificate and `ks` / `cert` name goes through `ns.charKey(name)` or
+  `ns.fullName(name)` (both drop the surname through `Model.charName`, 1.2.1). Signed data never changes form;
+- **identity without the surname, `WHISPER` target with it** (BRO's test in the game, 1.2.2): the server only
+  delivers a whisper to the full name with the surname, «Kas Pitas» («Kas» or «Kas-Realm» give «No hay ningún jugador
+  con el nombre …», shown as «Kas Realm»). Callers pass the character key to `Comm.Send(…, "WHISPER", key)`;
+  `ns.whisperTarget(key)` builds the target from the roster entry: `Name Surname` on your realm, `Name Surname-Realm`
+  on another one. Never build a whisper target anywhere else, and never sign, index or key anything with it;
+- a server «not found» for a name whispered in the last 5 s is hidden (`Comm.SystemFilter` on `CHAT_MSG_SYSTEM`,
+  matched through `ERR_CHAT_PLAYER_NOT_FOUND_S`), the message goes again once with the other variant (with / without
+  the realm suffix) and then the character is marked for 10 min: what went to him by whisper travels over `GUILD` in a
+  `W` envelope with the recipient key, and only he handles it. A character missing from the roster is never
+  whispered (envelope); one offline in the roster gets nothing;
 - the simulator gives every roster member a surname by default (`tests/sim/sim.js`, `surnames`); S19 also sends the
-  surname in the sender of a member on another realm.
+  surname in the sender of a member on another realm. Its server only delivers a whisper to `Name Surname[-Realm]`
+  (`whisperMember`, `whisperSuffix`) and answers anything else with the `CHAT_MSG_SYSTEM` error; S19 fails if one of
+  those lines reaches the chat.
