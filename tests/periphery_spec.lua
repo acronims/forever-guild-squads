@@ -487,3 +487,37 @@ test("2.0 UI: Hall version list and entry label, Discord export (§7)", function
   eq(bareKas(texts), nil, "a text with «Kas» alone")
   eq(find(texts, "Kas-"), nil, "a text with «Kas-…»")
 end)
+
+test("2.0 UI: raid editor cells, catalog withdrawal and Hall annulment name «Kas Pitas» / «Kas Mora» (§7, #67)", function()
+  local ns, _, rec = boot({})
+  local G, UI, W = ns.RaidGlue, ns.UI, ns.W
+  local prompts, confirms = {}, {}
+  W.Prompt = function(text) prompts[#prompts + 1] = text end
+  W.Confirm = function(text) confirms[#confirms + 1] = text end
+  -- the raid editor: both Kas in the roster cells (UI/Raids.lua short = ns.shortName)
+  local rid, whyR = G.Create({ raid = "custom", size = 10, name = "Banda", at = G.WallNow() + 86400 })
+  ok(rid, "raid roster created: " .. tostring(whyR))
+  local d = ns.Roster.copy(G.Get(rid).d)
+  d.main[1], d.main[2] = "Kas Pitas", "Kas Mora"
+  ok(G.Save(rid, d), "raid roster saved")
+  local n0 = #rec.texts
+  UI.OpenRoster(rid)
+  local texts = textsSince(rec, n0)
+  ok(find(texts, "Kas Pitas") and find(texts, "Kas Mora"), "raid cells show both: " .. table.concat(texts, " | "):sub(1, 300))
+  -- catalog: a badge granted to Kas Mora, then withdrawn (UI/Catalog.lua:230)
+  local badge
+  for _, b in ipairs(ns.Catalog.badges()) do if b.scope ~= "guild" and b.scope ~= "squad" then badge = b.key; break end end
+  ok(badge, "a character badge")
+  ok(ns.HallGlue.Grant(badge, "Kas Mora", "evento"), "granted")
+  local g
+  for _, r in pairs(ns.Catalog.grants()) do if r.d.who == "Kas Mora" then g = r end end
+  ok(g and UI.CatalogUngrant(g), "withdraw asked")
+  -- Hall: annulling an entry of Kas Mora asks with her name (UI/Hall.lua:137)
+  ok(UI.HallAnnul("race", { key = "Kas Mora", chars = { "Kas Mora" } }), "annul asked")
+  for _, t in ipairs(confirms) do texts[#texts + 1] = t end
+  for _, t in ipairs(prompts) do texts[#texts + 1] = t end
+  ok(find(confirms, "Kas Mora"), "withdrawal confirmation names Kas Mora: " .. table.concat(confirms, " | "))
+  ok(find(prompts, "Kas Mora"), "annulment prompt names Kas Mora: " .. table.concat(prompts, " | "))
+  eq(bareKas(texts), nil, "a text with «Kas» alone")
+  eq(find(texts, "Kas-"), nil, "a text with «Kas-…»")
+end)
