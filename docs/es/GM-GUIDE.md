@@ -19,7 +19,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 
 1. Instala el addon y abre `/gsq` > **Ajustes**.
 2. Repasa las 9 secciones (abajo; **Logros** solo la ves tú). Cambia lo que quieras y pulsa **Guardar y compartir**. Si sales de la pestaña sin guardar, avisa.
-3. Pide a toda la guild que instale la **1.2**: no se habla con la 1.0.x ni con la 1.1, y cada jugador ve en el chat cuántos compañeros siguen con una versión vieja (ver *Problemas*).
+3. Pide a toda la guild que instale la **2.0**: no se habla con la 1.x (1.0.x, 1.1 y 1.2.x), y cada jugador ve en el chat cuántos compañeros siguen con una versión anterior a la 2.0 (ver *Problemas*). Al actualizar, lo que otros firmaron con la 1.x (también tus ajustes y tu catálogo) se borra de los clientes con la 2.0 y vuelve cuando su autor actualiza: entra con la 2.0 para que tus ajustes se firmen otra vez.
 4. Anuncia el addon en la guild. La bienvenida del addon ya les guía (perfil → squad → ranking).
 
 ## Ajustes, sección a sección
@@ -38,7 +38,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 
 **Contenido.** Catálogo de jefes que se aprende solo (cada jefe se guarda la primera vez que muere con el addon). Marca el **jefe final** de cada mazmorra o banda: sin eso no se abren las carreras de "completar".
 
-**Bandas.** Lista de RL (un personaje de la guild por línea), *Los oficiales pueden editar rosters de otros*, y la tabla de clases útiles (`clave:CLASE+CLASE:tamaño mín.`) que alimenta los avisos de composición. Vacía = valores por defecto. GM y oficiales siempre pueden liderar.
+**Bandas.** Lista de RL (un personaje de la guild por línea, como «Nombre Apellido»; basta el nombre de pila si solo un miembro se llama así), *Los oficiales pueden editar rosters de otros*, y la tabla de clases útiles (`clave:CLASE+CLASE:tamaño mín.`) que alimenta los avisos de composición. Vacía = valores por defecto. GM y oficiales siempre pueden liderar.
 
 **Logros** (solo la ve el GM). Aquí decides qué reconocimientos usa tu guild. **Cada cambio se comparte al momento** (no hace falta *Guardar y compartir*) y cada cliente vuelve a comprobar que lo firmó el GM: un oficial no puede tocarlo.
 - **Grupo** (Nivel, Clase, Raza, Mazmorras, Bandas, PvP, Profesiones, Reputación, Squad, Personaje) y una fila por logro o carrera: casilla (activo), nombre, estado (*abierta n/N*, *cerrada*, *pendiente de datos* o *insignia*), **Top N** y **Renombrar**.
@@ -47,7 +47,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 - **Top N**: solo en carreras **abiertas**, de 1 al máximo de su familia (100 en las de nivel general, 10 en el resto, 3 en "contenido completo") y nunca por debajo de las entradas que ya tiene. Una carrera cerrada no se toca (el botón lo explica).
 - **Renombrar**: hasta 32 caracteres, sin colores ni enlaces. El identificador interno no cambia; vacío = nombre por defecto.
 - **Nuevo logro** (máximo 50): 1) qué mide — nivel (opcional: de una clase o raza), un jefe del catálogo en grupo (≥2 testigos), victorias de squad en BG (en general o en un mapa), habilidad de una profesión, reputación Exaltado, o una **insignia que otorgas tú**; 2) cuál; 3) umbral y tamaño del Top; 4) nombre. Se calcula con los mismos datos y testigos que los de serie. Lo que mide no se puede cambiar una vez creado (sí el nombre, el tamaño y activarlo o no).
-- **Otorgar**: elige insignia, personaje (o squad, si es de squad) y **motivo obligatorio**. Sale en el tooltip como *Otorgado por el GM: motivo*. **Nunca mete a nadie en un Top** (los Tops van por quién llegó antes). *Retirar* lo quita y queda en el historial.
+- **Otorgar**: elige insignia, personaje («Nombre Apellido»; o squad, si es de squad) y **motivo obligatorio**. Sale en el tooltip como *Otorgado por el GM: motivo*. **Nunca mete a nadie en un Top** (los Tops van por quién llegó antes). *Retirar* lo quita y queda en el historial.
 - Compatibilidad: un cliente que no conoce un tipo de registro lo ignora sin error (sigue viendo el catálogo de serie).
 
 ## Moderar el Salón de la fama
@@ -62,7 +62,7 @@ Los Ajustes los ve toda la guild en solo lectura. Cada cliente comprueba contra 
 2. **Monta el roster** con "+" en el panel de squads y jugadores (filtra por rol, conectados, nombre o clase; un número = nivel mínimo). Un squad entra entero en el primer grupo con sitio; si no cabe, entran los titulares que quepan y te avisa; sus suplentes van a huecos libres o a la lista de suplentes (máx. 10). Nadie sale dos veces.
 3. Mira la **barra de composición** y los avisos ("faltan 1 T", "sobran 1 D", "sin quitar maldiciones"). **Guardar**.
 4. **Publicar**: los apuntados ya pueden responder Sí / Tal vez / No / Suplente. Cualquiera de la guild puede responder como voluntario. Ves el recuento y los comentarios.
-5. A la hora: **Invitar confirmados**. Una tanda por clic, solo fuera de combate (5 en grupo; luego convierte a banda si el cliente lo permite y coloca los subgrupos si eres líder o ayudante). Cuando acepten, **vuelve a pulsar**.
+5. A la hora: **Invitar confirmados**. Una tanda por clic, solo fuera de combate (5 en grupo; luego convierte a banda si el cliente lo permite y coloca los subgrupos si eres líder o ayudante). Cuando acepten, **vuelve a pulsar**. Las invitaciones van a «Nombre Apellido»; a quien no sale en la lista de la guild no se le invita y el addon dice cuántos se han quedado fuera.
 6. **Cerrar** al acabar: guarda la asistencia (quién estuvo en la banda desde 30 min antes hasta 3 h después). Si no la cierras, se cierra sola 3 h después **si tu cliente (o el del GM) está conectado**.
 7. **Semana sig.** copia la banda a +7 días a la misma hora del reino. **Exportar** da el texto para Discord. **Cancelar banda** avisa a todos los apuntados.
 
@@ -84,7 +84,7 @@ El % de asistencia de cada jugador cuenta las 8 últimas bandas con asistencia r
 
 **Algo se queda en gris (sin verificar).** Desde la 1.2 cada registro va firmado por su autor y todos los que tienen el addon lo reenvían. Una copia cuenta cuando se conoce la clave de su autor: oída del propio autor en persona, o certificada por dos jugadores que has oído en persona (squads y ajustes necesitan la clave de su capitán o del GM; un desmentido, la del propio autor). Con muy pocos conectados, los datos de un desconocido pueden quedarse en gris hasta que coincidáis conectados. Si una clave está *disputada* (dos jugadores dan claves distintas para el mismo nombre), no se aplica nada nuevo suyo hasta que ese jugador se conecta cerca de ti; `/gsq diag` lo muestra en `keys … contested=` y `cert … disputed=`. **Los que van con la 1.0.x o la 1.1 no reciben nada**: pídeles que actualicen.
 
-**Un miembro perdió sus SavedVariables (o reinstaló).** Su clave se pierde y se crea una nueva. No hay que hacer nada: la clave oída de su dueño en persona siempre gana, así que se acepta cuando se conecta. Si la clave de alguien se queda atascada, `/gsq trust reset <nombre>` la olvida y se vuelve a aprender en persona.
+**Un miembro perdió sus SavedVariables (o reinstaló).** Su clave se pierde y se crea una nueva. No hay que hacer nada: la clave oída de su dueño en persona siempre gana, así que se acepta cuando se conecta. Si la clave de alguien se queda atascada, `/gsq trust reset <Nombre Apellido>` la olvida y se vuelve a aprender en persona (con dos «Kas» en la guild, el apellido es obligatorio).
 
 **Los datos parecen perderse al reiniciar.** Se ha visto que el cliente de Forever a veces no relee las SavedVariables. Haz `/gsq export` después de cambiar ajustes o cerrar bandas y guarda el texto; los demás los recuperan de cualquier GM/oficial conectado.
 

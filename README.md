@@ -49,7 +49,7 @@ Diagrams (PNG; interactive HTML and index in [docs/en/diagrams](docs/en/diagrams
 | `/gsq ui` | Which templates/atlases this client has (fallback report) |
 | `/gsq debug` | Counters + verbose log |
 | `/gsq trust newkey` | Delete your signing key and make a new one (asks for confirmation) |
-| `/gsq trust reset <name>` | Forget a member's key; it is learned again from them in person |
+| `/gsq trust reset <Name Surname>` | Forget a member's key; it is learned again from them in person |
 
 ## GM settings
 Only the GM (rank 0) writes settings; everyone else sees them read-only. Sections: **Squads**, **Compet.** (on/off, weight 0–3 and cap per category, weekly goal), **Season**, **Integr.** (Overlord), **Moderation**, **Celebrate**, **Content** (final boss per dungeon/raid), **Raids** (RL list, permissions, useful classes) and **Achiev.** (GM only: catalog of achievements and races, custom achievements, granted badges). Details: [GM-GUIDE.md](docs/en/GM-GUIDE.md).
@@ -66,6 +66,7 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
 ## FAQ
 - **Does the whole guild need the addon?** No, but only players with it can join a squad and score. Levels of members without it are seen in the guild roster and count for the level races.
 - **Can I be in two squads?** No, one per character. Your alts can be in others, and an alt in another guild keeps its data apart.
+- **Two guildmates with the same first name?** Since 2.0 every character is «Name Surname» (unique in the WoW Forever region, without the realm), so "Kas Pitas" and "Kas Mora" are two people. When you type a name (`/gsq trust reset`, RL list, grants), add the surname if the first name is repeated.
 - **Why does my score differ from a guildmate's?** Each client computes the ranking from the events it has; once you both have the same data, it matches.
 - **Can an officer change the settings or the achievement catalog?** No: only the GM (rank 0). Officers moderate squads and relay data.
 - **Does it cost anything?** No. Free, MIT, no ads, no donations.
@@ -73,7 +74,7 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
 ## Troubleshooting
 - `/gsq diag` → Ctrl+A, Ctrl+C and paste it in the issue.
 - Data file: `WTF\Account\<ACCOUNT>\SavedVariables\GuildSquads.lua` (in the Forever client folder).
-- Grey entries are unverified: no verified signature from their author yet. They count once you hear the author in person, or once two players you heard in person certify the author's key. 1.2 does not talk to 1.0.x or 1.1. See [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md).
+- Grey entries are unverified: no verified signature from their author yet. They count once you hear the author in person, or once two players you heard in person certify the author's key. 2.0 does not talk to 1.x (1.0.x, 1.1, 1.2.x). See [PLAYER-GUIDE.md](docs/en/PLAYER-GUIDE.md).
 
 ## Known limitations
 - Every record is signed (Ed25519) by its author's key; a relay without a valid signature is never applied, so a modified client cannot forge, alter or delete the data of someone whose key you hold; with alts, only in the cases of the limits below. Keys are learned from their owner in person (trust on first use), or from the signed certificates of 2 players you heard in person. Limits of that model:
@@ -84,7 +85,9 @@ Only the GM (rank 0) writes settings; everyone else sees them read-only. Section
   - A key certified by two alts also lets them replace that player's squad when you only have a copy heard live without their key; it ends, like the rest, when you hear the player in person.
   - Under a flood from modified clients the addon stays usable but slower: certificate checks go before key rotations and manifests in the verify queue, forged unsigned copies of your records make your client sign up to 5 denials per hour (each one is a record of yours for 30 days), a denial that only matches a record's base is not retried when the author's manifest arrives later, a name asking to catch up gets a large answer at most once every 25 seconds and 20 times per hour, and answers to hellos re-whisper certificates up to 10 times per minute.
   - Losing SavedVariables loses the key: a new one is made and others accept it when they hear you in person; until then your data looks unverified to them.
-- 1.2 does not talk to 1.0.x or 1.1: the whole guild has to update.
+- 2.0 does not talk to 1.x (1.0.x, 1.1, 1.2.x): the whole guild has to update. When you update, what others signed with 1.x is removed from your client; it comes back when its author updates and signs it again.
+- Some old local data with 1.x names inside does not move to the «Name Surname» identity (member snapshots of past wipes, achievements already earned, known levels, closed races): it stays out of date, without errors.
+- Not measured in the game yet: inviting or whispering «Name Surname» on another connected realm. If the server does not find them, the notice is hidden and the message goes over the guild channel.
 - Each player signs only their 180 most recent records; older ones show as "unverified" (signed manifest pages come in 1.2.1).
 - Catching up: 95 % arrives in about 4 minutes; the last few records can take longer (1.2.1).
 - A full resync of a large guild takes minutes by design (throttle).

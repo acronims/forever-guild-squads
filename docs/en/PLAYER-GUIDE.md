@@ -46,7 +46,7 @@ Guide for guild masters, officers and raid leaders: [GM-GUIDE.md](GM-GUIDE.md).
 | `/gsq diag` | Copyable diagnostics report (also saved in SavedVariables). |
 | `/gsq minimap` | Shows the minimap button again. |
 | `/gsq trust newkey` | Deletes your signing key and makes a new one (it asks first). Only if you think someone copied your SavedVariables. |
-| `/gsq trust reset <name>` | Forgets a guildmate's key; it is learned again when you hear them in person. |
+| `/gsq trust reset <Name Surname>` | Forgets a guildmate's key; it is learned again when you hear them in person. The first name alone is enough when only one guildmate has it. |
 | `/gsq news` · `/gsq welcome` | What's new · welcome guide. |
 
 ## How scoring works, in plain words
@@ -73,7 +73,9 @@ Guide for guild masters, officers and raid leaders: [GM-GUIDE.md](GM-GUIDE.md).
 
 **My data is gone after logging in again.** The Forever client has been seen writing SavedVariables on exit but not reading them back. What to do: run `/gsq export` now and then and keep the text; if you lose data, `/gsq import`. Also, on login you get it back from the guild if a GM or officer is online (`/gsq sync`).
 
-**Nothing syncs / I don't see other squads.** Since 1.2 any guildmate with the addon sends you what you are missing; catching up runs in the background and the chat says "Guild Squads: synced (N records, M pending verification)" when it is done. In big guilds it takes a few minutes (on purpose, so the channel is not flooded). Grey entries are unverified: they have no verified signature from their author yet, and count once you hear the author in person or two players you heard in person certify the author's key (the tooltip says which). If the chat says "N guild members use an old version", those players (1.0.x or 1.1) neither send you nor receive anything until they update. Run `/gsq sync` to ask again.
+**Nothing syncs / I don't see other squads.** Since 1.2 any guildmate with the addon sends you what you are missing; catching up runs in the background and the chat says "Guild Squads: synced (N records, M pending verification)" when it is done. In big guilds it takes a few minutes (on purpose, so the channel is not flooded). Grey entries are unverified: they have no verified signature from their author yet, and count once you hear the author in person or two players you heard in person certify the author's key (the tooltip says which). If the chat says "N members use a version older than 2.0", those players (1.x) neither send you nor receive anything until they update. Run `/gsq sync` to ask again.
+
+**After updating to 2.0 I see fewer profiles and squads.** 2.0 makes every character «Name Surname» and signs everything again with a new key. What others signed with 1.x is removed from your client and comes back when its author updates to 2.0. Your own data moves by itself; your alts' data waits until you log in with each alt.
 
 **Nothing is announced in guild chat.** Guild chat celebrations are **off by default**; the GM turns them on in Settings > Celebrate (*Announce in guild chat*, *What is announced*: 1st place / Top 3 / Any entry, and *Also announce squad achievements*). The in-addon notice always shows. The chat message uses the language of the client that announces it, which may not be yours.
 
@@ -98,7 +100,9 @@ It opens a window with the report to copy (Ctrl+A, Ctrl+C); the same copy is kep
 - `raid apis <API>=yes|no … rosters=<N>`: which group/raid APIs the client has and how many raid rosters exist.
 - `comm sent= recv= failed= pending= badProto= tooBig=`: addon messages sent, received, failed and queued, old-version messages dropped, and messages too big to send (over 64 parts).
 - `sync bad= relayRefused= future= errors= quarantine= guild=`: refused records (malformed, unauthorised relay, future date), quarantined ones, and the loaded guild.
-- `[roster] me=<key> found=yes|no entries=<N> surnames=<N>`: whether your character was found in the guild roster (character surnames are supported).
+- `id mode=forever|realm me=<Name Surname> surname=yes|no`: how the addon names characters (WoW Forever: «Name Surname», unique in the region, without the realm) and your own identity.
+- `[roster] me=<identity> found=yes|no entries=<N> surnames=<N>`: whether your character was found in the guild roster.
+- `proto v=3 old=<N>`: the protocol (2.0 = 3) and how many members it heard on 1.x.
 - `keys own= strong= weak= pend= contested= suspects= alerts=`: whether you have your own key, keys heard in person (strong), keys known only through others, disputed names, relayers that brought a losing key, and the last key alerts.
 - `sig verified= pending= rejected= …`: signed manifests verified, waiting in the queue (one per frame, paused in combat) and rejected.
 - `cert held= cert= disputed=`: certificates held, strangers' keys certified by 2 players you heard in person, and disputed ones.

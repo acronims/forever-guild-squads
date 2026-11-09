@@ -49,7 +49,7 @@ Diagramas (PNG; HTML interactivo e índice en [docs/es/diagrams](docs/es/diagram
 | `/gsq ui` | Qué plantillas/atlas tiene este cliente (informe de alternativas) |
 | `/gsq debug` | Contadores + log detallado |
 | `/gsq trust newkey` | Borra tu clave de firma y crea una nueva (pide confirmación) |
-| `/gsq trust reset <nombre>` | Olvida la clave de un miembro; se vuelve a aprender de él en persona |
+| `/gsq trust reset <Nombre Apellido>` | Olvida la clave de un miembro; se vuelve a aprender de él en persona |
 
 ## Ajustes del GM
 Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secciones: **Squads** (rango mínimo para crear, aprobación por oficiales, suplentes 0–2, rangos de oficial, días hasta inactivo, máximo de squads), **Compet.** (activar, peso 0–3 y tope por categoría, objetivo semanal), **Temporada**, **Integrac.** (Overlord), **Moderación** (palabras prohibidas, disolver/restablecer squads, exportar/importar/sync), **Celebrac.**, **Contenido** (jefe final de cada mazmorra/banda), **Bandas** (lista de RL, permisos, clases útiles) y **Logros** (solo la ve el GM: catálogo de logros y carreras, logros propios, insignias otorgadas). Detalle: [GM-GUIDE.md](docs/es/GM-GUIDE.md).
@@ -66,6 +66,7 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
 ## Preguntas frecuentes
 - **¿Necesita el addon toda la guild?** No, pero solo quien lo tiene puede estar en un squad y puntuar. Los niveles de quien no lo tiene se ven en el roster y cuentan para las carreras de nivel.
 - **¿Puedo estar en dos squads?** No, uno por personaje. Tus alts pueden estar en otros, y un alt en otra guild guarda sus datos aparte.
+- **¿Y dos compañeros con el mismo nombre de pila?** Desde la 2.0 cada personaje es «Nombre Apellido» (único en la región de WoW Forever, sin reino), así que «Kas Pitas» y «Kas Mora» son dos personas. Cuando teclees un nombre (`/gsq trust reset`, lista de RL, concesiones), añade el apellido si el nombre de pila se repite.
 - **¿Por qué veo una puntuación distinta a la de un compañero?** Cada cliente calcula el ranking con los eventos que tiene; en cuanto os llegan los mismos datos, coincide.
 - **¿Puede un oficial cambiar los ajustes o el catálogo de logros?** No: solo el GM (rango 0). Los oficiales moderan squads y reenvían datos.
 - **¿Cuesta algo?** No. Gratis, MIT, sin anuncios ni donaciones.
@@ -73,7 +74,7 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
 ## Problemas
 - `/gsq diag` → Ctrl+A, Ctrl+C y pégalo en la incidencia.
 - Fichero de datos: `WTF\Account\<CUENTA>\SavedVariables\GuildSquads.lua` (en la carpeta del cliente Forever).
-- Lo gris está sin verificar: aún no tiene una firma verificada de su autor. Cuenta cuando oyes al autor en persona, o cuando dos jugadores que has oído en persona certifican la clave del autor. La 1.2 no se habla con la 1.0.x ni con la 1.1. Más en [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md).
+- Lo gris está sin verificar: aún no tiene una firma verificada de su autor. Cuenta cuando oyes al autor en persona, o cuando dos jugadores que has oído en persona certifican la clave del autor. La 2.0 no se habla con la 1.x (1.0.x, 1.1 y 1.2.x). Más en [PLAYER-GUIDE.md](docs/es/PLAYER-GUIDE.md).
 
 ## Limitaciones conocidas
 - Cada registro va firmado (Ed25519) con la clave de su autor; un reenvío sin firma válida nunca se aplica, así que un cliente modificado no puede falsificar, alterar ni borrar los datos de alguien cuya clave tienes bien; con alts, solo en los casos de los límites de abajo. Las claves se aprenden de su dueño en persona (confianza en el primer uso), o de los certificados firmados de 2 jugadores que has oído en persona. Límites de ese modelo:
@@ -84,7 +85,9 @@ Solo el GM (rango 0) escribe los ajustes; el resto los ve en solo lectura. Secci
   - Una clave certificada por dos alts también les deja sustituir el squad de ese jugador cuando solo tienes una copia oída en directo sin su clave; se acaba, como lo demás, cuando oyes al jugador en persona.
   - Ante una inundación de clientes modificados el addon sigue funcionando, pero más lento: en la cola de verificación los certificados van antes que las rotaciones de clave y los manifiestos, las copias falsas sin firma de tus registros hacen que tu cliente firme hasta 5 desmentidos por hora (cada uno es un registro tuyo durante 30 días), un desmentido que solo coincide con la base de un registro no se reintenta cuando llega después el manifiesto del autor, a un nombre que pide ponerse al día se le da una respuesta grande como mucho una vez cada 25 segundos y 20 veces por hora, y las respuestas a hellos vuelven a susurrar certificados hasta 10 veces por minuto.
   - Si pierdes las SavedVariables, pierdes la clave: se crea una nueva y los demás la aceptan cuando te oyen en persona; hasta entonces ven tus datos sin verificar.
-- La 1.2 no se habla con la 1.0.x ni con la 1.1: tiene que actualizar toda la guild.
+- La 2.0 no se habla con la 1.x (1.0.x, 1.1 y 1.2.x): tiene que actualizar toda la guild. Al actualizar, lo que otros firmaron con la 1.x se borra de tu cliente; vuelve cuando su autor actualiza y lo firma otra vez.
+- Algunos datos locales antiguos que llevan nombres de la 1.x no pasan a la identidad «Nombre Apellido» (instantáneas de miembros de wipes pasados, logros ya ganados, niveles conocidos y carreras cerradas): se quedan desfasados, sin errores.
+- Sin medir todavía en el juego: invitar o susurrar a «Nombre Apellido» de otro reino conectado. Si el servidor no lo encuentra, el aviso se oculta y el mensaje va por el canal de la guild.
 - Cada jugador firma solo sus 180 registros más recientes; los más viejos se ven «sin verificar» (los manifiestos por páginas firmadas llegan en la 1.2.1).
 - Ponerse al día: el 95 % llega en unos 4 minutos; los últimos registros pueden tardar más (1.2.1).
 - Una resincronización completa de una guild grande tarda minutos (throttle, por diseño).

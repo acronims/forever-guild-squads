@@ -19,7 +19,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 
 1. Install the addon and open `/gsq` > **Settings**.
 2. Go through the 9 sections (below; **Achievements** is shown to you only). Change what you want and press **Save and share**. Leaving the tab with unsaved changes asks first.
-3. Ask the whole guild to install **1.2**: it does not talk to 1.0.x or 1.1, and each player sees in chat how many guildmates are still on an old version (see *Troubleshooting*).
+3. Ask the whole guild to install **2.0**: it does not talk to 1.x (1.0.x, 1.1, 1.2.x), and each player sees in chat how many guildmates are still on a version older than 2.0 (see *Troubleshooting*). When you update, what others signed with 1.x (your settings and catalog included) is removed from the clients on 2.0 and comes back when its author updates: log in with 2.0 so your settings are signed again.
 4. Announce the addon in the guild. The in-addon welcome guides them (profile → squad → ranking).
 
 ## Settings, section by section
@@ -38,7 +38,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 
 **Content.** Boss catalog learned automatically (each boss is stored the first time it dies with the addon). Mark the **final boss** of each dungeon or raid: without it the "complete" races do not open.
 
-**Raids.** RL list (one guild character per line), *Officers may edit other people's rosters*, and the useful-classes table (`key:CLASS+CLASS:min size`) behind the composition warnings. Empty = defaults. The GM and officers can always lead.
+**Raids.** RL list (one guild character per line, as «Name Surname»; the first name alone is enough when only one member has it), *Officers may edit other people's rosters*, and the useful-classes table (`key:CLASS+CLASS:min size`) behind the composition warnings. Empty = defaults. The GM and officers can always lead.
 
 **Achievements** (GM only). Decide which recognitions your guild uses. **Every change is shared at once** (no *Save and share*) and every client checks again that the GM signed it: officers cannot change it.
 - **Group** (Level, Class, Race, Dungeons, Raids, PvP, Professions, Reputation, Squad, Character) and one row per achievement or race: checkbox (enabled), name, state (*open n/N*, *closed*, *pending data* or *badge*), **Top N** and **Rename**.
@@ -47,7 +47,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 - **Top N**: **open** races only, from 1 to the family maximum (100 for the overall level races, 10 for the rest, 3 for "full content") and never below the entries it already has. A closed race cannot change (the button says why).
 - **Rename**: up to 32 characters, no colours or links. The internal id never changes; empty = default name.
 - **New achievement** (50 at most): 1) what it measures — level (optionally of one class or race), a catalog boss in a group (≥2 witnesses), squad battleground wins (overall or on one map), a profession skill, Exalted reputation, or a **badge you grant**; 2) which one; 3) threshold and Top size; 4) name. It is computed from the same data and witnesses as the built-in ones. What it measures cannot change once created (its name, size and on/off can).
-- **Grant**: pick the badge, the character (or squad, for squad badges) and a **mandatory reason**. The tooltip shows *Granted by the GM: reason*. It **never puts anyone in a Top** (Tops are ordered by who got there first). *Withdraw* removes it and keeps it in the history.
+- **Grant**: pick the badge, the character («Name Surname»; or squad, for squad badges) and a **mandatory reason**. The tooltip shows *Granted by the GM: reason*. It **never puts anyone in a Top** (Tops are ordered by who got there first). *Withdraw* removes it and keeps it in the history.
 - Compatibility: a client that does not know a record kind ignores it without error (it keeps the built-in catalog).
 
 ## Moderating the Hall of Fame
@@ -62,7 +62,7 @@ The whole guild sees the Settings read-only. Each client checks against the guil
 2. **Build the roster** with "+" in the squads and players panel (filter by role, online, name or class; a number = minimum level). A squad goes whole into the first group with room; if it does not fit, the starters that fit go in and you get a warning; its bench players take free slots or the bench list (max 10). Nobody appears twice.
 3. Check the **composition bar** and warnings ("missing 1 T", "1 D too many", "no curse removal"). **Save**.
 4. **Publish**: listed players can now answer Yes / Maybe / No / Bench. Anyone in the guild may answer as a volunteer. You see the count and the comments.
-5. At raid time: **Invite confirmed**. One batch per click, only out of combat (5 into a party; then it converts to a raid if the client allows it and arranges subgroups if you are leader or assistant). When they accept, **click again**.
+5. At raid time: **Invite confirmed**. One batch per click, only out of combat (5 into a party; then it converts to a raid if the client allows it and arranges subgroups if you are leader or assistant). When they accept, **click again**. Invites go to «Name Surname»; someone missing from the guild roster is not invited and the addon says how many were left out.
 6. **Close** when done: it saves attendance (who was in the raid from 30 min before to 3 h after). If you don't close it, it closes by itself 3 h later **if your client (or the GM's) is online**.
 7. **Next week** copies the raid to +7 days at the same realm hour. **Export** gives the text for Discord. **Cancel raid** tells everyone listed.
 
@@ -84,7 +84,7 @@ A player's attendance % counts the last 8 raids with recorded attendance where t
 
 **Something stays grey (unverified).** Since 1.2 every record is signed by its author and every player with the addon relays it. A copy counts once its author's key is known: heard from the author in person, or certified by two players you heard in person (squads and settings need the key of their captain or GM; a denial needs the author's own). With very few players online, a stranger's data can stay grey until you meet them online. If a key is *disputed* (two players list different keys for the same name), nothing new from it is applied until that player logs in near you; `/gsq diag` shows it in `keys … contested=` and `cert … disputed=`. **Players on 1.0.x or 1.1 receive nothing**: ask them to update.
 
-**A member lost their SavedVariables (or reinstalled).** Their key is gone and a new one is made. Nothing to do: the key heard from its owner in person always wins, so it is accepted when they log in. If someone's key stays stuck, `/gsq trust reset <name>` forgets it and it is learned again in person.
+**A member lost their SavedVariables (or reinstalled).** Their key is gone and a new one is made. Nothing to do: the key heard from its owner in person always wins, so it is accepted when they log in. If someone's key stays stuck, `/gsq trust reset <Name Surname>` forgets it and it is learned again in person (with two "Kas" in the guild, the surname is required).
 
 **Data seems lost after a restart.** The Forever client has been seen not reading SavedVariables back. Run `/gsq export` after changing settings or closing raids and keep the text; the others get it back from any online GM/officer.
 

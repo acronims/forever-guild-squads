@@ -46,7 +46,7 @@ Guía del GM, los oficiales y los líderes de banda: [GM-GUIDE.md](GM-GUIDE.md).
 | `/gsq diag` | Informe de diagnóstico para copiar (también se guarda en SavedVariables). |
 | `/gsq minimap` | Vuelve a mostrar el botón del minimapa. |
 | `/gsq trust newkey` | Borra tu clave de firma y crea una nueva (pregunta antes). Solo si crees que alguien ha copiado tus SavedVariables. |
-| `/gsq trust reset <nombre>` | Olvida la clave de un compañero; se vuelve a aprender cuando lo oyes en persona. |
+| `/gsq trust reset <Nombre Apellido>` | Olvida la clave de un compañero; se vuelve a aprender cuando lo oyes en persona. Basta el nombre de pila si solo un compañero se llama así. |
 | `/gsq novedades` · `/gsq bienvenida` | Novedades · guía de bienvenida (también `/gsq news` · `/gsq welcome`). |
 
 ## Cómo se puntúa, en pocas palabras
@@ -73,7 +73,9 @@ Guía del GM, los oficiales y los líderes de banda: [GM-GUIDE.md](GM-GUIDE.md).
 
 **Al volver a entrar no tengo mis datos.** Se ha visto que el cliente de Forever guarda las SavedVariables al salir pero a veces no las vuelve a leer. Qué hacer: haz `/gsq export` de vez en cuando y guarda el texto; si pierdes datos, `/gsq import`. Además, al conectar, lo recuperas de la guild si hay un GM u oficial conectado (`/gsq sync`).
 
-**No me llega nada / no veo los squads de otros.** Desde la 1.2 cualquier compañero con el addon te manda lo que te falta; ponerse al día va en segundo plano y el chat dice «Guild Squads: sincronizado (N registros, M pendientes de verificar)» al acabar. En guilds grandes tarda unos minutos (a propósito, para no saturar el canal). Lo gris está sin verificar: aún no tiene una firma verificada de su autor, y cuenta cuando oyes al autor en persona o cuando dos jugadores que has oído en persona certifican la clave del autor (el tooltip dice cuál falta). Si el chat dice «N miembros de la hermandad usan una versión antigua», esos jugadores (1.0.x o 1.1) ni te mandan ni reciben nada hasta que actualicen. Haz `/gsq sync` para volver a pedirlo.
+**No me llega nada / no veo los squads de otros.** Desde la 1.2 cualquier compañero con el addon te manda lo que te falta; ponerse al día va en segundo plano y el chat dice «Guild Squads: sincronizado (N registros, M pendientes de verificar)» al acabar. En guilds grandes tarda unos minutos (a propósito, para no saturar el canal). Lo gris está sin verificar: aún no tiene una firma verificada de su autor, y cuenta cuando oyes al autor en persona o cuando dos jugadores que has oído en persona certifican la clave del autor (el tooltip dice cuál falta). Si el chat dice «N miembros usan una versión anterior a la 2.0», esos jugadores (1.x) ni te mandan ni reciben nada hasta que actualicen. Haz `/gsq sync` para volver a pedirlo.
+
+**Al actualizar a la 2.0 veo menos perfiles y squads.** La 2.0 hace que cada personaje sea «Nombre Apellido» y vuelve a firmarlo todo con una clave nueva. Lo que otros firmaron con la 1.x se borra de tu cliente y vuelve cuando su autor actualiza a la 2.0. Lo tuyo pasa solo; lo de tus alts espera hasta que entras con cada alt.
 
 **No se anuncia nada en el chat de la guild.** Las celebraciones en el chat de la guild están **desactivadas por defecto**; las activa el GM en Ajustes > Celebrac. (*Anunciar en el chat de la guild*, *Qué se anuncia*: Puesto 1 / Top 3 / Cualquiera, y *Anunciar también los logros de squad*). El aviso dentro del addon sale siempre. El mensaje del chat va en el idioma del cliente que lo anuncia, que puede no ser el tuyo.
 
@@ -98,7 +100,9 @@ Abre una ventana con el informe para copiar (Ctrl+A, Ctrl+C); la misma copia que
 - `raid apis <API>=yes|no … rosters=<N>`: qué APIs de grupo y banda existen en el cliente y cuántos rosters de banda hay.
 - `comm sent= recv= failed= pending= badProto= tooBig=`: mensajes de addon enviados, recibidos, fallidos y en cola, mensajes de versión vieja descartados, y mensajes demasiado grandes para enviarse (más de 64 partes).
 - `sync bad= relayRefused= future= errors= quarantine= guild=`: registros rechazados (mal formados, reenvío no autorizado, fecha futura), en cuarentena, y la guild cargada.
-- `[roster] me=<clave> found=yes|no entries=<N> surnames=<N>`: si tu personaje aparece en el roster de la guild (se admiten los apellidos de personaje).
+- `id mode=forever|realm me=<Nombre Apellido> surname=yes|no`: cómo nombra el addon a los personajes (WoW Forever: «Nombre Apellido», único en la región, sin reino) y tu propia identidad.
+- `[roster] me=<identidad> found=yes|no entries=<N> surnames=<N>`: si tu personaje aparece en el roster de la guild.
+- `proto v=3 old=<N>`: el protocolo (la 2.0 = 3) y cuántos miembros ha oído con la 1.x.
 - `keys own= strong= weak= pend= contested= suspects= alerts=`: si tienes clave propia, claves oídas en persona (fuertes), claves conocidas solo por otros, nombres en disputa, reenviadores que trajeron una clave que perdió, y los últimos avisos de claves.
 - `sig verified= pending= rejected= …`: manifiestos firmados verificados, en cola (uno por frame, en pausa en combate) y rechazados.
 - `cert held= cert= disputed=`: certificados que tienes, claves de desconocidos certificadas por 2 jugadores que has oído en persona, y las disputadas.
