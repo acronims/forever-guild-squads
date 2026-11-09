@@ -252,5 +252,40 @@ if (onlyEn.length) fail(`LOCALE keys in enUS missing in esES (${onlyEn.length}):
 if (onlyEs.length) fail(`LOCALE keys in esES missing in enUS (${onlyEs.length}): ${onlyEs.join(', ')}`);
 console.log(`LOCALE: enUS ${en.size} keys, esES ${es.size} keys`);
 
+// ---------- 5: identity (2.0, docs/SPEC-v2.0-identidad.md AC9) ----------
+// In WoW Forever a character is «Name Surname»: names read from the client go through ns.id / ns.idFromUnit
+// (Core/Identity.lua and the identity part of GuildSquads.lua). Anywhere else, a reference to the unit name APIs
+// fails unless its line carries `-- id-ok` (with the reason): a call (`UnitName("party1")`), the function passed by
+// value (`pcall(UnitName, "party" .. i)`, the 1.2.x witness bug), `_G.UnitName`, `_G["UnitName"]`, `ns.apiFn("UnitName")`.
+const ID_APIS = new Set(['UnitName', 'UnitNameUnmodified', 'UnitFullName', 'GetUnitName']);
+const ID_FILES = new Set(['Core/Identity.lua', 'GuildSquads.lua']);
+let idRefs = 0, idMarked = 0;
+for (const [f, ast] of parsed) {
+  if (ID_FILES.has(rel(f))) continue;
+  const lines = fs.readFileSync(f, 'utf8').split('\n');
+  const str = (x) => x && x.type === 'StringLiteral' && ID_APIS.has(x.raw.slice(1, -1)) ? x.raw.slice(1, -1) : null;
+  const hit = (name, n) => {
+    idRefs++;
+    const line = n.loc.start.line;
+    if (/--\s*id-ok\b/.test(lines[line - 1] || '')) { idMarked++; return; }
+    fail(`IDENTITY ${name} outside Core/Identity.lua and GuildSquads.lua without "-- id-ok": ${rel(f)}:${line} (use ns.idFromUnit / ns.id)`);
+  };
+  const v = (n, parent, key) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { n.forEach((c) => v(c, parent, key)); return; }
+    if (n.type === 'Identifier' && !n.isLocal && ID_APIS.has(n.name)
+        && !(parent && parent.type === 'MemberExpression' && key === 'identifier')
+        && !(parent && parent.type === 'TableKeyString' && key === 'key')) hit(n.name, n);
+    if (n.type === 'MemberExpression' && n.base.type === 'Identifier' && n.base.name === '_G' && ID_APIS.has(n.identifier.name)) hit(n.identifier.name, n);
+    if (n.type === 'IndexExpression' && n.base.type === 'Identifier' && n.base.name === '_G' && str(n.index)) hit(str(n.index), n);
+    if (n.type === 'CallExpression' && n.base.type === 'MemberExpression' && n.base.identifier.name === 'apiFn') {
+      for (const a of n.arguments) if (str(a)) hit(str(a), n);
+    }
+    for (const k of Object.keys(n)) if (k !== 'loc' && k !== 'range') v(n[k], n, k);
+  };
+  v(ast.body, null, null);
+}
+console.log(`IDENTITY: ${idRefs} reference(s) to ${[...ID_APIS].join('/')} outside ${[...ID_FILES].join(' and ')}, ${idMarked} marked -- id-ok`);
+
 console.log(failures === 0 ? 'GATES: OK' : `GATES: ${failures} failure(s)`);
 process.exit(failures === 0 ? 0 : 1);
