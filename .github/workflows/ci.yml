@@ -55,8 +55,9 @@ jobs:
           - "S9 --seed 8303 --s9min 15"
           - "S9 --seed 9303 --s9min 15"
           - "S19 --seed 7303"
-          # 2.0 (SPEC-v2.0-identidad AC2-AC4): WoW Forever identity «Name Surname»; S23 (feat/2.0-proto) joins this group
-          - "S20 S21 S22 --seed 7303"
+          # 2.0 (SPEC-v2.0-identidad AC2-AC5, AC12): WoW Forever identity «Name Surname»; S23 = the 1.2.2 SavedVariables
+          # migration (tests/fixtures/sv-1.2.2.lua, no git history needed)
+          - "S20 S21 S22 S23 --seed 7303"
           # the 1.2.x world (RegionalUniqueNamesEnabled absent): the realm mode keeps working
           - "S19 --seed 7303 --realm"
     steps:
