@@ -9,7 +9,7 @@ ns.Model = M
 local P = ns.Permissions
 local S = ns.Serialize
 
-M.PROTO = 2
+M.PROTO = 3   -- 2.0 (docs/SPEC-v2.0-identidad.md §4): names are «Name Surname» identities; the 1.x is another network
 M.SQUAD_SIZE = 5
 M.ROLES = { "TANK", "HEALER", "DAMAGER" }
 M.GOALS = { "leveling", "dungeons", "farm", "worldpvp", "bg", "raid" }
@@ -27,9 +27,9 @@ M.SCHEMA = {
     xferTo = { "s", 120 }, -- "squadId>NewCaptain" signed by the captain who hands the squad over
   },
   squad = {
-    name = { "s", 24 }, captain = { "s", 48 }, members = { "L", 5, 48 }, bench = { "L", 2, 48 },
+    name = { "s", 24 }, captain = { "s", 64 }, members = { "L", 5, 64 }, bench = { "L", 2, 64 },
     icon = { "n" }, color = { "n" }, border = { "n" }, motto = { "s", 60 }, tags = { "L", 6, 16 },
-    open = { "b" }, approved = { "b" }, disbanded = { "b" }, xferFrom = { "s", 48 },
+    open = { "b" }, approved = { "b" }, disbanded = { "b" }, xferFrom = { "s", 64 },
     ct = { "n" },          -- creation ts, carried by every edit (deterministic name/limit races)
     nts = { "n" },         -- ts since the squad has its current name (absent = ct)
   },
@@ -53,7 +53,7 @@ M.SCHEMA = {
   boss = { inst = { "s", 64 }, enc = { "n" }, name = { "s", 64 }, kind = { "s", 8 }, final = { "b" } },
   -- durable rejection. id = sid .. "|" .. name .. "|" .. kind ; kind "req" (captain rejects a request)
   -- or "inv" (the invited player declines). at = the reqAt (req) the rejection refers to; on = false withdraws it.
-  reject = { sid = { "s", 64 }, name = { "s", 48 }, kind = { "s", 3 }, at = { "n" }, on = { "b" } },
+  reject = { sid = { "s", 64 }, name = { "s", 64 }, kind = { "s", 3 }, at = { "n" }, on = { "b" } },
 }
 
 -- allowed values (anything else is normalised on receipt)
@@ -795,23 +795,347 @@ function M.charName(raw, realm) return ns.Identity.realmKey(raw, realm) end
 -- M.whisperTarget: the 1.2.2 target "Name Surname" (any realm) from a realm key and the roster surname; alt = with
 -- "-Realm". In WoW Forever (mode forever) the target is the identity itself: ns.whisperTarget, never this.
 function M.whisperTarget(key, surname, myRealm, alt) return ns.Identity.realmWhisper(key, surname, myRealm, alt) end
--- 1.2.2: the 1.2.0 keyed trust, manifests and certificates under "Name Surname-Realm" (the roster form): they never
--- match a character again but inflate `keys strong=` and our own certificate. A character name has no space, so
--- every saved name with one is such a leftover. g = a guild partition of GuildSquadsDB; returns how many went.
-function M.sweepSurnames(g)
-  if type(g) ~= "table" then return 0 end
-  local n = 0
+-------------------------------------------------------------------------------
+-- 2.0 (docs/SPEC-v2.0-identidad.md §5, BRO D1 = drop): the SavedVariables of the 1.x, where a character was
+-- "Name-Realm" (and "Name Surname-Realm" in the leftovers of the 1.2.0), move to the WoW Forever identity «Name Surname».
+-- It replaces M.sweepSurnames of the 1.2.2. Only in forever mode (realm mode keeps "Name-Realm": nothing to do). An
+-- identity never holds a "-" in forever mode, so both steps only touch names in the old form and give the same bytes
+-- when they run again, with or without their marks (AC5 f).
+--   step 1, guild partition g (g.idv ~= 2; the roster is read: ctx.id remaps through it):
+--     1. trust (keys, pend, contested, suspects, alerts), manifests (sig.man, sig.own), certificates (cert.crt,
+--        cert.own) and GuildSquadsDB.prevOwnKeys under an old name go: they are learned again in person on PROTO 3.
+--     2. signed records of someone else in the old form go (D1), and their unverified copies (p2p.pend): they come
+--        back when their author updates and signs them again.
+--     3. records of a character of this account (ownKeys, prevOwnKeys, idOld, the one logging in) get their author
+--        remapped and wait in g.resign with resign = true: never applied, sent nor relayed until that character logs
+--        in (step 2). Unknown or ambiguous in the roster: they go.
+--     4. names inside local unsigned data (progress events who / pres, race observations who / by / pres, pend):
+--        remapped when the roster gives exactly one identity, otherwise out of the list (or the entry goes, when the
+--        name is its subject); two «Kas» on the realm make «Kas-Realm» ambiguous there, even if one is me. The
+--        per-character state of this account (hkState, pending, hkBase, sent) maps my old key to me.
+--     5. g.idv = 2, g.idMigratedAt = the first ctx.now.
+--   step 2, character (GuildSquadsDB.idv[me] ~= 2, or records of mine waiting in g.resign; after step 1):
+--     1. ownKeys[old] goes (ns.myPk makes ownKeys[me]); idOld[old] = me (for the other partitions of this account).
+--     2. my records in g.resign: a = me, the ids that are my name re-keyed (profile, presence) or rebuilt (reject, rsvp,
+--        grant), the names inside remapped (a member without one identity leaves the list; a record whose own name
+--        field has none goes), sq + 1 and ts = now (my version wins any copy), resign removed, back to g.records.
+--        Repudiations deny 1.x versions: they go. g.sig.fresh = me: Sync.OwnManifest signs n = 1 with the new key.
+--     3. GuildSquadsDB.idv[me] = 2.
+-- ctx = { mode, id = fn(old) -> identity | nil (ns.id), me = my identity, oldMe = my 1.x key ("Kas-Realm"), now =
+--   server time, dry = true (count only: a copy is migrated), eventId / obsId / rsvpId / grantId = the id builders of
+--   Progress / Races / Roster / Catalog, note = fn(rec) (the ledger of my versions) }.
+-- Returns { swept, dropped, resign, remapped, removed, resigned, guild = step 1 ran, char = step 2 ran }.
+M.IDV = 2
+local function isOld(n) return type(n) == "string" and string.find(n, "-", 1, true) ~= nil end
+M.isOldName = isOld
+local function sortedKeys(t)
+  local ks = {}
+  for k in pairs(t) do ks[#ks + 1] = k end
+  table.sort(ks, function(a, b) return tostring(a) < tostring(b) end)
+  return ks
+end
+local function deepCopy(v, seen)
+  if type(v) ~= "table" then return v end
+  if seen[v] then return seen[v] end
+  local out = {}
+  seen[v] = out
+  for k, x in pairs(v) do out[deepCopy(k, seen)] = deepCopy(x, seen) end
+  return out
+end
+-- old name -> identity | nil (identities and other values pass unchanged).
+--   strict: ctx.id alone (the roster index): «Kas-Realm» with two «Kas» on the realm is nil, even when one is me (in
+--           data of others nobody can tell which one it was). For the names inside shared unsigned data.
+--   own:    for what is this account's by construction (its records, its per-character state): my old key is me, an
+--           account character already migrated is in root.idOld, the rest goes through ctx.id.
+local function mappers(root, ctx)
+  local idOld = type(root.idOld) == "table" and root.idOld or {}
+  local function strict(n)
+    if not isOld(n) then return n end
+    if type(ctx.id) ~= "function" then return nil end
+    local okI, v = pcall(ctx.id, n)
+    if okI and type(v) == "string" and v ~= "" and not isOld(v) then return v end
+    return nil
+  end
+  local function own(n)
+    if not isOld(n) then return n end
+    if n == ctx.oldMe then return ctx.me end
+    local m = idOld[n]
+    if type(m) == "string" and m ~= "" and not isOld(m) then return m end
+    return strict(n)
+  end
+  return strict, own
+end
+-- a list of names with an old one: remapped, deduplicated, the ones without an identity out (untouched otherwise)
+local function remapList(l, map, r)
+  if type(l) ~= "table" then return l end
+  local any = false
+  for _, n in ipairs(l) do if isOld(n) then any = true; break end end
+  if not any then return l end
+  local out, seen = {}, {}
+  for _, n in ipairs(l) do
+    local m = n
+    if isOld(n) then
+      m = map(n)
+      if m then r.remapped = r.remapped + 1 else r.removed = r.removed + 1 end
+    end
+    if m ~= nil and not seen[m] then seen[m] = true; out[#out + 1] = m end
+  end
+  return out
+end
+-- e[f] in the old form: remapped; false when it has no identity (the caller drops the entry or the field)
+local function remapField(e, f, map, r)
+  if not isOld(e[f]) then return true end
+  local m = map(e[f])
+  if not m then return false end
+  e[f] = m
+  r.remapped = r.remapped + 1
+  return true
+end
+-- a map keyed by names (hkBase, sent): old keys re-keyed, the ones without an identity go
+local function remapKeys(t, map, r)
+  if type(t) ~= "table" then return end
+  for _, k in ipairs(sortedKeys(t)) do
+    if isOld(k) then
+      local m, v = map(k), t[k]
+      t[k] = nil
+      if m and t[m] == nil then t[m] = v; r.remapped = r.remapped + 1 else r.removed = r.removed + 1 end
+    end
+  end
+end
+-- entries of a map keyed by an id built from their fields (progress events, race observations): the fields remapped,
+-- the entry re-keyed with idOf; one whose subject (`must`) has no identity goes. Returns old id -> new id | false.
+local function remapEntries(t, must, lists, idOf, map, r)
+  local moved = {}
+  if type(t) ~= "table" then return moved end
+  for _, id in ipairs(sortedKeys(t)) do
+    local e = t[id]
+    if type(e) == "table" then
+      local touched, keep = false, true
+      for _, f in ipairs(must) do
+        if isOld(e[f]) then touched = true; if not remapField(e, f, map, r) then keep = false end end
+      end
+      for _, f in ipairs(lists) do
+        local l = e[f]
+        local nl = keep and remapList(l, map, r) or l
+        if nl ~= l then touched = true; e[f] = nl end
+      end
+      if not keep then
+        t[id] = nil; moved[id] = false; r.removed = r.removed + 1
+      elseif touched then
+        local okI, nid = false, nil
+        if type(idOf) == "function" then okI, nid = pcall(idOf, e) end
+        if okI and type(nid) == "string" and nid ~= id then
+          t[id] = nil
+          if t[nid] == nil then t[nid] = e; moved[id] = nid else moved[id] = false end
+        end
+      end
+    end
+  end
+  return moved
+end
+
+local function step1(root, g, ctx, strict, map, r)
+  -- the characters of this account, by their old name (before prevOwnKeys is swept)
+  local own = {}
+  for _, t in ipairs({ root.ownKeys, root.prevOwnKeys, root.idOld }) do
+    if type(t) == "table" then for n in pairs(t) do if isOld(n) then own[n] = true end end end
+  end
+  if isOld(ctx.oldMe) then own[ctx.oldMe] = true end
+  -- 1. keys, manifests and certificates under an old name
   local function sweep(t)
     if type(t) ~= "table" then return end
-    local drop = {}
-    for name in pairs(t) do if type(name) == "string" and string.find(name, " ", 1, true) then drop[#drop + 1] = name end end
-    for _, name in ipairs(drop) do t[name] = nil; n = n + 1 end
+    for _, k in ipairs(sortedKeys(t)) do if isOld(k) then t[k] = nil; r.swept = r.swept + 1 end end
   end
-  local tr = type(g.trust) == "table" and g.trust or {}
-  sweep(tr.keys); sweep(tr.pend); sweep(tr.contested); sweep(tr.suspects)
-  sweep(type(g.sig) == "table" and g.sig.man or nil)
-  sweep(type(g.cert) == "table" and g.cert.crt or nil)
-  return n
+  local tr = type(g.trust) == "table" and g.trust or nil
+  if tr then
+    sweep(tr.keys); sweep(tr.pend); sweep(tr.contested); sweep(tr.suspects)
+    if type(tr.alerts) == "table" then   -- "kind name" lines (Trust.lua alert): the ones naming an old name go
+      local keep = {}
+      for _, a in ipairs(tr.alerts) do
+        local sp = type(a) == "string" and string.find(a, " ", 1, true)
+        if sp and isOld(string.sub(a, sp + 1)) then r.swept = r.swept + 1 else keep[#keep + 1] = a end
+      end
+      if #keep ~= #tr.alerts then tr.alerts = keep end
+    end
+  end
+  if type(g.sig) == "table" then sweep(g.sig.man); sweep(g.sig.own) end
+  if type(g.cert) == "table" then sweep(g.cert.crt); sweep(g.cert.own) end
+  sweep(root.prevOwnKeys)
+  -- 2. and 3. signed records in the old form: someone else's go (D1); this account's wait in g.resign
+  if type(g.records) == "table" then
+    local keep, aside = {}, type(g.resign) == "table" and g.resign or {}
+    for _, rec in ipairs(g.records) do
+      if type(rec) == "table" and isOld(rec.a) then
+        local n = own[rec.a] and map(rec.a) or nil
+        if n then rec.a = n; rec.resign = true; aside[#aside + 1] = rec; r.resign = r.resign + 1
+        else r.dropped = r.dropped + 1 end
+      else keep[#keep + 1] = rec end
+    end
+    g.records = keep
+    if #aside > 0 then g.resign = aside end
+  end
+  local pend = type(g.p2p) == "table" and type(g.p2p.pend) == "table" and g.p2p.pend or nil
+  if pend then
+    for _, kid in ipairs(sortedKeys(pend)) do
+      local byV = pend[kid]
+      if type(byV) == "table" then
+        for _, vk in ipairs(sortedKeys(byV)) do
+          local e = byV[vk]
+          if type(e) == "table" and type(e.r) == "table" and isOld(e.r.a) then byV[vk] = nil; r.dropped = r.dropped + 1 end
+        end
+        if next(byV) == nil then pend[kid] = nil end
+      end
+    end
+  end
+  -- 4. names inside local unsigned data
+  local pr = type(g.progress) == "table" and g.progress or nil
+  if pr then
+    remapEntries(pr.events, { "who" }, { "pres" }, ctx.eventId, strict, r)
+    local hs = pr.hkState
+    if type(hs) == "table" and type(hs.who) == "string" then        -- "<id>:<src>" (Progress.lua counterStep)
+      local i = #hs.who
+      while i > 0 and string.sub(hs.who, i, i) ~= ":" do i = i - 1 end
+      local name = i > 0 and string.sub(hs.who, 1, i - 1) or hs.who
+      if isOld(name) then
+        local m = map(name)
+        if m then hs.who = m .. string.sub(hs.who, i); r.remapped = r.remapped + 1 else pr.hkState = nil; r.removed = r.removed + 1 end
+      end
+    end
+    if type(pr.pending) == "table" and isOld(pr.pending.who) then
+      if not remapField(pr.pending, "who", map, r) then pr.pending.who, pr.pending.hk, pr.pending.cap = nil, 0, 0; r.removed = r.removed + 1 end
+    end
+  end
+  local ra = type(g.races) == "table" and g.races or nil
+  if ra then
+    local moved = remapEntries(ra.obs, { "who", "by" }, { "pres" }, ctx.obsId, strict, r)
+    if type(ra.pend) == "table" then                                 -- observation id -> t (Hall.lua retries)
+      for _, id in ipairs(sortedKeys(ra.pend)) do
+        local to = moved[id]
+        local bar = type(id) == "string" and string.find(id, "|", 1, true)
+        if to == false or (to == nil and bar and isOld(string.sub(id, 1, bar - 1))) then ra.pend[id] = nil; r.removed = r.removed + 1
+        elseif to then local v = ra.pend[id]; ra.pend[id] = nil; if ra.pend[to] == nil then ra.pend[to] = v end end
+      end
+    end
+    remapKeys(ra.hkBase, map, r)
+    remapKeys(ra.sent, map, r)
+  end
+  -- 5. the mark
+  g.idv = M.IDV
+  g.idMigratedAt = g.idMigratedAt or ctx.now
+end
+
+-- my record r, waiting for its re-signature: the names inside remapped; false = it must go
+local NAME_ID = { profile = true, presence = true }
+local function fixOwn(rec, ctx, map, r)
+  local d = type(rec.d) == "table" and rec.d or {}
+  local k = rec.k
+  if k == "repudiate" then return false end                         -- it denies a 1.x version: nothing left to deny
+  if NAME_ID[k] and isOld(rec.id) then
+    if map(rec.id) ~= ctx.me then return false end
+    rec.id = ctx.me
+  end
+  local function single(f) return remapField(d, f, map, r) end
+  local function many(f) local l = d[f]; if type(l) == "table" then d[f] = remapList(l, map, r) end end
+  if k == "squad" then
+    if not single("captain") then return false end
+    many("members"); many("bench")
+    if not single("xferFrom") then d.xferFrom = nil; r.removed = r.removed + 1 end
+  elseif k == "profile" then
+    if type(d.xferTo) == "string" then                              -- "squadId>NewCaptain" (the squad id is opaque)
+      local cut = #d.xferTo
+      while cut > 0 and string.sub(d.xferTo, cut, cut) ~= ">" do cut = cut - 1 end
+      local cap = cut > 0 and string.sub(d.xferTo, cut + 1) or nil
+      if cap and isOld(cap) then
+        local m = map(cap)
+        if m then d.xferTo = string.sub(d.xferTo, 1, cut) .. m; r.remapped = r.remapped + 1 else d.xferTo = nil; r.removed = r.removed + 1 end
+      end
+    end
+  elseif k == "reject" then
+    local was = d.name
+    if not single("name") then return false end
+    if d.name ~= was then rec.id = M.rejectId(d.sid, d.name, d.kind) end
+  elseif k == "roster" then
+    if not single("owner") then return false end
+    many("main"); many("bench")
+  elseif k == "rsvp" then
+    local was = d.name
+    if not single("name") then return false end
+    if d.name ~= was and type(ctx.rsvpId) == "function" then rec.id = ctx.rsvpId(d.rid, d.name) end
+  elseif k == "attendance" or k == "witness" then many("names")
+  elseif k == "achgrant" then
+    local was = d.who
+    if not single("who") then return false end
+    if d.who ~= was and type(ctx.grantId) == "function" then rec.id = ctx.grantId(d.ach, d.who) end
+  elseif k == "settings" then many("rlList")
+  end
+  return true
+end
+
+local function step2(root, g, ctx, map, r)
+  local me, oldMe = ctx.me, ctx.oldMe
+  -- 1. the 1.x key of this character
+  if isOld(oldMe) then
+    if type(root.ownKeys) == "table" and root.ownKeys[oldMe] ~= nil then root.ownKeys[oldMe] = nil; r.swept = r.swept + 1 end
+    root.idOld = type(root.idOld) == "table" and root.idOld or {}
+    root.idOld[oldMe] = me
+  end
+  -- 2. my records waiting in g.resign (the ones of the other characters of this account keep waiting)
+  local back, rest = {}, {}
+  for _, rec in ipairs(type(g.resign) == "table" and g.resign or {}) do
+    if type(rec) == "table" and (rec.a == me or (oldMe ~= nil and rec.a == oldMe)) then back[#back + 1] = rec else rest[#rest + 1] = rec end
+  end
+  if g.resign ~= nil then g.resign = (#rest > 0) and rest or nil end
+  if #back > 0 then
+    g.records = type(g.records) == "table" and g.records or {}
+    local at = {}                                                    -- kid -> index in g.records (one version per kid)
+    for i, rec in ipairs(g.records) do if type(rec) == "table" then at[tostring(rec.k) .. ":" .. tostring(rec.id)] = i end end
+    for _, rec in ipairs(back) do
+      if fixOwn(rec, ctx, map, r) then
+        rec.a = me
+        rec.sq = (tonumber(rec.sq) or 0) + 1
+        rec.ts = math.max(tonumber(rec.ts) or 0, tonumber(ctx.now) or 0)
+        rec.resign = nil
+        local kid = tostring(rec.k) .. ":" .. tostring(rec.id)
+        local i = at[kid]
+        local cur = i and g.records[i]
+        if not cur or (rec.ts > (tonumber(cur.ts) or 0)) or (rec.ts == (tonumber(cur.ts) or 0) and rec.sq > (tonumber(cur.sq) or 0)) then
+          if i then g.records[i] = rec else g.records[#g.records + 1] = rec; at[kid] = #g.records end
+          if type(ctx.note) == "function" then pcall(ctx.note, rec) end
+        end
+        r.resigned = r.resigned + 1
+      else
+        r.dropped = r.dropped + 1
+      end
+    end
+    g.sig = type(g.sig) == "table" and g.sig or {}
+    g.sig.fresh = me
+  end
+  -- 3. the mark
+  root.idv = type(root.idv) == "table" and root.idv or {}
+  root.idv[me] = M.IDV
+end
+
+function M.migrateIdentity(root, g, ctx)
+  local r = { swept = 0, dropped = 0, resign = 0, remapped = 0, removed = 0, resigned = 0 }
+  ctx = type(ctx) == "table" and ctx or {}
+  if ctx.mode ~= "forever" or type(root) ~= "table" or type(g) ~= "table" then return r end
+  if type(ctx.me) ~= "string" or ctx.me == "" or isOld(ctx.me) then return r end   -- no identity yet: nothing written
+  if ctx.dry then
+    local seen = {}
+    local root2 = deepCopy(root, seen)
+    local c2 = {}
+    for k, v in pairs(ctx) do c2[k] = v end
+    c2.dry, c2.note = nil, nil
+    return M.migrateIdentity(root2, seen[g] or deepCopy(g, seen), c2)
+  end
+  local strict, map = mappers(root, ctx)
+  if g.idv ~= M.IDV then step1(root, g, ctx, strict, map, r); r.guild = true end
+  local mine = false
+  for _, rec in ipairs(type(g.resign) == "table" and g.resign or {}) do
+    if type(rec) == "table" and (rec.a == ctx.me or rec.a == ctx.oldMe) then mine = true; break end
+  end
+  if mine or not (type(root.idv) == "table" and root.idv[ctx.me] == M.IDV) then step2(root, g, ctx, map, r); r.char = true end
+  return r
 end
 function M.guildKey(name, realm)
   if type(name) ~= "string" or name == "" then return nil end

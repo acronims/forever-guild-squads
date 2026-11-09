@@ -66,7 +66,14 @@ local pending = {}            -- { rec, sender } waiting for the guild roster
 local seenAfter = {}          -- id -> version string seen on the wire (reply suppression)
 local corrections = {}        -- id -> true when a correction is already scheduled
 local cursor = {}             -- requester -> last reply key sent (pagination)
-local heard = {}              -- sender -> GetTime() of the last addon message (addon detection)
+local heard = {}              -- sender identity (ns.id) -> GetTime() of the last addon message (addon detection)
+local unresolved, unresolvedN = {}, 0   -- 2.0: senders without an identity (two «Kas» and a bare «Kas»), diag only
+-- 2.0: the identity of a sender (ns.id, SPEC-v2.0 §2); nil = it has none (dropped by the callers). Without the identity
+-- layer (this file loaded alone, unit mocks) the sender stays as it came, like the 1.2.2 fallback.
+local function idOf(sender)
+  if ns.id then return ns.id(sender) end
+  return sender
+end
 -- 1.2.1 (BRO's guild, 9-nov: 317 members, ~60 online, 2-3 on 1.2; diag sample=0, sig verified=0): who answers a hello
 -- is a client of this protocol, not any member online. ns.peerCount() = me + the distinct senders of PROTO 2 messages
 -- (Comm hands only those to Sync.OnMessage) heard in the last PEER_FRESH s that the roster still shows online. It
@@ -94,6 +101,7 @@ function Sync.PeerDiag()
     n = n + 1
     if not (ns.roster and ns.roster(name)) then unknown = unknown + 1; sample = sample or name end
   end
+  for name in pairs(unresolved) do n = n + 1; unknown = unknown + 1; sample = sample or name end
   return Sync.PeerCount(), n, unknown, sample
 end
 Sync.stats = { hellos = 0, replied = 0, bad = 0, relayRefused = 0, future = 0, errors = 0, quarantined = 0, pending = 0, mine = 0,
@@ -375,10 +383,14 @@ function Sync.OwnManifest()
   ownDirty = false
   if same then return cur end
   local n = math.max((cur and tonumber(cur.n) or 0) + 1, math.floor(serverNow() or 0))
+  -- 2.0 (SPEC-v2.0 §5 step 2): the first manifest of an identity the migration just made (db.fresh) is n = 1: nobody
+  -- can hold one (a 1.x signature never verifies here). A lost SavedVariables still starts from the server time.
+  if not cur and db.fresh == me then n = 1 end
   local okS, m = pcall(G.build, me, n, mine, sk, pk, h)
   if not okS or not m then return cur end
   forceSign = false
   db.own[me] = m
+  if db.fresh == me then db.fresh = nil end
   return m
 end
 -- fix/perf (runtime review M2): what signs (a sign ~10 ms plus a hash per entry) waits for the end of combat and
@@ -757,7 +769,7 @@ function Sync.OldPeersLine()
   local old = ns.Comm and ns.Comm.OldPeerCount and ns.Comm.OldPeerCount() or 0
   if old == 0 or synced.oldTold then return nil end
   synced.oldTold = true
-  return ((ns.L and ns.L.OLD_PEERS) or "Guild Squads: %d guild members use an old version and cannot sync until they update"):format(old)
+  return ((ns.L and ns.L.OLD_PEERS) or "Guild Squads: %d members use a version older than 2.0 and do not sync with you until they update"):format(old)
 end
 function Sync.OnOldPeer()
   if synced.oldTold or synced.oldWait or not ns.After then return end
@@ -852,7 +864,11 @@ function Sync.Hello(again)
     if catchup then msg.cu = 1 end      -- AC3 arreglo 2: bigger samples while catching up
   end
   -- v1.2 annex F: our public key, learned strong by whoever hears it from us (WoW guarantees the sender)
-  if ns.Trust and ns.myPk then local pk = ns.myPk(); if pk then msg.pk = ns.Trust.hex(pk) end end
+  if ns.Trust and ns.myPk then
+    local pk = ns.myPk()
+    if pk then msg.pk = ns.Trust.hex(pk)
+    else Sync.helloWithoutKey = true end   -- 2.0: ns.myPk says hello again as soon as the key exists
+  end
   msg.cr = Sync.HelloCertRef()                      -- v1.2 annex G: a reference to our certificate (fix/perf A3)
   Comm.Send("H", msg)
   -- keep asking (with growing delay) while replies keep teaching us records
@@ -1039,7 +1055,9 @@ Sync.HELLO_MIN = 20
 local helloReplyAt = {}           -- requester -> serverNow of the last hello we considered answering
 local function onHello(payload, sender)
   if type(payload) ~= "table" or type(payload.h) ~= "table" then return end
-  local from = (ns.fullName and ns.fullName(sender)) or sender
+  -- 2.0: the sender's identity (ns.id); none (e.g. «Kas» bare with two «Kas» in the roster) -> dropped and counted
+  local from = idOf(sender)
+  if not from then Sync.stats.bad = Sync.stats.bad + 1; return end
   Sync.HelloHeard(from)
   if ns.ProgressGlue and type(payload.ec) == "table" then ns.ProgressGlue.OnHello(payload.ec, sender) end
   if ns.ProgressGlue and ns.ProgressGlue.OnSummaries and type(payload.ws) == "table" then
@@ -1107,7 +1125,8 @@ local function stored(rec) return M.stored(ns.state, rec) end
 
 local function onRecords(payload, sender, channel)
   if type(payload) ~= "table" or type(payload.r) ~= "table" then return end
-  local from = (ns.fullName and ns.fullName(sender)) or sender
+  local from = idOf(sender)                               -- 2.0: no identity -> dropped and counted
+  if not from then Sync.stats.bad = Sync.stats.bad + 1; return end
   local t = GetTime and GetTime() or 0
   if channel == "GUILD" and type(payload.m) == "table" then
     for i = 1, math.min(#payload.m, 20) do
@@ -1169,7 +1188,11 @@ end
 -- the CHAT_MSG_ADDON entry point: never raises (a broken peer cannot spam Lua errors on the whole guild)
 -- sentAt = server time stamped by the sender when the message left its queue (nil from older clients)
 function Sync.OnMessage(tag, payload, sender, channel, sentAt)
-  if type(sender) == "string" then heard[(ns.fullName and ns.fullName(sender)) or sender] = GetTime and GetTime() or 0 end
+  -- 2.0: heard by identity (ns.id); a sender without one is not noted as heard (no peer, no HeardAgo), only counted in
+  -- the diag (`peers notInRoster=`, Sync.PeerDiag)
+  local who = type(sender) == "string" and idOf(sender)
+  if who then heard[who] = GetTime and GetTime() or 0
+  elseif type(sender) == "string" and not unresolved[sender] and unresolvedN < 200 then unresolved[sender] = true; unresolvedN = unresolvedN + 1 end
   local ok, err = pcall(dispatch, tag, payload, sender, sentAt, channel)
   if not ok then
     Sync.stats.errors = Sync.stats.errors + 1

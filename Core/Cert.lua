@@ -18,7 +18,7 @@ local C = {}
 ns.Cert = C
 local E, T = ns.Ed25519, ns.Trust
 
-C.TAG = "GSQ-CRT1"
+C.TAG = "GSQ-CRT2"             -- 2.0 (SPEC-v2.0 §4.2; 1.x: GSQ-CRT1): hash12(name|pk) entries and the statement
 C.HASH_LEN = 12
 C.MAX_ENTRIES = 600
 C.MAX_QUEUE = 200

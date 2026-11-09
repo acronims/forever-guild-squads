@@ -82,8 +82,8 @@ L.ERR_benchFull = "no quedan plazas de suplente"
 L.ERR_notInGuild = "la lista de la guild aún no ha cargado, prueba en unos segundos"
 L.ERR_notGuildMember = "ese jugador no está en la guild"
 L.ERR_notInRoster = "tu personaje (%s) no aparece en la lista de la guild (%d miembros); envía /gsq diag"
--- 1.2.2: a client of the 2.0 (PROTO 3) heard in the guild; shown once per session
-L.NEWER_VERSION = "Hay una versión nueva de Guild Squads (2.0) en tu guild: actualiza."
+-- 1.2.2: a client of a newer protocol heard in the guild; shown once per session (2.0: newer than PROTO 3)
+L.NEWER_VERSION = "Hay una versión más nueva de Guild Squads en tu hermandad: actualiza."
 -- todos los códigos que pueden devolver Model / Sync tienen texto
 L.ERR_captainNotMember = "el capitán tiene que ser uno de los miembros"
 L.ERR_disbanded = "ese squad se disolvió"
@@ -110,7 +110,7 @@ L.EXPORT_HELP = "Ctrl+A, Ctrl+C para copiar. Pega aquí una copia y pulsa Import
 L.IMPORT = "Importar"
 L.IMPORTED = "Importados %d registros (%d rechazados)."
 L.SYNCED = "Guild Squads: sincronizado (%d registros, %d pendientes de verificar)"
-L.OLD_PEERS = "Guild Squads: %d miembros de la hermandad usan una versión antigua y no se sincronizan hasta que actualicen"
+L.OLD_PEERS = "Guild Squads: %d miembros usan una versión anterior a la 2.0 y no se sincronizan contigo hasta que actualicen"
 L.SYNC_SENT = "Petición de sincronización enviada a la guild."
 L.TRUST_RESET = "Clave olvidada: %s. Se volverá a aprender de ese jugador en persona."
 L.TRUST_NEWKEY_CONFIRM = "Vas a borrar tu clave de firma de Guild Squads.\n\nPerderás tu clave: tus datos se volverán a firmar con una nueva. Quien te oiga en persona aceptará la nueva; hasta entonces, los demás pueden ver tus datos como «sin verificar».\n\n¿Seguir?"

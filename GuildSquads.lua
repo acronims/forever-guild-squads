@@ -272,12 +272,19 @@ local function selectGuild()
   local key = guildKey()
   if not key then return false end
   local root = GuildSquadsDB
-  local g, migrated = M.guildDB(root, key, function(n) return rosterCache[ns.fullName(n) or ""] ~= nil end)
+  local g, migrated = M.guildDB(root, key, function(n) return ns.roster(n) ~= nil end)   -- 2.0: by identity (§3 #11)
   ns.gdb, ns.guildKey = g, key
   g.ann = nil -- announced hashes are not used
-  -- 1.2.2: the 1.2.0 leftovers keyed "Name Surname-Realm" (trust, manifests, certificates) go before anything reads them
-  local swept = M.sweepSurnames(g)
-  if swept > 0 then ns.sweptSurnames = swept; ns.debug("1.2.0 surname keys dropped: " .. swept) end
+  -- 2.0 (SPEC-v2.0 §5): the 1.x names of this partition and of my character move to «Name Surname» before anything
+  -- reads them (step 1 needs the roster, read just now). false = forever mode and no identity yet: wait for the next
+  -- roster read, nothing is loaded nor written
+  local idr = ns.MigrateIdentity and ns.MigrateIdentity(root, g)
+  if idr == false then ns.gdb, ns.guildKey = nil, nil; return false end
+  if type(idr) == "table" then
+    ns.idMigration = idr
+    local went = (idr.swept or 0) + (idr.dropped or 0)
+    if went > 0 then ns.sweptSurnames = went; ns.debug(("2.0 identity: %d 1.x entries dropped, %d own records re-signed"):format(went, idr.resigned or 0)) end
+  end
   -- v1.2 annex F: the keys we learned for this guild's members (TOFU strong / weak with quorum)
   if ns.Trust then
     g.trust = type(g.trust) == "table" and g.trust or {}
@@ -830,20 +837,34 @@ local function sample(tag)
   pool.add(tag, debugprofilestop and debugprofilestop() or 0, GetTime and GetTime() or 0,
     GetServerTime and GetServerTime() or 0, cx, cy, UnitGUID and UnitGUID("player") or "", math.random(1, 2147483646))
 end
+local ownFor                           -- the identity ownPk belongs to
 function ns.myPk()
-  if ownPk then return ownPk end
   if not (ns.Trust and db and ns.me) then return nil end
   local me = ns.me()
   if not me then return nil end
+  if ownPk and ownFor == me then return ownPk end
+  ownPk = nil
+  -- 2.0 (SPEC-v2.0 §5 step 2): in forever mode the key of the identity is made after the migration ran for it (it
+  -- drops the 1.x key "Name-Realm"); never one under a name that is not the identity
+  if ns.ID_MODE == "forever" and not (type(db.idv) == "table" and db.idv[me] == M.IDV) then return nil end
   db.ownKeys = type(db.ownKeys) == "table" and db.ownKeys or {}
   local holder = type(db.ownKeys[me]) == "table" and db.ownKeys[me] or {}
   local fresh = holder.me == nil
   local ok, _, pk = pcall(ns.Trust.ensureOwn, holder, pool)
   if ok and pk then
-    db.ownKeys[me] = holder; ownPk = pk
+    db.ownKeys[me] = holder; ownPk, ownFor = pk, me
     -- a key made now: our records may already be out unsigned (published while the pool was still sampling). Sign
     -- and send our manifest (MAN_DEBOUNCE s later) so the ones who log in after us can verify them when relayed.
     if fresh and ns.Sync and ns.Sync.QueueOwnManifest then ns.Sync.QueueOwnManifest() end
+    -- 2.0 (SPEC-v2.0 §5 step 2): in forever mode the key of the identity is only made after the migration (selectGuild),
+    -- so it can be born after a hello already went out without it: one hello now (heard in person the key is strong
+    -- for everyone online, who then verify the manifest n = 1), not 10-20 min later in the next anti-entropy hello.
+    -- Realm mode keeps the 1.2.2 behaviour (the key in the next hello).
+    if fresh and ns.ID_MODE == "forever" and ns.Sync and ns.Sync.helloWithoutKey and ns.rosterReady and ns.Sync.Hello then
+      ns.Sync.helloWithoutKey = nil
+      local hello = function() pcall(ns.Sync.Hello) end
+      if ns.After and ns.Sync.WhenIdle then ns.After(1, function() ns.Sync.WhenIdle(hello) end) else hello() end
+    end
     -- AF5: a key made after /gsq trust newkey is signed by the old one (Sync.OwnRotation), then the old one is gone
     local prev = type(db.prevOwnKeys) == "table" and db.prevOwnKeys[me]
     if prev then
@@ -883,6 +904,29 @@ end
 function ns.mySk()
   if not ns.myPk() then return nil end
   return ns.Trust.own(db.ownKeys[ns.me()])
+end
+-- 2.0 (SPEC-v2.0 §5): Model.migrateIdentity with this client's identity, on a guild partition g of root
+-- (GuildSquadsDB). Realm mode: nothing to migrate ({}). Forever mode without an identity yet: false (selectGuild
+-- waits). dry = count what it would do on a copy (/gsq diag). Returns the counts of Model.migrateIdentity.
+function ns.MigrateIdentity(root, g, dry)
+  if ns.ID_MODE ~= "forever" then return {} end
+  local me = ns.me and ns.me()
+  if type(me) ~= "string" or me == "" then return false end
+  local sp = string.find(me, " ", 1, true)
+  local oldMe = (sp and string.sub(me, 1, sp - 1) or me) .. "-" .. myRealm()     -- the 1.x key of this character
+  local now = (ns.serverTime and ns.serverTime()) or (GetServerTime and GetServerTime()) or 0
+  local Pg, Rc, Ro, Ca, X = ns.Progress, ns.Races, ns.Roster, ns.Catalog, ns.P2P
+  local ctx = { mode = "forever", id = ns.id, me = me, oldMe = oldMe, now = now, dry = dry and true or nil,
+                eventId = Pg and Pg.eventId, obsId = Rc and Rc.obsId, rsvpId = Ro and Ro.rsvpId, grantId = Ca and Ca.grantId }
+  if X and X.ledgerNote then   -- my re-signed versions go to the ledger (a relayed copy of them is never repudiated)
+    ctx.note = function(rec)
+      g.mine = type(g.mine) == "table" and g.mine or {}
+      X.ledgerNote(g.mine, { k = rec.k, id = rec.id, a = rec.a, ts = rec.ts, sq = rec.sq, d = M.sanitize(rec.k, rec.d) or {} }, now)
+    end
+  end
+  local okM, r = pcall(M.migrateIdentity, root, g, ctx)
+  if not okM then if ns.debug then ns.debug("2.0 identity migration error: " .. tostring(r)) end return {} end
+  return r
 end
 
 -------------------------------------------------------------------------------

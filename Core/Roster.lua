@@ -374,11 +374,11 @@ end
 -- record validation (registered into Model)
 R.SCHEMA = {
   roster = { raid = { "s", 16 }, size = { "n" }, name = { "s", 32 }, at = { "n" }, wk = { "b" }, tpl = { "s", 20 },
-             main = { "L", 40, 48 }, bench = { "L", 10, 48 }, st = { "s", 10 }, owner = { "s", 48 }, prev = { "s", 80 },
+             main = { "L", 40, 64 }, bench = { "L", 10, 64 }, st = { "s", 10 }, owner = { "s", 64 }, prev = { "s", 80 },
              open = { "b" } },
-  rsvp = { rid = { "s", 80 }, name = { "s", 48 }, v = { "s", 6 }, c = { "s", 60 } },
-  attendance = { rid = { "s", 80 }, names = { "L", 80, 48 }, at = { "n" } },
-  witness = { rid = { "s", 80 }, names = { "L", 50, 48 } },
+  rsvp = { rid = { "s", 80 }, name = { "s", 64 }, v = { "s", 6 }, c = { "s", 60 } },
+  attendance = { rid = { "s", 80 }, names = { "L", 80, 64 }, at = { "n" } },
+  witness = { rid = { "s", 80 }, names = { "L", 50, 64 } },
 }
 
 local function validRosterData(d)
@@ -533,7 +533,7 @@ if M and M.registerKind then
   M.registerKind("rsvp", R.SCHEMA.rsvp, "rsvps", 8, R.applyRsvp)
   M.registerKind("attendance", R.SCHEMA.attendance, "attendance", 9, R.applyAttendance)
   M.registerKind("witness", R.SCHEMA.witness, "witness", 10, R.applyWitness)
-  M.SCHEMA.settings.rlList = { "L", 20, 48 }
+  M.SCHEMA.settings.rlList = { "L", 20, 64 }
   M.SCHEMA.settings.offEdit = { "b" }
   M.SCHEMA.settings.rutil = { "L", 30, 60 }
 end
