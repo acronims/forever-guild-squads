@@ -67,6 +67,7 @@ const ORDER = [
   'catalog_ui_spec.lua',
   'hall_others_spec.lua',
   'whisper_spec.lua',
+  'periphery_spec.lua',
   'zload_spec.lua',
   'zzcold_spec.lua',
 ];
