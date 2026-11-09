@@ -261,6 +261,7 @@ class Sim {
     // realm from any realm, and the server delivers a WHISPER only to the exact «Name Surname» of an online client
     // (anything else: «No hay ningún jugador con el nombre X.»). Every delivery is logged in whisperLog. The 1.2.x
     // knobs (surnames, surnameSenders, senderFullName, bareSameRealm, whisperSuffix) are the realm-mode world.
+    // Default: forever (Sim.FOREVER_DEFAULT).
     this.forever = opts.forever !== undefined ? !!opts.forever : Sim.FOREVER_DEFAULT;
     this.whisperLog = [];                         // every WHISPER sent: { t, from, target, to (handle or null) }
     this.whisperDelivered = [];                   // every WHISPER that reached a client: { t, to, prefix, sender }
@@ -430,8 +431,9 @@ Sim.parts = (name) => {
   const sp = String(name).indexOf(' ');
   return sp < 0 ? { first: String(name), surname: null } : { first: name.slice(0, sp), surname: name.slice(sp + 1) };
 };
-// the mode of a Sim built without opts.forever (AC7: GSQ_SIM_FOREVER=0 gives the 1.2.x world back)
-Sim.FOREVER_DEFAULT = process.env.GSQ_SIM_FOREVER === '1';
+// the mode of a Sim built without opts.forever: a WoW Forever realm (2.0, AC7). GSQ_SIM_FOREVER=0 or run.js --realm
+// give the 1.2.x world back
+Sim.FOREVER_DEFAULT = process.env.GSQ_SIM_FOREVER !== '0';
 Sim.sysShownTotal = 0;          // «No hay ningún jugador…» lines shown in any chat of any client, whole process
 
 module.exports = { Sim, luaStr, mulberry32, sourcesAt };
