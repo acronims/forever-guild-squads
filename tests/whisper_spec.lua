@@ -279,8 +279,14 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.2: roster «Name Surname-Realm»: SendA
     RegionalUniqueNamesEnabled = nil
     ok(tNo == nil, "Forever, no surname cached: no whisper target (GUILD envelope)")
     c.roster[2][1] = "Bob Pitas-Realm"; c.fire("GUILD_ROSTER_UPDATE"); c.tick(2)
-    Comm.Send("X", { s = 1 }, "WHISPER", "Bob-Realm", nil, true)   -- urgent: ahead of any backlog
-    c.tick(3)
+    -- urgent: ahead of any backlog; the queue is pumped here (Comm may run on a C_Timer ticker the fake clock does
+    -- not drive) with the blocks of earlier checks set aside
+    local q, blocks, locked = Comm.queue, Comm.queue.blocks, Comm.queue.isLocked
+    q.blocks, q.isLocked = {}, nil
+    Comm.Send("X", { s = 1 }, "WHISPER", "Bob-Realm", nil, true)
+    local t0 = math.max(GetTime(), q.last or 0)
+    for k = 1, 6 do q:pump(t0 + k) end
+    q.blocks, q.isLocked = blocks, locked
     local toBob, bad = 0, {}
     for _, s in ipairs(got) do
       if s.ch == "WHISPER" then
