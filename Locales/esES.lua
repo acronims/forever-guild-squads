@@ -115,7 +115,7 @@ L.SYNC_SENT = "Petición de sincronización enviada a la guild."
 L.TRUST_RESET = "Clave olvidada: %s. Se volverá a aprender de ese jugador en persona."
 L.TRUST_NEWKEY_CONFIRM = "Vas a borrar tu clave de firma de Guild Squads.\n\nPerderás tu clave: tus datos se volverán a firmar con una nueva. Quien te oiga en persona aceptará la nueva; hasta entonces, los demás pueden ver tus datos como «sin verificar».\n\n¿Seguir?"
 L.TRUST_NEWKEY_DONE = "Clave borrada. Se crea una nueva en unos segundos y tus datos se vuelven a firmar con ella."
-L.TRUST_USAGE = "/gsq trust reset <nombre>: olvida la clave de un miembro (si perdió sus datos guardados)."
+L.TRUST_USAGE = "/gsq trust reset <Nombre Apellido>: olvida la clave de un miembro (si perdió sus datos guardados)."
 L.SYNC_COOLDOWN = "Ya se pidió una sincronización hace menos de un minuto. Prueba otra vez en un momento."
 
 -- UI
@@ -816,3 +816,8 @@ L.ERR_metric = "métrica desconocida"
 L.ERR_thr = "umbral no válido"
 L.ERR_param = "parámetro no válido"
 L.ERR_notGranted = "esa insignia no está otorgada"
+
+-- 2.0 UI (identidad «Nombre Apellido»): nombres tecleados e invitaciones
+L.TYPED_NOT_MEMBER = "%s no está en la guild"
+L.TYPED_AMBIGUOUS = "hay varios personajes en la guild que se llaman %s: escribe el nombre con el apellido"
+L.RB_NO_TARGET = "%d no se han podido invitar (no aparecen en la lista de la guild)."

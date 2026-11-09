@@ -136,3 +136,53 @@ smoke("wording: the guild goal counts this wipe, not 'this week'", function(e)
   e.ns.UI.Open("ranking")
   ok(L.GOAL:format(3, 30):find("3 / 30", 1, true))
 end)
+
+-- 2.0 (docs/SPEC-v2.0-identidad.md §7, AC11): in WoW Forever every character shows «Name Surname», up to
+-- 12 + 1 + 12 = 25 characters. Every label that shows a character name must stay inside its cell: bounded (explicit
+-- width or two horizontal anchors), on one line (word wrap off, so the client truncates it with "...") and within its
+-- parent. The text is the whole name: nothing is shortened in code ("Kas P." collides again).
+-- Limits (zload geometry model): no real text measuring; an unbounded label is 7 px per byte of its text.
+smoke("geometry: a 25-character «Name Surname» stays inside its cell on every screen (2.0, AC11)", function(e)
+  local ns = e.ns
+  local LONG = "Bartholomewo Desamparados"
+  eq(#LONG, 25, "longest Forever name")
+  local sn, dn = ns.shortName, ns.displayName
+  ns.shortName = function() return LONG end
+  ns.displayName = function() return LONG end
+  local okRun, errRun = pcall(function()
+    for _, key in ipairs(ns.UI.order) do ns.UI.Select(key) end
+    -- the raid editor: roster cells and the list of characters to add
+    local G = ns.RaidGlue
+    local rid, whyR = G.Create({ raid = "custom", size = 10, name = "Banda", at = G.WallNow() + 86400 })
+    assert(rid, "raid roster created: " .. tostring(whyR))
+    local d = ns.Roster.copy(G.Get(rid).d)
+    d.main[1], d.main[2] = ns.me(), "Bob-Realm"
+    assert(G.Save(rid, d), "raid roster saved")
+    ns.UI.OpenRoster(rid)
+    ns.UI.Select("mysquad")
+  end)
+  ns.shortName, ns.displayName = sn, dn
+  ok(okRun, "screens refreshed: " .. tostring(errRun))
+  local checked, bad, where, kinds = 0, {}, {}, {}
+  for _, o in ipairs(e.allObjs) do
+    local txt = rawget(o, "_fs") and rawget(o, "_text")
+    if type(txt) == "string" and txt:find(LONG, 1, true) then
+      local p = rawget(o, "_parent")
+      local l, _, w, _, stretched = e.geo(o, p)
+      local pw = p and rawget(p, "_w")
+      checked = checked + 1
+      local why
+      if not (rawget(o, "_w") or stretched) then why = "unbounded (" .. 7 * #txt .. " px)"
+      elseif rawget(o, "_wrap") ~= false then why = "wraps onto a 2nd line"
+      elseif l and pw and (l < 0 or l + w > pw + 0.5) then why = ("outside its parent: %d..%d of %d px"):format(l, l + w, pw) end
+      local tag = txt:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub(LONG, "<name>"):sub(1, 40)
+      where[#where + 1] = tag .. " @" .. tostring(pw)
+      kinds[tostring(pw)] = true
+      if why then bad[#bad + 1] = why .. ": «" .. tag .. "»" end
+    end
+  end
+  -- coverage (by parent width): squad slot 128, squad card 335, profile column 200, raid cell 102
+  local seen = table.concat(where, " | ")
+  for _, w in ipairs({ "128", "335", "200", "102" }) do ok(kinds[w], "a name label in a " .. w .. " px cell was measured: " .. seen) end
+  ok(#bad == 0, #bad .. " name labels spill out of their cell: " .. table.concat(bad, " ; "))
+end)

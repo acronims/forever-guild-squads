@@ -24,6 +24,14 @@ function ns.UnverifiedTip(name, from)
   if db and db.contested and db.contested[name] then return L.UNVERIFIED_TIP_DISPUTED:format(ns.shortName(name)) end
   return L.UNVERIFIED_TIP:format(ns.shortName(from or "?"), ns.shortName(name))
 end
+-- 2.0 (SPEC §7): a label that shows «Name Surname» (up to 25 characters) gets a fixed width and one line, so the
+-- client truncates it visually; the text itself is never shortened (a «Kas P.» would collide again)
+local function oneLine(fs, w)
+  fs:SetWidth(w)
+  if fs.SetWordWrap then fs:SetWordWrap(false) end
+  if fs.SetMaxLines then pcall(fs.SetMaxLines, fs, 1) end
+  return fs
+end
 local function nameColored(name, class)
   local _, _, _, hex = W.ClassColor(class)
   return hex .. (ns.displayName and ns.displayName(name) or ns.shortName(name)) .. "|r"   -- with surname
@@ -40,7 +48,9 @@ local function whisper(name)
 end
 local function inviteGroup(name)
   if inCombat() then ns.print(L.IN_COMBAT); return end
-  if C_PartyInfo and C_PartyInfo.InviteUnit then pcall(C_PartyInfo.InviteUnit, name) end
+  -- 2.0: the whisper target («Name Surname» in Forever), never the «Name-Realm» key the server does not find
+  local target = ns.whisperTarget and ns.whisperTarget(name)
+  if target and C_PartyInfo and C_PartyInfo.InviteUnit then pcall(C_PartyInfo.InviteUnit, target) end
 end
 
 local function squadCtx(id)
@@ -156,7 +166,7 @@ local function makeSlot(parent)
   c.crown:SetTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
   c.class = c:CreateTexture(nil, "ARTWORK"); c.class:SetSize(44, 44); c.class:SetPoint("TOP", 0, -14)
   c.role = c:CreateTexture(nil, "OVERLAY"); c.role:SetSize(22, 22); c.role:SetPoint("CENTER", c.class, "BOTTOMRIGHT", 0, 2)
-  c.name = W.Label(c, "", "GameFontNormal"); c.name:SetPoint("TOP", 0, -66); c.name:SetJustifyH("CENTER")
+  c.name = W.Label(c, "", "GameFontNormal"); c.name:SetPoint("TOP", 0, -66); c.name:SetJustifyH("CENTER"); oneLine(c.name, 120)
   c.line2 = W.Label(c, ""); c.line2:SetPoint("TOP", 0, -84); c.line2:SetTextColor(0.7, 0.7, 0.7)
   c.line3 = W.Label(c, ""); c.line3:SetPoint("TOP", 0, -100)
   c.plus = W.Label(c, "+", "GameFontNormalHuge"); c.plus:SetPoint("TOP", 0, -24)
@@ -210,7 +220,7 @@ local function smallRow(parent, w)
   local r = W.Card(parent); r:SetSize(w, 28)
   r.dot = r:CreateTexture(nil, "OVERLAY"); r.dot:SetSize(8, 8); r.dot:SetPoint("LEFT", 6, 0)
   r.class = r:CreateTexture(nil, "ARTWORK"); r.class:SetSize(20, 20); r.class:SetPoint("LEFT", 18, 0)
-  r.name = W.Label(r, "", "GameFontNormalSmall"); r.name:SetPoint("LEFT", 42, 0)
+  r.name = W.Label(r, "", "GameFontNormalSmall"); r.name:SetPoint("LEFT", 42, 0); oneLine(r.name, 104)
   r.role = r:CreateTexture(nil, "ARTWORK"); r.role:SetSize(16, 16); r.role:SetPoint("LEFT", 150, 0)
   r.right = W.Label(r, ""); r.right:SetPoint("RIGHT", -8, 0); r.right:SetTextColor(0.6, 0.6, 0.6)
   return r
@@ -230,7 +240,7 @@ UI.Register("mysquad", L.TAB_MYSQUAD, function(f, bar)
     local c = W.Card(e); c:SetSize(335, 56); c:SetPoint("TOPLEFT", 180, -250 - (i - 1) * 60)
     c.logo = W.Logo(c, 40); c.logo:SetPoint("LEFT", 8, 0)
     c.name = W.Label(c, "", "GameFontNormal"); c.name:SetPoint("TOPLEFT", 56, -10)
-    c.sub = W.Label(c, ""); c.sub:SetPoint("TOPLEFT", 56, -28); c.sub:SetTextColor(0.7, 0.7, 0.7)
+    c.sub = W.Label(c, ""); c.sub:SetPoint("TOPLEFT", 56, -28); c.sub:SetTextColor(0.7, 0.7, 0.7); oneLine(c.sub, 210)
     c.yes = W.IconButton(c, 26, "Interface\\RaidFrame\\ReadyCheck-Ready", L.ACCEPT); c.yes:SetPoint("RIGHT", -38, 0)
     c.no = W.IconButton(c, 26, "Interface\\RaidFrame\\ReadyCheck-NotReady", L.REJECT); c.no:SetPoint("RIGHT", -8, 0)
     sq.inv[i] = c
@@ -458,7 +468,7 @@ local function makeSquadCard(parent)
     c.roles[i] = t
   end
   c.count = W.Label(c, ""); c.count:SetPoint("BOTTOMLEFT", 112, 13)
-  c.captain = W.Label(c, ""); c.captain:SetPoint("BOTTOMLEFT", 150, 13)
+  c.captain = W.Label(c, ""); c.captain:SetPoint("BOTTOMLEFT", 150, 13); oneLine(c.captain, 98)
   c.state = stateChip(c); c.state:SetPoint("BOTTOMRIGHT", -8, 8); c.state:EnableMouse(false)
   -- grey "Inactivo · N d" chip instead of 10 px grey text
   c.inactive = CreateFrame("Frame", nil, c); c.inactive:SetSize(90, 16)
@@ -672,7 +682,7 @@ local function makeResult(parent)
   c.class = c:CreateTexture(nil, "ARTWORK"); c.class:SetSize(36, 36); c.class:SetPoint("LEFT", 10, 0)
   c.logo = W.Logo(c, 40); c.logo:SetPoint("LEFT", 8, 0)
   c.dot = c:CreateTexture(nil, "OVERLAY"); c.dot:SetSize(8, 8); c.dot:SetPoint("TOPLEFT", 4, -4)
-  c.name = W.Label(c, "", "GameFontNormal"); c.name:SetPoint("TOPLEFT", 56, -8)
+  c.name = W.Label(c, "", "GameFontNormal"); c.name:SetPoint("TOPLEFT", 56, -8); oneLine(c.name, 170)
   c.role = c:CreateTexture(nil, "ARTWORK"); c.role:SetSize(18, 18); c.role:SetPoint("TOPLEFT", 230, -6)
   c.role2 = c:CreateTexture(nil, "ARTWORK"); c.role2:SetSize(13, 13); c.role2:SetPoint("LEFT", c.role, "RIGHT", 2, -2)
   c.reasons = {}
@@ -950,7 +960,7 @@ UI.Register("profile", L.TAB_PROFILE, function(f, bar)
   local left = CreateFrame("Frame", nil, f); left:SetPoint("TOPLEFT", 8, -30); left:SetSize(200, 394) -- below the portrait
   local lbg = left:CreateTexture(nil, "BACKGROUND"); lbg:SetAllPoints(); lbg:SetColorTexture(0.06, 0.05, 0.04, 1)
   prof.classIcon = left:CreateTexture(nil, "ARTWORK"); prof.classIcon:SetSize(66, 66); prof.classIcon:SetPoint("TOP", 0, -14)
-  prof.name = W.Label(left, "", "GameFontNormalLarge"); prof.name:SetPoint("TOP", 0, -88)
+  prof.name = W.Label(left, "", "GameFontNormalLarge"); prof.name:SetPoint("TOP", 0, -88); oneLine(prof.name, 190)
   prof.sub = W.Label(left, ""); prof.sub:SetPoint("TOP", 0, -110)
   prof.zone = W.Label(left, ""); prof.zone:SetPoint("TOP", 0, -126); prof.zone:SetTextColor(0.7, 0.7, 0.7)
   local note = W.Label(left, L.PROFILE_AUTO); note:SetPoint("TOPLEFT", 10, -156); note:SetWidth(180); note:SetTextColor(0.55, 0.55, 0.55)
@@ -1299,7 +1309,7 @@ end
 local function modRow(parent, i)
   local r = CreateFrame("Frame", nil, parent); r:SetSize(660, 22)
   r:SetPoint("TOPLEFT", 12, -168 - (i - 1) * 24)
-  r.name = W.Label(r, ""); r.name:SetPoint("LEFT", 0, 0); r.name:SetWidth(300)
+  r.name = W.Label(r, ""); r.name:SetPoint("LEFT", 0, 0); oneLine(r.name, 300)
   -- "Restablecer nombre/logo" needs ~180 px
   r.reset = W.Button(r, L.S_RESET_LOGO, UI.SegButtonWidth({ L.S_RESET_LOGO }) - 2, 20); r.reset:SetPoint("RIGHT", 0, 0)
   r.disband = W.Button(r, L.DISBAND, 120, 20); r.disband:SetPoint("RIGHT", r.reset, "LEFT", -6, 0)
@@ -1330,7 +1340,11 @@ local function listEdit(f, x, y, w, h, label, field, max, maxLen, norm)
   return ctl(eb)
 end
 local function buildRaids(f)
-  st.rlList = listEdit(f, 12, -6, 250, 120, L.S_RL_LIST, "rlList", 20, 48, function(n) return (ns.charKey or ns.fullName)(n) end)
+  -- 2.0: one identity per line («kas pitas» -> «Kas Pitas» by the roster; not a guild member -> dropped), up to 64 bytes
+  st.rlList = listEdit(f, 12, -6, 250, 120, L.S_RL_LIST, "rlList", 20, 64, function(n)
+    local id = ns.id(n)
+    return (id and ns.roster(id)) and id or nil
+  end)
   check(f, 8, -160, L.S_OFF_EDIT, "offEdit")
   st.rutil = listEdit(f, 300, -6, 360, 120, L.S_RUTIL, "rutil", 30, 60, nil)
   local n = W.Label(f, L.S_RAIDS_NOTE); n:SetPoint("TOPLEFT", 12, -196); n:SetWidth(640); n:SetTextColor(0.7, 0.7, 0.7)

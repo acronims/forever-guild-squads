@@ -363,7 +363,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "smoke: Raids tab, 10 with 2 squads, publish
   click(rb.primary); eq(#sent, 0, "no invites in combat")
   InCombatLockdown = origCombat
   click(rb.primary)
-  eq(#sent, 1, "one confirmed online player invited"); eq(sent[1], "Bob-Realm")
+  -- 2.0 (§6): InviteUnit gets the whisper target, not the key: same realm -> "Bob" (in Forever «Name Surname»)
+  eq(#sent, 1, "one confirmed online player invited"); eq(sent[1], "Bob", "InviteUnit target")
   C_PartyInfo.InviteUnit = origInvite
   -- attendance seen during the window, then close (confirmation accepted)
   local wall = G.WallNow()

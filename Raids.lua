@@ -200,7 +200,9 @@ end
 
 -------------------------------------------------------------------------------
 -- group API adapter for R.invite (every call guarded; missing APIs are simply absent)
-local function short(n) return (type(n) == "string" and n:match("^([^-]+)")) or n end
+-- 2.0: the name the client knows without the realm: the identity itself in Forever («Name Surname»), «Name» in realm
+-- mode (ns.shortName)
+local function short(n) return (type(n) == "string" and ns.shortName and ns.shortName(n)) or n end
 function G.GroupAPI()
   local api = {}
   api.now = function() return (type(GetTime) == "function" and GetTime()) or now() end
@@ -215,7 +217,17 @@ function G.GroupAPI()
   end
   local inviteFn = (C_PartyInfo and type(C_PartyInfo.InviteUnit) == "function" and C_PartyInfo.InviteUnit) or
                    (type(InviteUnit) == "function" and InviteUnit) or nil
-  if inviteFn then api.invite = function(n) inviteFn(n) end end
+  -- 2.0: InviteUnit takes the same target as a whisper (ns.whisperTarget: «Name Surname» in Forever, never
+  -- «Name-Realm», which the server does not find). No target (not in the roster, ambiguous) -> false: not invited,
+  -- R.invite counts it as noTarget
+  if inviteFn then
+    api.invite = function(n)
+      local target = ns.roster(n) and ns.whisperTarget and ns.whisperTarget(n)
+      if type(target) ~= "string" then return false end
+      inviteFn(target)
+      return true
+    end
+  end
   api.isRaid = function() return apiTrue(IsInRaid) end
   api.groupSize = function()
     if type(GetNumGroupMembers) ~= "function" then return 1 end
@@ -223,7 +235,7 @@ function G.GroupAPI()
     return (ok and type(n) == "number" and n > 0) and n or 1
   end
   api.inGroup = function(n)
-    return apiTrue(UnitInRaid, short(n)) or apiTrue(UnitInParty, short(n)) or apiTrue(UnitInRaid, n) or apiTrue(UnitInParty, n)
+    return apiTrue(UnitInRaid, n) or apiTrue(UnitInParty, n) or apiTrue(UnitInRaid, short(n)) or apiTrue(UnitInParty, short(n))
   end
   local convert = (C_PartyInfo and type(C_PartyInfo.ConvertToRaid) == "function" and C_PartyInfo.ConvertToRaid) or
                   (type(ConvertToRaid) == "function" and ConvertToRaid) or nil
@@ -234,7 +246,8 @@ function G.GroupAPI()
       local okN, n = pcall(GetNumGroupMembers)
       for i = 1, (okN and tonumber(n)) or 0 do
         local ok, name, _, sub = pcall(GetRaidRosterInfo, i)
-        if ok and type(name) == "string" then out[#out + 1] = { name = ns.charKey(name), index = i, sub = tonumber(sub) or 1 } end
+        local id = ok and ns.id(name)   -- «Name Surname-Realm» -> «Name Surname»
+        if id then out[#out + 1] = { name = id, index = i, sub = tonumber(sub) or 1 } end
       end
       return out
     end
@@ -263,6 +276,7 @@ function G.Invite(rid)
   if res.reason == "noInvite" then ns.print(L.FB_NO_INVITE_API); return res end
   if res.reason == "notLeader" then feedback(false, L.RB_NOT_LEADER); return res end
   local parts = { L.RB_FB_INVITED:format(res.invited, res.remaining) }
+  if res.noTarget then parts[#parts + 1] = L.RB_NO_TARGET:format(res.noTarget) end
   if res.noConvert then parts[#parts + 1] = L.RB_NO_CONVERT end
   if res.converted then parts[#parts + 1] = L.RB_CONVERTED end
   if res.sub == "missing" or res.sub == "failed" then parts[#parts + 1] = L.RB_NO_SUBGROUP end

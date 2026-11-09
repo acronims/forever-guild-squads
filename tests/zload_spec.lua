@@ -37,6 +37,8 @@ local GEO = {
   SetShown = function(self, v) rawset(self, "_vis", v and true or false) end,
   SetEnabled = function(self, v) rawset(self, "_enabled", v and true or false) end,
   SetText = function(self, t) rawset(self, "_text", t) end,
+  -- 2.0 (AC11): one-line labels truncate in the client instead of wrapping (ui_layout_spec, 25-character names)
+  SetWordWrap = function(self, v) rawset(self, "_wrap", v and true or false) end,
 }
 local stub
 local function child(self) local c = stub(); rawset(c, "_parent", self); return c end

@@ -626,11 +626,26 @@ function A.Disband(id)
 end
 function A.Approve(id) return editSquad(id, function(d) d.approved = true end) end
 
+-- 2.0: a typed name that is nobody: the error repeats what was typed («Kas Pitas»), so a wrong surname shows, and
+-- a first name that several characters share asks for the surname. Code "notGuildMember" either way (the UI caller
+-- repeats it in the same frame and ns.ShowError skips the repeat).
+function ns.TypedNameError(typed)
+  typed = type(typed) == "string" and (typed:gsub("^%s+", ""):gsub("%s+$", "")) or ""
+  local idx = ns.rosterIndex and ns.rosterIndex()
+  local same = idx and idx.byFirst and idx.byFirst[typed:lower()]
+  local text = (type(same) == "table" and #same > 1) and L.TYPED_AMBIGUOUS:format(typed)
+               or (typed ~= "" and L.TYPED_NOT_MEMBER:format(typed)) or ns.ErrText("notGuildMember")
+  lastErr.why, lastErr.t = "notGuildMember", GetTime and GetTime() or 0
+  print_(L.ERR:format(text))
+  return false, "notGuildMember"
+end
+
 -- captain adds a name (invite or accepting a request); goes to bench when the 5 are full
 function A.AddMember(id, name)
-  name = ns.charKey(name)   -- a typed "Fire Essency" is the character "Fire"
+  local typed = name
+  name = ns.id(name)   -- 2.0: a typed «kas pitas» is the character «Kas Pitas» (roster); nil = nobody
   -- only guild members can be added (the Buscador does not accept any other name)
-  if not (name and ns.roster(name)) then ns.ShowError("notGuildMember"); return false, "notGuildMember" end
+  if not (name and ns.roster(name)) then return ns.TypedNameError(typed) end
   local settings = M.settingsOf(ns.state)
   local p = ns.state.profiles[name]
   local requested = p and p.d.squad == id
@@ -661,7 +676,9 @@ end
 
 -- durable rejection: kind "req" (captain rejects `name`'s request to squad `sid`) or "inv" (I decline `sid`)
 function A.Reject(sid, name, kind)
-  name = ns.charKey(name)
+  local typed = name
+  name = ns.id(name)   -- 2.0: identity («Name Surname»); nil = nobody
+  if not name then return ns.TypedNameError(typed) end
   if M.isRejected(ns.state, sid, name, kind) then return true end -- repeated rejection: nothing to do
   local p = ns.state.profiles[name]
   local at = kind == "req" and ((p and p.d.reqAt) or 0) or 0
@@ -692,8 +709,10 @@ function A.InviteSquadToGroup(id)
     local r = ns.roster(name)
     if name ~= me then
       total = total + 1
-      if r and r.online then
-        if pcall(C_PartyInfo.InviteUnit, name) then sent = sent + 1 end
+      -- 2.0: InviteUnit takes the whisper target («Name Surname» in Forever), never the «Name-Realm» key
+      local target = r and r.online and ns.whisperTarget(name)
+      if target then
+        if pcall(C_PartyInfo.InviteUnit, target) then sent = sent + 1 end
       else offline = offline + 1 end
     end
   end
@@ -742,8 +761,9 @@ end
 
 -- receiver side: only from a member of my squad, at most one per sender every 5 min
 function ns.OnCall(payload, sender)
-  local from = ns.fullName(sender)
+  local from = ns.id(sender)   -- 2.0: «Name Surname»; nil = nobody
   local id = A.MySquadId()
+  if not from then return end
   if not id or not M.isMember(ns.state, id, from) then return end
   if not ns.Call.accept(seenCalls, from, GetTime()) then return end
   local text = ns.Call.text(payload)
@@ -1010,8 +1030,10 @@ SlashCmdList.GUILDSQUADS = function(msg)
     db.minimap.hide = false
     if ns.Minimap then ns.Minimap.Show() end
   elseif cmd == "trust" then
-    -- /gsq trust reset <name>: forget a member's key (he lost his SavedVariables); learned again from him in person
-    local sub, who = (msg or ""):match("^%S+%s+(%S+)%s*(%S*)")
+    -- /gsq trust reset <Name Surname>: forget a member's key (he lost his SavedVariables); learned again from him in
+    -- person. 2.0: <who> is the rest of the line (1.2.x cut «Kas Pitas» to «Kas»)
+    local sub = (msg or ""):match("^%S+%s+(%S+)")
+    local who = (msg or ""):match("^%S+%s+%S+%s+(.-)%s*$")
     if sub == "newkey" then
       local W = ns.W
       local go = function()
@@ -1019,7 +1041,9 @@ SlashCmdList.GUILDSQUADS = function(msg)
       end
       if W and W.Confirm then W.Confirm(L.TRUST_NEWKEY_CONFIRM, go) else print_(L.TRUST_NEWKEY_CONFIRM) end
     elseif sub == "reset" and who and who ~= "" and ns.Trust and ns.trustDB then
-      local name = (ns.fullName and ns.fullName(who)) or who
+      local name = ns.id(who)
+      -- nobody (not in the roster and no key held under that identity): say so, nothing is forgotten
+      if not (name and (ns.roster(name) or (ns.trustDB.keys and ns.trustDB.keys[name]))) then ns.TypedNameError(who); return end
       ns.Trust.reset(ns.trustDB, name)
       if ns.Sync and ns.Sync.DropOwnCertCache then ns.Sync.DropOwnCertCache() end
       print_((L.TRUST_RESET or "Clave olvidada: %s"):format(name))
