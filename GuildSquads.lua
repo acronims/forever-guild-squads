@@ -124,16 +124,6 @@ function ns.isAmbiguous(name)
   return key ~= nil and ambig[key] ~= nil and key ~= ns.me()
 end
 
--- TEMPORARY aliases (SPEC §2.4) so B and C merge in any order. C removes them at the end:
--- git grep -nE 'ns\.(fullName|charKey)\(' -- '*.lua' ':!tests/*' = 0.
-function ns.fullName(name) return ns.id(name) end
-function ns.charKey(name)
-  local id = ns.id(name)
-  if id == nil then return nil end
-  idCtx.mode, idCtx.myRealm = ns.ID_MODE, myRealm()
-  return id, I.surnameOf(name, idCtx)
-end
-
 -- forever: the identity itself («Kas Pitas»: nothing to cut, the realm is not part of it); realm: the 1.2.2
 function ns.shortName(name)
   if ns.ID_MODE == "forever" then

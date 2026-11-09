@@ -3,7 +3,7 @@
 -- every input (sender, roster, unit, typed name, saved 1.x data).
 --   forever (WoW Forever: RegionalUniqueNamesEnabled() is true): "Name Surname", no realm, unique in the region
 --           (Blizzard: "a full name that is unique within a region"; agents/research-surnames.md).
---   realm   (anything else): "Name-Realm", exactly the 1.2.2 key (ns.fullName / M.charName).
+--   realm   (anything else): "Name-Realm", exactly the 1.2.2 key (the 1.2.2 ns.fullName / M.charName: I.realmKey).
 -- I.id(a, b, ctx) -> identity or nil. ctx = { mode = "forever"|"realm", myRealm = "Realm", index = I.newIndex(),
 -- isSecret = fn }: no globals. Rules: (a) not a string, empty or secret -> nil; (b) idempotent:
 -- I.id(I.id(x)) == I.id(x); (c) never raises; (d) splits with plain string.find, never %s / %w (locale, UTF-8);
@@ -38,7 +38,7 @@ function I.trim(s)
 end
 
 -------------------------------------------------------------------------------
--- realm mode: the 1.2.2 code, unchanged (M.charName and M.whisperTarget are wrappers of these two)
+-- realm mode: the 1.2.2 code, unchanged (I.realmKey is the 1.2.2 M.charName; M.whisperTarget wraps I.realmWhisper)
 
 -- "Fire", "Fire Essency", "Fire-Realm", "Fire Essency-Realm", "Fire-Realm Essency" -> "Fire-Realm" (realm = `realm`
 -- when the name has none) and the surname (nil when there is none). Character names have no spaces: everything after
@@ -220,7 +220,7 @@ function I.firstOf(id)
   return cut and sub(id, 1, cut - 1) or id
 end
 
--- the surname a name carries (forever: what follows the first space of its identity; realm: M.charName's)
+-- the surname a name carries (forever: what follows the first space of its identity; realm: I.realmKey's)
 function I.surnameOf(raw, ctx)
   if type(raw) ~= "string" or type(ctx) ~= "table" then return nil end
   if ctx.mode == "forever" then

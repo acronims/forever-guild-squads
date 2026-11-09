@@ -56,7 +56,7 @@ local function syncNs(state, me, rosterFn)
   local sent = {}
   local ns = { Model = M, Permissions = NS.Permissions, Serialize = S, state = state, roster = rosterFn or roster,
                rosterReady = true, onlineCount = function() return 1 end, me = function() return me end,
-               fullName = function(n) return n end, After = function(_, fn) fn() end, serverTime = function() return T0 + 1000 end,
+               After = function(_, fn) fn() end, serverTime = function() return T0 + 1000 end,
                Comm = { Send = function(tag, p) sent[#sent + 1] = { tag, p } end } }
   loadmod("Sync.lua", ns)
   return ns, sent

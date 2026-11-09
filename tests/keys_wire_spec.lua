@@ -14,7 +14,7 @@ local function wireNs(me, myPk, p2p)
   local sent = {}
   local ns = { Model = M, Permissions = NS.Permissions, Serialize = S, Trust = T, state = M.newState(), roster = roster,
                rosterReady = true, onlineCount = function() return 1 end, me = function() return me end,
-               fullName = function(n) return n end, After = function(_, fn) fn() end, serverTime = function() return T0 end,
+               After = function(_, fn) fn() end, serverTime = function() return T0 end,
                trustDB = T.st({}), myPk = function() return myPk end, Cert = NS.Cert, certDB = NS.Cert.st({}),
                Comm = { Send = function(tag, p, ch, to) sent[#sent + 1] = { tag, p, ch, to } end } }
   if p2p then ns.P2P = NS.P2P end

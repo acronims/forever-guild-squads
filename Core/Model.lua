@@ -788,12 +788,11 @@ end
 -- guild. Otherwise it stays untouched for the character of the right guild. inGuild(name) -> bool.
 M.LEGACY_KEYS = { "records", "progress", "races" }
 
--- 2.0: the identity lives in Core/Identity.lua (docs/SPEC-v2.0-identidad.md §2). These two stay as wrappers of its
--- realm mode (the 1.2.2 answers, unchanged). M.charName: "Fire", "Fire Essency", "Fire-Realm", "Fire Essency-Realm",
--- "Fire-Realm Essency" -> the realm key "Fire-Realm" and the surname (nil when there is none).
-function M.charName(raw, realm) return ns.Identity.realmKey(raw, realm) end
--- M.whisperTarget: the 1.2.2 target "Name Surname" (any realm) from a realm key and the roster surname; alt = with
--- "-Realm". In WoW Forever (mode forever) the target is the identity itself: ns.whisperTarget, never this.
+-- 2.0: the identity lives in Core/Identity.lua (docs/SPEC-v2.0-identidad.md §2). The 1.2.2 M.charName is gone: its
+-- realm key is ns.Identity.realmKey, and outside Core/Identity.lua the code asks ns.id (AC9; tests/gates.js fails on
+-- a charName / ns.fullName / ns.charKey reference). M.whisperTarget stays as the wrapper of its realm mode: the 1.2.2
+-- target "Name Surname" (any realm) from a realm key and the roster surname; alt = with "-Realm". In WoW Forever
+-- (mode forever) the target is the identity itself: ns.whisperTarget, never this.
 function M.whisperTarget(key, surname, myRealm, alt) return ns.Identity.realmWhisper(key, surname, myRealm, alt) end
 -------------------------------------------------------------------------------
 -- 2.0 (docs/SPEC-v2.0-identidad.md §5, BRO D1 = drop): the SavedVariables of the 1.x, where a character was

@@ -37,16 +37,16 @@ local roster = { ["Kas-Realm"] = { online = true, surname = "Pitas" }, ["Ñoño-
 -- 2.0: these part-1 checks are the realm mode (ns.ID_MODE = "realm": the identity is the 1.2.2 key "Name-Realm" and the
 -- 1.2.2 whisper rules stay whole, SPEC-v2.0 §6); part 1b below is the forever mode
 ns.ID_MODE = "realm"
-ns.fullName = function(n)
+local realmKey = NS.Identity.realmKey   -- the 1.2.2 M.charName (2.0: removed from Model, SPEC §2.4)
+ns.id = function(n)
   if type(n) ~= "string" or n == "" then return nil end
-  return (M.charName(n, "Realm"))
+  return (realmKey(n, "Realm"))
 end
-ns.id = ns.fullName
-ns.roster = function(n) return roster[ns.fullName(n) or ""] end
+ns.roster = function(n) return roster[ns.id(n) or ""] end
 ns.me = function() return "Ann-Realm" end
-ns.isSelf = function(s) return ns.fullName(s) == "Ann-Realm" end
+ns.isSelf = function(s) return ns.id(s) == "Ann-Realm" end
 ns.whisperTarget = function(n, alt)
-  local key = ns.fullName(n); local r = key and roster[key]
+  local key = ns.id(n); local r = key and roster[key]
   if not r then return nil end
   return M.whisperTarget and M.whisperTarget(key, r.surname, "Realm", alt)
 end
@@ -82,7 +82,7 @@ test("1.2.2 names: the character key never carries the surname, in every plausib
     { "Ñoño Pérez-Otro", "Ñoño-Otro", "Pérez" }, { "Ástrid Muñoz", "Ástrid-Realm", "Muñoz" }, { "Élan-Otro", "Élan-Otro", nil },
   }
   for _, c in ipairs(cases) do
-    local key, surname = M.charName(c[1], "Realm")
+    local key, surname = realmKey(c[1], "Realm")
     eq(key, c[2], "key of «" .. c[1] .. "»"); eq(surname, c[3], "surname of «" .. c[1] .. "»")
   end
 end)
@@ -415,9 +415,9 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.2: roster «Name Surname-Realm»: SendA
     eq(ns.whisperTarget("Cid-Otro"), "Cid Ñúñez", "another realm: «Name Surname» too")
     eq(ns.whisperTarget("Cid-Otro", true), "Cid Ñúñez-Otro", "the other variant: with the suffix")
     -- a sender «Name Surname» without the realm (WoW Forever, research-surnames.md): the roster gives his realm
-    eq(ns.fullName("Cid Ñúñez"), "Cid-Otro", "sender «Cid Ñúñez» = Cid-Otro (roster)")
-    eq(ns.fullName("Bob Pitas"), "Bob-Realm", "sender «Bob Pitas» = Bob-Realm")
-    eq(ns.fullName("Zed Nadie"), "Zed-Realm", "not in the roster: my realm, as before")
+    eq(ns.id("Cid Ñúñez"), "Cid-Otro", "sender «Cid Ñúñez» = Cid-Otro (roster)")
+    eq(ns.id("Bob Pitas"), "Bob-Realm", "sender «Bob Pitas» = Bob-Realm")
+    eq(ns.id("Zed Nadie"), "Zed-Realm", "not in the roster: my realm, as before")
     ok(ns.isSelf("Ann Essency"), "our own echo «Ann Essency» is ours")
     ok(Comm.ChannelOk("WHISPER", "Cid Ñúñez"), "a whisper from «Cid Ñúñez» (another realm) is accepted")
     ok(ns.whisperTarget("Zed-Realm") == nil, "not in the roster: no target")
@@ -446,7 +446,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.2: roster «Name Surname-Realm»: SendA
     end
     ok(toBob >= 1, "SendAddonMessage got «Bob Pitas»"); eq(#bad, 0, "whispers without the surname: " .. table.concat(bad, ","))
     -- the sender of CHAT_MSG_ADDON is «Bob-Realm» (no surname): his messages and his key stay under Bob-Realm
-    eq(ns.fullName("Bob-Realm"), "Bob-Realm"); ok(Comm.ChannelOk("WHISPER", "Bob-Realm"), "a whisper from Bob is accepted")
+    eq(ns.id("Bob-Realm"), "Bob-Realm"); ok(Comm.ChannelOk("WHISPER", "Bob-Realm"), "a whisper from Bob is accepted")
   end)
   C_ChatInfo.SendAddonMessage = origSend
   c.roster[1][1], c.roster[2][1], c.roster[3][1] = orig[1], orig[2], orig[3]

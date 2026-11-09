@@ -2,6 +2,8 @@
 //   API       a call used as a condition / operand is NOT a guard (fixture appended to UI/Widgets.lua);
 //   IDENTITY  (2.0, AC9) a unit name API read outside the identity code fails unless its line says `-- id-ok`
 //             (fixture put at the top of the file: Hall.lua ends with `return H`).
+//   ALIASES   (2.0, AC9) any reference to ns.fullName / ns.charKey / charName outside Core/Identity.lua fails; a
+//             comment or a `fullName` field of another table does not.
 // Copies the addon to a temp dir per case, adds one fixture and runs the gate on it.
 // Usage: NODE_PATH=/tmp/gsq-node/node_modules node tests/tools/gates-selftest.js
 const fs = require('fs');
@@ -12,6 +14,7 @@ const root = path.resolve(__dirname, '..', '..');
 const gates = path.join(root, 'tests', 'gates.js');
 const API = (name) => 'API unguarded call not in 16001 list: ' + name;
 const ID = (name, file) => `IDENTITY ${name} outside the identity code without "-- id-ok": ${file}:1 `;
+const AL = (name, file) => `ALIAS ${name} (1.x identity helper, removed in 2.0): ${file}:`;
 const cases = [
   // [file, lua, where ('append' | 'top'), expected exit code, line the gate must print (expected exit 1) or must not print]
   ['UI/Widgets.lua', 'if GsqFakeApiA() then end', 'append', 1, API('GsqFakeApiA')],
@@ -28,6 +31,15 @@ const cases = [
   // GuildSquads.lua: only its identity functions (unitName, ns.idFromUnit, ns.me) may read the unit name
   ['GuildSquads.lua', 'local _gsqG = UnitName("player")', 'top', 1, ID('UnitName', 'GuildSquads.lua')],
   ['Core/Identity.lua', 'local _gsqH = UnitName', 'top', 0, ID('UnitName', 'Core/Identity.lua')],
+  // the 1.x identity helpers removed at the 2.0 integration: a call, by value, an index, a definition
+  ['UI/Widgets.lua', 'local _gsqI = ns.fullName("Kas")', 'append', 1, AL('fullName', 'UI/Widgets.lua')],
+  ['UI/Widgets.lua', 'local _gsqJ = (ns.charKey or ns.id)', 'append', 1, AL('charKey', 'UI/Widgets.lua')],
+  ['UI/Widgets.lua', 'local _gsqK = ns["fullName"]', 'append', 1, AL('fullName', 'UI/Widgets.lua')],
+  ['UI/Widgets.lua', 'local _gsqL = ns.Model.charName', 'append', 1, AL('charName', 'UI/Widgets.lua')],
+  ['UI/Widgets.lua', 'local function charName(a) return a end', 'append', 1, AL('charName', 'UI/Widgets.lua')],
+  ['UI/Widgets.lua', '-- ns.fullName(x) was the 1.x key', 'append', 0, AL('fullName', 'UI/Widgets.lua')],
+  ['UI/Widgets.lua', 'local _gsqM = {}; _gsqM.fullName = 1', 'append', 0, AL('fullName', 'UI/Widgets.lua')],
+  ['Core/Identity.lua', 'local _gsqN = {}; _gsqN.charName = 1', 'top', 0, AL('charName', 'Core/Identity.lua')],
 ];
 let failed = 0;
 for (const [file, lua, where, want, line] of cases) {

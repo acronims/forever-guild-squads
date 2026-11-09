@@ -76,7 +76,8 @@ Reglas:
 - `ns.whisperTarget(id, alt)`: ver §6.
 - `ns.displayName(id)` y `ns.shortName(id)`: en forever los dos devuelven `id`; en realm, como la 1.2.2.
 - Alias **temporales** `ns.fullName = ns.id` y `ns.charKey = function(n) return ns.id(n), surnameOf(n) end`, para que B y C se puedan fusionar en cualquier orden. Al final de C, `git grep -nE 'ns\.(fullName|charKey)\(' -- '*.lua' ':!tests/*'` = 0, y las definiciones de los alias se borran.
-- `M.charName` y `M.whisperTarget` (Core/Model.lua:796 y :819) se quedan como envoltorios de `Core/Identity.lua` para el modo realm.
+- `M.charName` y `M.whisperTarget` (Core/Model.lua:796 y :819) se quedan como envoltorios de `Core/Identity.lua` para el modo realm. **Corregido en la integración, ver el apunte siguiente.**
+- **Apunte de la integración (9-nov, `feat/2.0`).** Esta sección conservaba `M.charName` y el grep de AC9 (`charName\(`) lo prohibía. Decisión: en el código de producción no queda ninguna llamada a `M.charName` fuera de `Core/Identity.lua`, y la definición se borra. `I.realmKey` (`ns.Identity.realmKey`) lo sustituye: da las mismas respuestas de la 1.2.2. Fuera de `Core/Identity.lua`, el código pregunta a `ns.id`. Los alias `ns.fullName` y `ns.charKey` también se borran. `M.whisperTarget` se queda como envoltorio de `I.realmWhisper` para el modo realm, porque AC9 no lo prohíbe. Lo hace cumplir `tests/gates.js` §6 ALIASES: falla cualquier referencia a `ns.fullName`, `ns.charKey` o `charName` fuera de `Core/Identity.lua` (llamada, por valor, índice o definición), y `gates-selftest.js` lo comprueba.
 
 ---
 
@@ -266,7 +267,7 @@ Nunca se muestra «-Reino» (en Forever el reino no es identidad). Si no cabe en
   - Simulador, con 4 de la 2.0 y 2 de la 1.2.2 (`GSQ_REF=<sha 1.2.2>`): 0 errores de Lua en los 6; ningún registro de autor 1.2.2 en el estado de un 2.0, ni al revés; los 2.0 ven `old=2`.
 - [ ] **AC7 — batería en modo forever (el valor por defecto del simulador pasa a `forever:true`):** S19 (las 2 variantes), S2, S8 (`--s8min 1`, partes ≤ 5601, cola ≤ 500 y 0 throttle), S11 y S15 (verificados ≥ 26/50 y ≥ 38/50, 0 claves falsas), S16 y S16b en **PASS**. S1-S7 y S9 ×3 también siguen en verde (matriz de la CI).
 - [ ] **AC8 — 0 líneas «No hay ningún jugador»:** `tests/sim/run.js` imprime al final `SYSSHOWN total=0` sumando todos los escenarios ejecutados. Si no es 0, el run falla.
-- [ ] **AC9 — gate:** `tests/gates.js` falla si aparece `UnitName(`, `UnitNameUnmodified(` o `UnitFullName(` fuera de `Core/Identity.lua` y `GuildSquads.lua` (identidad) sin la marca `-- id-ok`. `gates-selftest.js` comprueba que detecta un `UnitName("party1")` metido en Hall.lua. Al final, `git grep -nE 'ns\.(fullName|charKey)\(|charName\(' -- '*.lua' ':!tests/*'` da 0 resultados.
+- [ ] **AC9 — gate:** `tests/gates.js` falla si aparece `UnitName(`, `UnitNameUnmodified(` o `UnitFullName(` fuera de `Core/Identity.lua` y `GuildSquads.lua` (identidad) sin la marca `-- id-ok`. `gates-selftest.js` comprueba que detecta un `UnitName("party1")` metido en Hall.lua. Al final, `git grep -nE 'ns\.(fullName|charKey)\(|charName\(' -- '*.lua' ':!tests/*'` da 0 resultados (lo mantiene el gate §6 ALIASES; ver el apunte de §2.4).
 - [ ] **AC10 — periferia (`tests/periphery_spec.lua`):**
   - `UnitName("party1")` → `("Kas","Pitas")` da «Kas Pitas» en los testigos de Hall y de Progress. **Rojo en 5e4a845**, que da «Kas-Pitas».
   - El `InviteUnit` falso recibe «Kas Pitas», nunca un nombre con «-».

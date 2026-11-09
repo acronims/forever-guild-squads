@@ -140,8 +140,10 @@ test("surname in the roster ('Fire Essency', rank 4) + UnitName 'Fire': save pro
   ok(sid and ns.state.squads[sid] and ns.state.squads[sid].d.captain == "Fire-ClassicBetaPvE", "I captain the new squad")
 end)
 
-test("M.charName: the 4 surname formats + no surname (no regression)", function()
-  local M = NS.Model
+-- 2.0 (SPEC §2.4, AC9): the 1.2.2 M.charName is gone; its realm key is ns.Identity.realmKey (same answers)
+test("I.realmKey (the 1.2.2 M.charName): the 4 surname formats + no surname (no regression)", function()
+  local realmKey = NS.Identity.realmKey
+  eq(NS.Model.charName, nil, "M.charName removed")
   local cases = {
     { "Fire Essency", "Fire-Home", "Essency" },
     { "Fire-Reino", "Fire-Reino", nil },
@@ -151,16 +153,16 @@ test("M.charName: the 4 surname formats + no surname (no regression)", function(
     { "Ñandú Ébano", "Ñandú-Home", "Ébano" },     -- non-ASCII: split on the plain space, not on %s
   }
   for _, c in ipairs(cases) do
-    local key, surname = M.charName(c[1], "Home")
+    local key, surname = realmKey(c[1], "Home")
     eq(key, c[2], "key of '" .. c[1] .. "'")
     eq(surname, c[3], "surname of '" .. c[1] .. "'")
   end
-  eq(M.charName("", "Home"), nil, "empty")
-  eq(M.charName(nil, "Home"), nil, "nil")
-  eq(M.charName(" Essency", "Home"), nil, "no character name")
+  eq(realmKey("", "Home"), nil, "empty")
+  eq(realmKey(nil, "Home"), nil, "nil")
+  eq(realmKey(" Essency", "Home"), nil, "no character name")
 end)
 
-test("glue: the 4 formats and a plain name key the roster like ns.fullName(UnitName) and senders", function()
+test("glue: the 4 formats and a plain name key the roster like ns.id(UnitName) and senders", function()
   local roster = {
     { "Fire Essency", "Member", 4, 20, "Warrior", "Durotar", "", "", true, 0, "WARRIOR" },
     { "Ann-ClassicBetaPvE", "GM", 0, 22, "Priest", "Durotar", "", "", true, 0, "PRIEST" },
@@ -177,11 +179,11 @@ test("glue: the 4 formats and a plain name key the roster like ns.fullName(UnitN
   local n = 0
   for k in pairs(list) do n = n + 1; ok(not k:find(" ", 1, true), "no space in key " .. k) end
   eq(n, 5, "5 entries")
-  ok(ns.roster(ns.fullName("Bob-OtherRealm")), "addon sender (no surname) found")
+  ok(ns.roster(ns.id("Bob-OtherRealm")), "addon sender (no surname) found")
   ok(ns.roster("Dee"), "bare name found")
   eq(ns.displayName("Fire-ClassicBetaPvE"), "Fire Essency", "display with surname")
   eq(ns.displayName("Ann-ClassicBetaPvE"), "Ann", "display without surname")
-  eq(ns.charKey("Fire Essency"), "Fire-ClassicBetaPvE", "typed name with surname -> character key")
+  eq(ns.id("Fire Essency"), "Fire-ClassicBetaPvE", "typed name with surname -> character key")
 end)
 
 test("honest error: roster ready and I am missing -> new text; roster not ready -> old text", function()

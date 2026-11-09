@@ -123,7 +123,7 @@ local function id(n)
   if sp and dash and dash > sp then return n:sub(1, dash - 1) end
   return sp and n or nil
 end
-local nsC = { Serialize = NS.Serialize, Chunk = NS.Chunk, Queue = NS.Queue, Model = M, id = id, fullName = id,
+local nsC = { Serialize = NS.Serialize, Chunk = NS.Chunk, Queue = NS.Queue, Model = M, id = id,
               me = function() return "Ann Essency" end, roster = function(n) return id(n) and {} or nil end,
               Sync = { OnOldPeer = function() olds = olds + 1 end } }
 nsC.isSelf = function(s) return id(s) == "Ann Essency" end

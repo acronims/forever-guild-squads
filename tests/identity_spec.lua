@@ -128,18 +128,20 @@ test("AC1 identity: never raises, whatever the context", function()
   end
 end)
 
-test("AC1 identity: realm wrappers M.charName / M.whisperTarget keep the 1.2.2 answers", function()
+-- 2.0 integration (SPEC §2.4, AC9): the 1.2.2 M.charName is gone; I.realmKey gives its answers, M.whisperTarget stays
+test("AC1 identity: realm mode I.realmKey (the 1.2.2 M.charName) and M.whisperTarget keep the 1.2.2 answers", function()
   local M = NS.Model
+  eq(M.charName, nil, "M.charName removed: I.realmKey replaces it")
   local cases = {
     { "Fire Essency", "Fire-Home", "Essency" }, { "Fire-Reino", "Fire-Reino", nil },
     { "Fire Essency-Reino", "Fire-Reino", "Essency" }, { "Fire-Reino Essency", "Fire-Reino", "Essency" },
     { "Fire", "Fire-Home", nil }, { "Ñandú Ébano", "Ñandú-Home", "Ébano" },
   }
   for _, c in ipairs(cases) do
-    local key, surname = M.charName(c[1], "Home")
+    local key, surname = I.realmKey(c[1], "Home")
     eq(key, c[2], "key of " .. c[1]); eq(surname, c[3], "surname of " .. c[1])
   end
-  eq(M.charName(" Essency", "Home"), nil); eq(M.charName("", "Home"), nil); eq(M.charName(nil, "Home"), nil)
+  eq(I.realmKey(" Essency", "Home"), nil); eq(I.realmKey("", "Home"), nil); eq(I.realmKey(nil, "Home"), nil)
   eq(M.whisperTarget("Kas-Realm", "Pitas", "Realm"), "Kas Pitas")
   eq(M.whisperTarget("Kas-Realm", "Pitas", "Realm", true), "Kas Pitas-Realm")
   eq(M.whisperTarget("Kas-Other", "Pitas", "Realm"), "Kas Pitas", "any realm: no suffix")
@@ -314,8 +316,9 @@ test("AC1 ns.*: forever (RegionalUniqueNamesEnabled), me «Kas Pitas», two Kas 
   eq(ns.displayName("Kas Mora"), "Kas Mora"); eq(ns.shortName("Kas Mora"), "Kas Mora"); eq(ns.displayName("Kas Pitas"), "Kas Pitas")
   ok(ns.displayName("Kas Mora") ~= ns.displayName("Kas Pitas"), "the two Kas show apart")
   ok(not ns.isAmbiguous("Kas Pitas") and not ns.isAmbiguous("Kas Mora"), "forever: no ambiguous identities")
-  -- temporary aliases for B and C (§2.4)
-  eq(ns.fullName("Kas Pitas-" .. MY), "Kas Pitas"); local k, s = ns.charKey("Kas Mora-" .. MY); eq(k, "Kas Mora"); eq(s, "Mora")
+  -- the temporary aliases of §2.4 are gone after the merge (AC9): ns.id gives the identity, ns.roster the surname
+  eq(ns.fullName, nil, "alias ns.fullName removed"); eq(ns.charKey, nil, "alias ns.charKey removed")
+  eq(ns.id("Kas Mora-" .. MY), "Kas Mora"); eq(ns.roster("Kas Mora-" .. MY).surname, "Mora")
   -- writes work under the new identity
   local okP, whyP = ns.Actions.SaveProfile({ role = "TANK" })
   ok(okP, "save profile: " .. tostring(whyP))
@@ -378,7 +381,8 @@ test("AC1 ns.*: realm mode keeps the 1.2.2 (surname in the roster, UnitName bare
   eq(ns.roster("Fire").surname, "Essency"); eq(ns.roster("Fire").realm, "ClassicBetaPvE"); eq(ns.roster("Fire").raw, "Fire Essency")
   eq(ns.displayName("Fire-ClassicBetaPvE"), "Fire Essency"); eq(ns.shortName("Fire-ClassicBetaPvE"), "Fire")
   eq(ns.whisperTarget("Bob-OtherRealm"), "Bob Stone"); eq(ns.whisperTarget("Bob-OtherRealm", true), "Bob Stone-OtherRealm")
-  eq(ns.fullName("Fire"), "Fire-ClassicBetaPvE"); local k, s = ns.charKey("Fire Essency"); eq(k, "Fire-ClassicBetaPvE"); eq(s, "Essency")
+  eq(ns.fullName, nil, "alias ns.fullName removed"); eq(ns.charKey, nil, "alias ns.charKey removed")
+  eq(ns.id("Fire"), "Fire-ClassicBetaPvE"); eq(ns.id("Fire Essency"), "Fire-ClassicBetaPvE"); eq(ns.roster("Fire Essency").surname, "Essency")
   local out = diag()
   ok(out:find("id mode=realm me=Fire-ClassicBetaPvE surname=yes", 1, true), out)
   ok(out:find("[roster] me=Fire-ClassicBetaPvE found=yes entries=3 surnames=2", 1, true), out)

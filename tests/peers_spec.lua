@@ -160,10 +160,10 @@ end }
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.1: a sender with a surname is the character: key, roster, whisper target, own echo", function(c)
   local ns = c.ns
   local S, Comm, T = ns.Sync, ns.Comm, ns.Trust
-  eq(ns.fullName("Cid Essency"), "Cid-Realm", "bare name + surname")
-  eq(ns.fullName("Cid Essency-Realm"), "Cid-Realm", "surname before the realm")
-  eq(ns.fullName("Cid-Realm Essency"), "Cid-Realm", "surname after the realm")
-  eq(ns.fullName("Cid"), "Cid-Realm", "a name without surname as before")
+  eq(ns.id("Cid Essency"), "Cid-Realm", "bare name + surname")
+  eq(ns.id("Cid Essency-Realm"), "Cid-Realm", "surname before the realm")
+  eq(ns.id("Cid-Realm Essency"), "Cid-Realm", "surname after the realm")
+  eq(ns.id("Cid"), "Cid-Realm", "a name without surname as before")
   ok(ns.roster("Cid Essency") ~= nil, "the roster finds a sender with a surname")
   ok(ns.isSelf("Ann Essency"), "our own echo with a surname is ours")
   ok(Comm.ChannelOk("WHISPER", "Cid Essency-Realm"), "a whisper from a member with a surname is accepted")

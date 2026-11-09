@@ -7,6 +7,8 @@
 //   3. TOC     Interface 16001, SavedVariables declared, every listed file exists (case-exact, backslash paths),
 //              every addon .lua outside tests/ is listed.
 //   4. LOCALE  key parity: every L.KEY assigned in Locales/enUS.lua is assigned in Locales/esES.lua and vice versa.
+//   5. IDENTITY the unit name APIs only in the identity code (2.0, AC9) or on a line marked `-- id-ok`.
+//   6. ALIASES no ns.fullName / ns.charKey / charName (the 1.x identity helpers) outside Core/Identity.lua (2.0, AC9).
 // Usage: NODE_PATH=/tmp/gsq-node/node_modules node tests/gates.js [path/to/Probe.lua]
 // The optional probe file only adds names (e.g. checked in game by GuildSquadsProbe) to the known list.
 const fs = require('fs');
@@ -293,6 +295,38 @@ for (const [f, ast] of parsed) {
   v(ast.body, null, null);
 }
 console.log(`IDENTITY: ${idRefs} reference(s) to ${[...ID_APIS].join('/')} outside Core/Identity.lua and the identity functions of GuildSquads.lua, ${idMarked} marked -- id-ok`);
+
+// ---------- 6: the 1.x identity helpers are gone (2.0, docs/SPEC-v2.0-identidad.md §2.4 and AC9) ----------
+// The temporary aliases ns.fullName / ns.charKey of the contract and the 1.2.2 M.charName were removed at the
+// integration: outside Core/Identity.lua the addon asks ns.id (the realm key of the 1.2.2 is ns.Identity.realmKey).
+// Any reference fails, not only a call: the function passed by value (`(ns.charKey or ns.fullName)(n)`, the 1.2.x UI
+// pattern), a definition, `ns["fullName"]`, a `charName` of any table or a bare `charName(...)`. It is the AC9 grep
+// `git grep -nE 'ns\.(fullName|charKey)\(|charName\(' -- '*.lua' ':!tests/*'` = 0, kept by the gate (comments aside).
+const OLD_NS = new Set(['fullName', 'charKey']), OLD_ANY = new Set(['charName']);
+let oldRefs = 0;
+for (const [f, ast] of parsed) {
+  if (ID_FILES.has(rel(f))) continue;
+  const key = (n) => n.type === 'MemberExpression' ? n.identifier.name
+    : n.type === 'IndexExpression' && n.index.type === 'StringLiteral' ? n.index.raw.slice(1, -1) : null;
+  const v = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { n.forEach(v); return; }
+    let name = null;
+    if (n.type === 'MemberExpression' || n.type === 'IndexExpression') {
+      const k = key(n);
+      if (OLD_ANY.has(k) || (OLD_NS.has(k) && n.base.type === 'Identifier' && n.base.name === 'ns')) name = k;
+    }
+    if (n.type === 'CallExpression' && n.base.type === 'Identifier' && OLD_ANY.has(n.base.name)) name = n.base.name;
+    if (n.type === 'FunctionDeclaration' && n.identifier && n.identifier.type === 'Identifier' && OLD_ANY.has(n.identifier.name)) name = n.identifier.name;
+    if (name) {
+      oldRefs++;
+      fail(`ALIAS ${name} (1.x identity helper, removed in 2.0): ${rel(f)}:${n.loc.start.line} (use ns.id; the realm key: ns.Identity.realmKey)`);
+    }
+    for (const k of Object.keys(n)) if (k !== 'loc' && k !== 'range') v(n[k]);
+  };
+  v(ast.body);
+}
+console.log(`ALIASES: ${oldRefs} reference(s) to ns.fullName/ns.charKey/charName outside Core/Identity.lua`);
 
 console.log(failures === 0 ? 'GATES: OK' : `GATES: ${failures} failure(s)`);
 process.exit(failures === 0 ? 0 : 1);

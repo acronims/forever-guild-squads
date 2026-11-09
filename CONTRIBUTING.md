@@ -16,7 +16,7 @@ Any prefix works as long as `NODE_PATH` points at its `node_modules` (for exampl
 | What | Command |
 |---|---|
 | Unit tests (every `tests/*_spec.lua`, run in fengari) | `node tests/run.js` |
-| Static gates (fail the build): Lua 5.1 syntax, calls/globals vs the vendored 1.60.1 API list in `tests/tools/` unless guarded, TOC, enUS/esES key parity | `node tests/gates.js` |
+| Static gates (fail the build): Lua 5.1 syntax, calls/globals vs the vendored 1.60.1 API list in `tests/tools/` unless guarded, TOC, enUS/esES key parity, unit name APIs and the 1.x identity helpers outside the identity code (2.0) | `node tests/gates.js` |
 | Docs links (relative links and anchors resolve; `docs/en` and `docs/es` hold the same files) | `node tests/tools/check-links.js` |
 | Multi-client simulator (a WoW Forever realm by default; `--realm` = the 1.2.x world) | `node tests/sim/run.js [S1 … S22] [--seed N] [--s5seeds N] [--s8min N] [--s9seeds N] [--s9min N] [--realm]` |
 
@@ -77,6 +77,8 @@ workspace). Since 2.0 (`docs/SPEC-v2.0-identidad.md`) that full name is the **id
   (`Comm.SystemFilter`).
 - **Only `Core/Identity.lua` and `GuildSquads.lua` call `UnitName`, `UnitNameUnmodified` or `UnitFullName`**; any
   other call needs the `-- id-ok` mark (the gate checks it). Overlord keeps the bare first name (`-- id-ok`).
+- **The 1.x helpers are gone**: `ns.fullName`, `ns.charKey` and `M.charName` no longer exist. Ask `ns.id` (the 1.2.2
+  realm key is `ns.Identity.realmKey`); the gate fails on any reference to them outside `Core/Identity.lua`.
 - **The simulator is a WoW Forever realm by default** (`tests/sim/sim.js`, `forever`; `GSQ_SIM_FOREVER=0` gives the
   1.2.x world back): roster and raid roster `Name Surname-Realm`, `UnitName` `(Name, Surname)`, `UnitFullName` in
   both forms (alternating per client), senders `Name Surname`, and a server that delivers a whisper only to the

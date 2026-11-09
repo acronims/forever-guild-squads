@@ -17,7 +17,7 @@ local function wireNs(me, sk, pk)
   state.sigdb = sigdb
   local ns = { Model = M, Permissions = NS.Permissions, Serialize = S, Trust = T, Sig = G, P2P = NS.P2P, state = state,
                roster = roster, rosterReady = true, onlineCount = function() return 1 end, me = function() return me end,
-               fullName = function(n) return n end, After = function(_, fn) fn() end, serverTime = function() return T0 end,
+               After = function(_, fn) fn() end, serverTime = function() return T0 end,
                trustDB = T.st({}), sigDB = sigdb, myPk = function() return pk end, mySk = function() return sk end,
                Comm = { Send = function(tag, p, ch, to, onSent, urgent, skip) sent[#sent + 1] = { tag, p, ch, to, onSent, urgent, skip } end } }
   loadmod("Sync.lua", ns)
