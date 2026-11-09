@@ -77,7 +77,7 @@ R.SCHEMA = {
   t = { "s", 5 }, who = { "s", 64 }, by = { "s", 64 }, ts = { "n" }, src = { "s", 6 },
   lv = { "n" }, cls = { "s", 16 }, race = { "s", 24 },
   inst = { "s", 64 }, iid = { "n" }, it = { "s", 8 }, enc = { "n" }, boss = { "s", 64 }, gs = { "n" },
-  win = { "n" }, pres = { "L", 40, 64 }, sqm = { "L", 40, 100 },
+  win = { "n" }, pres = { "L", 40, 64 }, sqm = { "L", 40, 140 },   -- review D B8: «name>sid», 64 + 1 + 75 bytes
   k = { "s", 8 }, key = { "s", 48 }, n = { "n" }, sea = { "s", 16 },
 }
 local KEEP = {

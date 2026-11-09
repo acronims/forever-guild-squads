@@ -40,12 +40,15 @@ end
 local function whisper(name)
   -- 1.2.2: WoW Forever only finds «Name Surname» (ns.whisperTarget); the bare name when the roster has no surname
   local short = (ns.whisperTarget and ns.whisperTarget(name)) or ns.shortName(name)
+  -- review D B10: a name the roster does not know never goes to «/w» with a «-Realm» (WoW Forever: «Name Surname»)
+  if ns.ID_MODE == "forever" and type(short) == "string" then short = short:match("^([^-]*)") or short end
   if ChatFrame_SendTell and pcall(ChatFrame_SendTell, short) then return end
   if ChatFrameUtil and ChatFrameUtil.SendTell and pcall(ChatFrameUtil.SendTell, short) then return end
   if ChatFrame_OpenChat then pcall(ChatFrame_OpenChat, "/w " .. short .. " "); return end
   -- 16001 only has ChatFrameUtil.OpenChat
   if ChatFrameUtil and type(ChatFrameUtil.OpenChat) == "function" then pcall(ChatFrameUtil.OpenChat, "/w " .. short .. " ") end
 end
+UI.Whisper = whisper
 local function inviteGroup(name)
   if inCombat() then ns.print(L.IN_COMBAT); return end
   -- 2.0: the whisper target («Name Surname» in Forever), never the «Name-Realm» key the server does not find

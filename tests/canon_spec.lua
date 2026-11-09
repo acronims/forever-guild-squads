@@ -415,3 +415,38 @@ test("B2 property on the addon: ns.id(ns.id(x)) == ns.id(x) with the roster load
     if y then eq(ns.id(y), y, ("%q"):format(x)) end
   end
 end)
+
+-------------------------------------------------------------------------------
+-- the trivial lows of review D
+test("B8: a race observation keeps «name>squad id» whole for a 64-byte name and its squad (sqm cap)", function()
+  local R = NS.Races
+  local name = string.rep("Ж", 12) .. " " .. string.rep("Ж", 12) .. string.rep("x", 15)   -- 49 + 15 = 64 bytes
+  local sid = name .. ":" .. "1700000000"
+  local entry = name .. ">" .. sid
+  eq(#entry, 140, "fixture length")
+  local ev = R.sanitize({ t = "kill", who = name, by = name, ts = 1700000000, inst = "Foo", it = "raid", enc = 1, pres = { name }, sqm = { entry } })
+  ok(ev and ev.sqm, "sanitized")
+  eq(ev.sqm[1], entry, "the entry is not cut")
+end)
+
+test("B4: rejecting a typed name that matches nobody in the roster stores no rejection", function()
+  local ns, env, fire, diag, printed = boot(F())
+  local A = ns.Actions
+  local before = 0
+  for _ in pairs(ns.state.rejects or {}) do before = before + 1 end
+  A.Reject("Kas Pitas:1", "Nadie Nunca", "req")
+  local after = 0
+  for _ in pairs(ns.state.rejects or {}) do after = after + 1 end
+  eq(after, before, "rejection stored for a name outside the roster")
+end)
+
+test("B10: the manual whisper of a name the roster does not know never opens «/w» with a «-Realm»", function()
+  local ns, env = boot(F())
+  local told = {}
+  env.ChatFrame_SendTell = function(n) told[#told + 1] = n end
+  ok(ns.UI and ns.UI.Whisper, "ns.UI.Whisper")
+  ns.UI.Whisper("Zed Nadie-" .. MY)
+  ns.UI.Whisper("Ann Oak-" .. MY)
+  eq(told[1], "Zed Nadie", "unknown name: no realm suffix")
+  eq(told[2], "Ann Oak", "known: the whisper target")
+end)
