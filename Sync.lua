@@ -114,9 +114,19 @@ local function serverNow()
   return nil
 end
 
+-- review D (A1): decisions over data use the strict roster (only an identity is a member, the GM or an officer) and
+-- Model refuses a record whose author or name fields are not identities ("alias")
+local function strictRoster() return ns.rosterStrict or ns.roster end
 local function ctxFor(sender)
-  return { roster = ns.roster, sender = sender, me = ns.me and ns.me() or nil, now = serverNow(),
+  return { roster = strictRoster(), canon = ns.isCanon, sender = sender, me = ns.me and ns.me() or nil, now = serverNow(),
            ledger = ns.gdb and ns.gdb.mine or nil }
+end
+-- a name inside a message must already be an identity (review D, A1): never normalized; counted when it is not
+local function canonName(x)
+  if not ns.isCanon then return true end      -- this file loaded alone (unit mocks): as it came
+  if ns.isCanon(x) then return true end
+  if ns.noteAlias then ns.noteAlias(x) end
+  return false
 end
 
 local function applyRaw(rec, ctx)
@@ -134,7 +144,7 @@ end
 
 -- sender = physical sender (nil = local/own disk)
 function Sync.Apply(rec, sender)
-  local ok, why = applyRaw(rec, sender and ctxFor(sender) or { roster = ns.roster })
+  local ok, why = applyRaw(rec, sender and ctxFor(sender) or { roster = strictRoster(), canon = ns.isCanon })
   if not ok and why == "notInGuild" and not ns.rosterReady then
     if #pending < MAX_PENDING then pending[#pending + 1] = { rec = rec, sender = sender } end
   elseif not ok and why == "relay" then
@@ -145,6 +155,8 @@ function Sync.Apply(rec, sender)
     -- a relayed version with my name that I never wrote: deny it (repudiate) and resend mine
     Sync.stats.mine = Sync.stats.mine + 1
     if ns.OnMine then pcall(ns.OnMine, rec) end
+  elseif not ok and why == "alias" then
+    Sync.stats.alias = (Sync.stats.alias or 0) + 1
   elseif not ok and why == "future" then
     Sync.stats.future = Sync.stats.future + 1
     -- a record from a peer whose clock is ahead of ours is applied again once it is no
@@ -184,7 +196,7 @@ local envelope
 local ownDirty = true
 -- local write: apply then broadcast
 function Sync.Publish(rec)
-  local ok, why = M.apply(ns.state, rec, { roster = ns.roster })
+  local ok, why = M.apply(ns.state, rec, { roster = strictRoster(), canon = ns.isCanon })
   if not ok then return false, why end
   ownDirty = true
   -- signing costs one ed25519 sign + a hash per own record: not on every click. Peers that hear the record from us
@@ -292,6 +304,8 @@ local function learnKeys(payload, from)
   for i = 1, math.min(#payload.r, 20) do local r = payload.r[i]; if type(r) == "table" then authors[r.a] = true end end
   for a in pairs(authors) do
     local h = payload.ks[a]
+    -- review D (A1): a key (and its rotation) only for an identity: «ann oak» / «Ann-Realm» never get a candidate
+    if type(a) == "string" and type(h) == "string" and not canonName(a) then h = nil end
     if type(a) == "string" and type(h) == "string" and a ~= (ns.me and ns.me()) and (a == from or (ns.roster and ns.roster(a))) then
       local pk = T.unhex(h)
       if pk then
@@ -480,7 +494,8 @@ local function offerManifests(payload, from)
   local keyOf = function(name) if ns.trustDB then return T.keyOf(ns.trustDB, name) end end
   for i = 1, math.min(#payload.m, 20) do
     local m = payload.m[i]
-    if type(m) == "table" and type(m.a) == "string" and (authors[m.a] or m.a == from or #payload.r == 0) and m.a ~= me and (m.a == from or (ns.roster and ns.roster(m.a))) then
+    -- review D (A1): the manifest of an identity only
+    if type(m) == "table" and type(m.a) == "string" and canonName(m.a) and (authors[m.a] or m.a == from or #payload.r == 0) and m.a ~= me and (m.a == from or (ns.roster and ns.roster(m.a))) then
       pcall(G.offer, db, m, keyOf, from)
     end
   end

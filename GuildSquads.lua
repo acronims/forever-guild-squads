@@ -70,12 +70,19 @@ local function evalIdMode(final)
   return mode
 end
 ns.EvalIdMode = evalIdMode
+-- review D M1: an addon loaded after the login (no PLAYER_LOGIN to come) takes its mode at ADDON_LOADED
+local function loggedIn()
+  if type(IsLoggedIn) ~= "function" then return false end
+  local okL, v = pcall(IsLoggedIn)
+  return okL and v == true
+end
+ns.ModeFrozen = function() return modeFrozen end
 do
   local idFrame = CreateFrame("Frame")
   idFrame:RegisterEvent("ADDON_LOADED")
   idFrame:RegisterEvent("PLAYER_LOGIN")
   idFrame:SetScript("OnEvent", function(_, ev, arg1)
-    if ev == "ADDON_LOADED" and arg1 == ADDON then evalIdMode(false)
+    if ev == "ADDON_LOADED" and arg1 == ADDON then evalIdMode(loggedIn())
     elseif ev == "PLAYER_LOGIN" then evalIdMode(true) end
   end)
 end
@@ -117,6 +124,27 @@ function ns.isSelf(sender)
   local id = ns.id(sender)
   return id ~= nil and id == ns.me()
 end
+-- review D (A1): a name that arrives inside data (the author and the name fields of a record, a key of `ks` / `kr`,
+-- the author of a manifest, the recipient of a W envelope, the saved trust / manifests / certificates / pending
+-- copies) must already be an identity: ns.id(x) == x. «Ann-Realm», «ann oak», «Ann» or «Ann Oak-X» resolve to Ann Oak
+-- in the roster (rank, GM, display) but are other names for trust, signatures and the «mine» check: two colluders
+-- could certify a key for one of them and get a record shown as hers. Such a name is refused, never normalized, and
+-- counted (/gsq diag, the id line: alias=N and the first one).
+function ns.isCanon(x)
+  return type(x) == "string" and x ~= "" and ns.id(x) == x
+end
+local aliasN, aliasFirst = 0, nil
+function ns.noteAlias(x)
+  aliasN = aliasN + 1
+  if aliasFirst == nil and type(x) == "string" and not secret(x) then aliasFirst = string.sub(x, 1, 48) end
+end
+-- x when it is an identity; nil (counted) otherwise
+function ns.canon(x)
+  if ns.isCanon(x) then return x end
+  ns.noteAlias(x)
+  return nil
+end
+function ns.AliasCount() return aliasN, aliasFirst end
 -- realm mode (1.2.2): a name whose key two roster members share (never my own key: my entry is kept)
 function ns.isAmbiguous(name)
   if ns.ID_MODE ~= "realm" then return false end
@@ -193,6 +221,13 @@ end
 function ns.roster(name)
   return rosterCache[ns.id(name) or ""]
 end
+-- review D (A1): the roster for decisions over data (Model and P2P: member, GM, officer, rank ties). Only an identity
+-- resolves: «ann oak» is not the GM there, whatever ns.roster says for a typed name
+function ns.rosterStrict(name)
+  local id = ns.id(name)
+  if id == nil or id ~= name then return nil end
+  return rosterCache[id]
+end
 function ns.onlineCount() return onlineN end
 function ns.rosterList() return rosterCache end
 function ns.rosterIndex() return rosterIdx end
@@ -237,7 +272,8 @@ function ns.RosterDiag()
   for key, names in pairs(ambig) do na = na + 1; first = first or (key .. ": " .. table.concat(names, ", ")) end
   local mine = me and rosterCache[me]
   local hasSurname = ns.ID_MODE == "forever" and me ~= nil and me:find(" ", 1, true) ~= nil or (mine and mine.surname ~= nil)
-  return ("id mode=%s me=%s surname=%s\n"):format(tostring(ns.ID_MODE), tostring(me), hasSurname and "yes" or "no") ..
+  return ("id mode=%s me=%s surname=%s alias=%d%s\n"):format(tostring(ns.ID_MODE), tostring(me), hasSurname and "yes" or "no",
+    aliasN, aliasFirst and (" (" .. aliasFirst .. ")") or "") ..
     ("[roster] me=%s found=%s entries=%d surnames=%d online=%d realms=%s ambiguous=%d%s mode=%s"):format(tostring(me),
     mine and "yes" or "no", n, s, onlineN, table.concat(parts, ","), na, first and (" (" .. first .. ")") or "",
     tostring(ns.ID_MODE))
@@ -255,6 +291,41 @@ local function guildKey()
   local ok, name, _, _, gRealm = pcall(GetGuildInfo, "player")
   if not ok or type(name) ~= "string" or name == "" then return nil end -- not loaded yet: try on the next roster
   return M.guildKey(name, gRealm or myRealm())
+end
+
+-- review D (A1): the saved data of a partition holds identities only. A key under «ann oak» (trust keys, pend,
+-- contested, suspects), a manifest or a certificate (sig.man / sig.own, cert.crt / cert.own) or a pending copy whose
+-- author is not canonical goes, counted; the records go through Sync.Apply, which refuses them. Runs after the 2.0
+-- migration (the roster is read: ns.id resolves through it). Returns how many went.
+function ns.SweepAliases(g)
+  if type(g) ~= "table" then return 0 end
+  local n = 0
+  local function sweep(t)
+    if type(t) ~= "table" then return end
+    local bad = {}
+    for k in pairs(t) do if not ns.isCanon(k) then bad[#bad + 1] = k end end
+    for _, k in ipairs(bad) do t[k] = nil; ns.noteAlias(k); n = n + 1 end
+  end
+  local tr = type(g.trust) == "table" and g.trust or nil
+  if tr then sweep(tr.keys); sweep(tr.pend); sweep(tr.contested); sweep(tr.suspects) end
+  if type(g.sig) == "table" then sweep(g.sig.man); sweep(g.sig.own) end
+  if type(g.cert) == "table" then sweep(g.cert.crt); sweep(g.cert.own) end
+  local pend = type(g.p2p) == "table" and type(g.p2p.pend) == "table" and g.p2p.pend or nil
+  if pend then
+    for kid, byV in pairs(pend) do
+      if type(byV) == "table" then
+        local bad = {}
+        for vk, e in pairs(byV) do
+          if type(e) == "table" and type(e.r) == "table" and not ns.isCanon(e.r.a) then bad[#bad + 1] = vk end
+        end
+        for _, vk in ipairs(bad) do ns.noteAlias(byV[vk].r.a); byV[vk] = nil; n = n + 1 end
+      end
+    end
+    local empty = {}
+    for kid, byV in pairs(pend) do if type(byV) == "table" and next(byV) == nil then empty[#empty + 1] = kid end end
+    for _, kid in ipairs(empty) do pend[kid] = nil end
+  end
+  return n
 end
 
 local function selectGuild()
@@ -275,6 +346,8 @@ local function selectGuild()
     local went = (idr.swept or 0) + (idr.dropped or 0)
     if went > 0 then ns.sweptSurnames = went; ns.debug(("2.0 identity: %d 1.x entries dropped, %d own records re-signed"):format(went, idr.resigned or 0)) end
   end
+  -- review D (A1): saved names that are not identities (keys, manifests, certificates, pending copies) go, counted
+  ns.SweepAliases(g)
   -- v1.2 annex F: the keys we learned for this guild's members (TOFU strong / weak with quorum)
   if ns.Trust then
     g.trust = type(g.trust) == "table" and g.trust or {}
@@ -323,8 +396,21 @@ local function unloadGuild()
 end
 ns.UnloadGuild = unloadGuild
 
+-- review D M1: RegionalUniqueNamesEnabled() may give false at ADDON_LOADED and true at PLAYER_LOGIN (SPEC §2.1: the
+-- PLAYER_LOGIN one wins). A roster read in between keyed the session in the wrong mode and it never migrated. With
+-- the API present the roster waits for the final mode (rosterDeferred: PLAYER_LOGIN reads it); a roster (and a
+-- partition) read in another mode is dropped and read again, so the migration runs in the final one.
+local rosterMode, rosterDeferred = nil, false
 local function readRoster()
   if not ns.ID_MODE then return end   -- no identity yet (before ADDON_LOADED): nothing to key the roster with
+  if not modeFrozen and type(RegionalUniqueNamesEnabled) == "function" then rosterDeferred = true; return end
+  rosterDeferred = false
+  if rosterMode ~= nil and rosterMode ~= ns.ID_MODE then
+    unloadGuild()
+    rosterCache, onlineN, rosterIdx, ambig = {}, 0, I.newIndex(), {}
+    ns.rosterReady = false
+  end
+  rosterMode = ns.ID_MODE
   if not (IsInGuild and IsInGuild()) then
     rosterCache = {}; onlineN = 0; rosterIdx = I.newIndex(); ambig = {}
     unloadGuild()   -- no guild -> no partition
@@ -668,7 +754,8 @@ end
 function A.Reject(sid, name, kind)
   local typed = name
   name = ns.id(name)   -- 2.0: identity («Name Surname»); nil = nobody
-  if not name then return ns.TypedNameError(typed) end
+  -- review D B4: a typed name that matches nobody in the roster is not stored as a rejection
+  if not (name and ns.roster(name)) then return ns.TypedNameError(typed) end
   if M.isRejected(ns.state, sid, name, kind) then return true end -- repeated rejection: nothing to do
   local p = ns.state.profiles[name]
   local at = kind == "req" and ((p and p.d.reqAt) or 0) or 0
@@ -972,6 +1059,10 @@ f:SetScript("OnEvent", function(_, ev, arg1)
     loadDB()
     Comm.Init(Sync.OnMessage)
   elseif ev == "PLAYER_LOGIN" then
+    -- review D M1: the mode is final now (also when this frame gets the event first); a roster that waited for it, or
+    -- one read in another mode, is read now
+    evalIdMode(true)
+    if rosterDeferred or (rosterMode ~= nil and rosterMode ~= ns.ID_MODE) then readRoster() end
     requestRoster()
   elseif ev == "GUILD_ROSTER_UPDATE" or ev == "PLAYER_GUILD_UPDATE" then
     -- the first read is immediate (bootstrap); later bursts are coalesced into one read after 1.5 s
@@ -1050,7 +1141,7 @@ SlashCmdList.GUILDSQUADS = function(msg)
 end
 
 function ns.ImportText(text)
-  local applied, rejected = M.import(ns.state, text, { roster = ns.roster, sender = ns.me() })
+  local applied, rejected = M.import(ns.state, text, { roster = ns.rosterStrict, canon = ns.isCanon, sender = ns.me() })
   print_(L.IMPORTED:format(applied, rejected))
   -- share what we restored
   if applied > 0 then Sync.Hello() end

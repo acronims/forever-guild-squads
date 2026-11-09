@@ -146,10 +146,6 @@ local function foreverId(a, b, ctx)
       if td then surname, realm = sub(tail, 1, td - 1), sub(tail, td + 1)   -- "Kas Pitas-Realm": the realm goes
       else surname = tail end                                                -- "Kas Pitas"
     end
-    if surname then
-      local td = find(surname, "-", 1, true)      -- nothing after a dash is ever part of the identity
-      if td then surname = sub(surname, 1, td - 1) end
-    end
   else
     local d = find(a, "-", 1, true)
     if d then
@@ -162,6 +158,13 @@ local function foreverId(a, b, ctx)
     if b and not surname then                     -- UnitName / UnitFullName: (name, surname)
       if isRealm(b, ctx, ix) then realm = realm or b else surname = b end
     end
+  end
+  if surname then
+    -- nothing after a dash is ever part of the identity, and no blank around the surname (review D, B2: «Kas Pitas
+    -- -Realm» gave «Kas Pitas », and the 2nd value «X-Y» an identity with a dash)
+    local td = find(surname, "-", 1, true)
+    if td then surname = sub(surname, 1, td - 1) end
+    surname = I.trim(surname)
   end
   if not first or first == "" then return nil end
   if surname and surname ~= "" then
@@ -205,10 +208,16 @@ local function idCore(a, b, ctx)
   return nil
 end
 
+-- rule (b) by construction (review D, B2): an answer is only given when it is its own identity, so
+-- I.id(I.id(x)) == I.id(x) for every x. The second pass is skipped when the answer is the input itself (the common
+-- case: an identity asked again). Odd forms whose first answer is not a fixed point («Kas- Realm» in realm mode) -> nil.
 function I.id(a, b, ctx)
   if type(ctx) ~= "table" then return nil end
   local ok, r = pcall(idCore, a, b, ctx)
-  if ok and type(r) == "string" and r ~= "" then return r end
+  if not (ok and type(r) == "string" and r ~= "") then return nil end
+  if r == a and b == nil then return r end
+  local ok2, r2 = pcall(idCore, r, nil, ctx)
+  if ok2 and r2 == r then return r end
   return nil
 end
 

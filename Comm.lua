@@ -314,8 +314,14 @@ function Comm.ForMe(to)
   if type(to) ~= "string" or not ns.me then return false end
   local me, key = ns.me(), keyOf(to)
   if not (me and key) then return false end
+  -- review D (A1): in forever the recipient is my identity exactly (the sender writes ns.id(target)); «kas pitas» or
+  -- «Kas Pitas-Realm» are other spellings, never for me (counted)
+  if forever() then
+    if to == me then return true end
+    if key == me and ns.noteAlias then ns.noteAlias(to) end
+    return false
+  end
   if key == me then return true end
-  if forever() then return false end
   if string.match(key, "^([^-]+)") ~= string.match(me, "^([^-]+)") then return false end
   return not (ns.roster and ns.roster(key))
 end

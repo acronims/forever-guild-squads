@@ -583,7 +583,48 @@ function M.provenance(rec, ctx, settings, u)
   return true
 end
 
--- Apply a record. ctx = { roster = fn, sender?, me?, trusted?, now? }. Returns ok, reason.
+-- review D (A1): the names a record carries, by kind (the fields the 2.0 migration remaps, fixOwn below). With
+-- profile.xferTo ("squadId>Name") and the author they must all be identities: M.aliasOf(rec, canon) gives the first one
+-- that is not (canon(x) = ns.id(x) == x), nil when there is none. Empty strings are no names (empty raid slots).
+M.NAME_FIELDS = {
+  squad = { one = { "captain", "xferFrom" }, many = { "members", "bench" } },
+  reject = { one = { "name" } },
+  roster = { one = { "owner" }, many = { "main", "bench" } },
+  rsvp = { one = { "name" } },
+  attendance = { many = { "names" } },
+  witness = { many = { "names" } },
+  achgrant = { one = { "who" } },
+  settings = { many = { "rlList" } },
+}
+function M.aliasOf(rec, canon)
+  if not canon(rec.a) then return rec.a end
+  local d = type(rec.d) == "table" and rec.d or {}
+  local f = M.NAME_FIELDS[rec.k]
+  if f then
+    for _, k in ipairs(f.one or {}) do
+      local v = d[k]
+      if type(v) == "string" and v ~= "" and not canon(v) then return v end
+    end
+    for _, k in ipairs(f.many or {}) do
+      local l = d[k]
+      if type(l) == "table" then
+        for _, v in ipairs(l) do if type(v) == "string" and v ~= "" and not canon(v) then return v end end
+      end
+    end
+  end
+  if rec.k == "profile" and type(d.xferTo) == "string" then
+    local cut = #d.xferTo
+    while cut > 0 and string.sub(d.xferTo, cut, cut) ~= ">" do cut = cut - 1 end
+    local cap = cut > 0 and string.sub(d.xferTo, cut + 1) or ""
+    if cap ~= "" and not canon(cap) then return cap end
+  end
+  return nil
+end
+
+-- Apply a record. ctx = { roster = fn, canon = fn?, sender?, me?, trusted?, now? }. Returns ok, reason.
+-- canon (default ns.isCanon, set by GuildSquads.lua; absent when Core is loaded alone): "alias" for a record with a
+-- name that is not an identity (review D, A1), before anything else reads it (also before "notInGuild": an alias is
+-- never held as pending)
 local applyKind
 function M.apply(state, rec, ctx)
   local okS, whyS = M.validShape(rec)
@@ -595,6 +636,14 @@ function M.apply(state, rec, ctx)
   if not data then return false, "shape" end
   local u = rec.u == 1 or rec.u == true
   rec = { k = rec.k, id = rec.id, a = rec.a, ts = rec.ts, sq = rec.sq, d = data }
+  local canon = ctx.canon or ns.isCanon
+  if type(canon) == "function" then
+    local bad = M.aliasOf(rec, canon)
+    if bad ~= nil then
+      if ns.noteAlias then ns.noteAlias(bad) end
+      return false, "alias"
+    end
+  end
   if not P.inGuild(roster, rec.a) then return false, "notInGuild" end
   local settings = M.settingsOf(state)
   local okP, whyP = M.provenance(rec, ctx, settings, u)
