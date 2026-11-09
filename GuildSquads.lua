@@ -272,7 +272,7 @@ local function selectGuild()
   local key = guildKey()
   if not key then return false end
   local root = GuildSquadsDB
-  local g, migrated = M.guildDB(root, key, function(n) return rosterCache[ns.fullName(n) or ""] ~= nil end)
+  local g, migrated = M.guildDB(root, key, function(n) return ns.roster(n) ~= nil end)   -- 2.0: by identity (§3 #11)
   ns.gdb, ns.guildKey = g, key
   g.ann = nil -- announced hashes are not used
   -- 2.0 (SPEC-v2.0 §5): the 1.x names of this partition and of my character move to «Name Surname» before anything
