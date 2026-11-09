@@ -64,6 +64,7 @@ const ORDER = [
   'pvp_rank_spec.lua',
   'catalog_spec.lua',
   'catalog_ui_spec.lua',
+  'whisper_spec.lua',
   'zload_spec.lua',
   'zzcold_spec.lua',
 ];

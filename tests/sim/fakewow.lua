@@ -140,6 +140,21 @@ C_ChatInfo = {
   end,
 }
 SendChatMessage = function(text, channel) SIM_CHAT[#SIM_CHAT + 1] = { tostring(text), tostring(channel) } end
+-- 1.2.2: the server's whisper errors (sim.js: whisperMember). The esES string of the client; the chat filters of
+-- ChatFrame_AddMessageEventFilter run on every CHAT_MSG_SYSTEM line, and a line no filter hides is shown
+-- (SIM_SYSSHOWN: the spam BRO saw, SIM_SYSLAST the last one)
+ERR_CHAT_PLAYER_NOT_FOUND_S = "No hay ningún jugador con el nombre %s."
+local chatFilters = {}
+ChatFrame_AddMessageEventFilter = function(ev, fn) chatFilters[ev] = chatFilters[ev] or {}; table.insert(chatFilters[ev], fn) end
+SIM_SYSSHOWN, SIM_SYSLAST = 0, ""
+function SIM_system(msg)
+  for _, fn in ipairs(chatFilters.CHAT_MSG_SYSTEM or {}) do
+    local okF, hide = pcall(fn, DEFAULT_CHAT_FRAME, "CHAT_MSG_SYSTEM", msg)
+    if not okF then err("chat filter", hide) elseif hide then return 0 end
+  end
+  SIM_SYSSHOWN, SIM_SYSLAST = SIM_SYSSHOWN + 1, tostring(msg)
+  return 1
+end
 
 -- timers on the simulated clock
 local timers, tseq = {}, 0

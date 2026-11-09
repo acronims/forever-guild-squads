@@ -1252,7 +1252,9 @@ function S18(seed) {
 function s19run(seed, connected, check) {
   const tag = connected ? '[connected realms]' : '[one realm]';
   // connected realms: names of the reader's own realm come bare, a sender on the other realm with its surname
-  const sim = new Sim(connected ? { seed, realm: 'RealmB', guildRealm: 'RealmB', bareSameRealm: true, surnameSenders: true } : { seed });
+  // 1.2.2: whispers only reach «Name Surname»; across realms the suffix is refused (whisperSuffix 'never'), so every
+  // first whisper to the other realm fails and the other variant has to take over without a line in the chat
+  const sim = new Sim(connected ? { seed, realm: 'RealmB', guildRealm: 'RealmB', bareSameRealm: true, surnameSenders: true, whisperSuffix: 'never' } : { seed });
   const realmOf = (n) => {
     if (!connected) return sim.realm;
     if (n === 'Mb1' || n === 'Mb3') return 'RealmA';
@@ -1344,7 +1346,14 @@ function s19run(seed, connected, check) {
   check(`S19${tag}: still the same model at the end (${Math.round(sim.t - tLast)} s after the last login)`, sim.converged(), '');
   check(`S19${tag}: ns.peerCount() = 3 on each 1.2 client`, cs.every((c) => st[c.name].peers === '3'), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].peers]))));
   check(`S19${tag}: every 1.2 client holds the certificates of the other 2`, cs.every((c) => st[c.name].crt === 2), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].crt]))));
-  check(`S19${tag}: whispers to a name that is not a character (surname in it) = 0`, !sim.stats.badWhisper, `${sim.stats.badWhisper || 0}${sim.badWhisperTo ? ' (first: ' + sim.badWhisperTo + ')' : ''}`);
+  // 1.2.2: the whisper target is «Name Surname» (BRO's test in the game). One realm: the server refuses none. Connected
+  // realms ('never'): only the first whispers of each pair across realms (the main variant, with the suffix) fail
+  const shown = cs.map((c) => Number(c.val('SIM_SYSSHOWN')[0]));
+  const lastShown = cs.map((c) => String(c.val('SIM_SYSLAST')[0])).filter(Boolean)[0] || '';
+  const wd = cs.map((c) => c.val('NS.Comm.WhisperDiag and NS.Comm.WhisperDiag() or "-"')[0]).join(' | ');
+  if (!connected) check(`S19${tag}: whispers the server does not find (not «Name Surname») = 0`, !sim.stats.badWhisper, `${sim.stats.badWhisper || 0}${sim.badWhisperTo ? ' (first: ' + sim.badWhisperTo + ')' : ''}`);
+  else check(`S19${tag}: whispers the server does not find <= 4 per pair across realms (4 pairs), then the other variant`, (sim.stats.badWhisper || 0) <= 16, `${sim.stats.badWhisper || 0}${sim.badWhisperTo ? ' (first: ' + sim.badWhisperTo + ')' : ''}; ${wd}`);
+  check(`S19${tag}: server «No hay ningún jugador con el nombre» lines shown in the chat = 0`, shown.every((n) => n === 0), `${JSON.stringify(shown)} ${lastShown} (errors from the server: ${sim.stats.sysErrors || 0})`);
   check(`S19${tag}: the 5 old clients are counted as old peers (OldPeerCount = 5) on each`, cs.every((c) => st[c.name].old === 5), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].old]))));
   return { sim, metrics: { tConv, tAll, rosterOnline, squadId, st, t: Math.round(sim.t), ...sim.stats } };
 }

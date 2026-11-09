@@ -196,6 +196,8 @@ class Client {
   run(code) { const r = loadRun(this.L, code, 'sim:' + this.name).map(str); this.after(); return r; }
   fire(ev, ...args) { callG(this.L, 'SIM_step', this.sim.t); callG(this.L, 'SIM_fire', ev, ...args); this.after(); }
   step() { callG(this.L, 'SIM_step', this.sim.t); this.after(); }
+  // 1.2.2: a CHAT_MSG_SYSTEM line through the chat filters; counted in SIM_SYSSHOWN when no filter hides it
+  systemMessage(msg) { callG(this.L, 'SIM_step', this.sim.t); callG(this.L, 'SIM_system', msg); this.after(); }
   after() {
     if (!this.L) return;
     const L = this.L;
@@ -240,6 +242,12 @@ class Sim {
     // character (a surname in it) is never delivered and counted in stats.badWhisper (first one in badWhisperTo).
     this.surnames = opts.surnames !== false;
     this.surnameSenders = !!opts.surnameSenders;
+    // 1.2.2 (BRO in the game, 9-nov 03:11): the server only delivers a whisper to the full name WITH the surname
+    // («Kas Pitas»); «Kas» / «Kas-Realm» are not found (the server shows «Kas-Realm» as «Kas Realm»). The realm suffix:
+    // whisperSuffix 'other' (default) = required for a member of another realm and refused for one of the sender's
+    // realm; 'never' = refused always (the bare «Name Surname» reaches any realm). A refused whisper is not delivered,
+    // counts in stats.badWhisper and the sender gets CHAT_MSG_SYSTEM «No hay ningún jugador con el nombre ...».
+    this.whisperSuffix = opts.whisperSuffix || 'other';
     this.present = new Set();                     // roster members online WITHOUT a client of this addon
     this.guild = opts.guild || 'Forever';
     this.epoch = opts.epoch || 1795000000;      // run second 0 in server time
@@ -270,6 +278,23 @@ class Sim {
     if (this.surnameSenders && from.realm !== to.realm) return from.name + ' ' + this.surnameOf(from.name) + '-' + from.realm;
     return from.full;
   }
+  // 1.2.2: the roster member a whisper target reaches (null = the server does not find that name)
+  whisperMember(from, target) {
+    let name = target, realm = null;
+    const dash = target.indexOf('-');
+    if (dash >= 0) { name = target.slice(0, dash); realm = target.slice(dash + 1); }
+    let first = name, surname = null;
+    const sp = name.indexOf(' ');
+    if (sp >= 0) { first = name.slice(0, sp); surname = name.slice(sp + 1); }
+    const r = this.roster.find((m) => m.name === first);
+    if (!r) return null;
+    if (!this.surnames) return surname === null ? r : null;      // the old form: «Name» / «Name-Realm»
+    const rRealm = r.realm || this.realm, fromRealm = from.realm || this.realm;
+    if (surname !== this.surnameOf(first)) return null;           // «Kas», «Kas-Realm»: no such character
+    if (realm === null) return (this.whisperSuffix === 'never' || rRealm === fromRealm) ? r : null;
+    if (this.whisperSuffix === 'never' || realm !== rRealm || rRealm === fromRealm) return null;
+    return r;
+  }
   setRank(name, rank) { for (const r of this.roster) if (r.name === name) r.rank = rank; this.markRoster(); }
   removeMember(name) { this.roster = this.roster.filter((r) => r.name !== name); this.markRoster(); }
   isOnline(name) { const c = this.clients[name]; return !!(c && c.online) || this.present.has(name); }
@@ -285,12 +310,15 @@ class Sim {
     const targets = [];
     if (channel === 'GUILD') { for (const c of this.online()) if (c !== from && c.guild && c.guild === from.guild) targets.push(c); }
     else if (channel === 'WHISPER') {
-      const short = target.replace(/-.*$/, '');
-      const c = this.clients[short];
+      const r = this.whisperMember(from, target);
+      const c = r && this.clients[r.name];
       if (c && c.online) targets.push(c);
-      else if (!this.roster.some((r) => r.name === short)) {
-        this.stats.badWhisper = (this.stats.badWhisper || 0) + 1;
-        if (!this.badWhisperTo) this.badWhisperTo = target;
+      else {
+        if (!r) { this.stats.badWhisper = (this.stats.badWhisper || 0) + 1; if (!this.badWhisperTo) this.badWhisperTo = target; }
+        // the server's answer to the sender (offline members too), shown its way: «Kas-Realm» -> «Kas Realm»
+        const shown = target.indexOf(' ') < 0 ? target.replace('-', ' ') : target;
+        this.queue.push({ t: this.t + 0.1, seq: ++this.seq, to: from, toGen: from.L, system: 'No hay ningún jugador con el nombre ' + shown + '.' });
+        this.stats.sysErrors = (this.stats.sysErrors || 0) + 1;
       }
     }
     for (const to of targets) {
@@ -320,7 +348,8 @@ class Sim {
       this.t = Math.max(this.t, next);
       if (this.queue.length && this.queue[0].t <= this.t) {
         const d = this.queue.shift();
-        if (d.to.online && d.to.L === d.toGen) { this.stats.delivered++; d.to.fire('CHAT_MSG_ADDON', d.prefix, d.msg, d.channel, d.sender); }
+        if (d.system) { if (d.to.online && d.to.L === d.toGen) d.to.systemMessage(d.system); }
+        else if (d.to.online && d.to.L === d.toGen) { this.stats.delivered++; d.to.fire('CHAT_MSG_ADDON', d.prefix, d.msg, d.channel, d.sender); }
       } else if (who) who.step();
       else for (const c of this.online()) if (c.next !== null && c.next <= this.t) c.step();
     }
