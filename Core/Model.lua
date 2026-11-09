@@ -9,7 +9,7 @@ ns.Model = M
 local P = ns.Permissions
 local S = ns.Serialize
 
-M.PROTO = 2
+M.PROTO = 3   -- 2.0 (docs/SPEC-v2.0-identidad.md §4): names are «Name Surname» identities; the 1.x is another network
 M.SQUAD_SIZE = 5
 M.ROLES = { "TANK", "HEALER", "DAMAGER" }
 M.GOALS = { "leveling", "dungeons", "farm", "worldpvp", "bg", "raid" }
@@ -27,9 +27,9 @@ M.SCHEMA = {
     xferTo = { "s", 120 }, -- "squadId>NewCaptain" signed by the captain who hands the squad over
   },
   squad = {
-    name = { "s", 24 }, captain = { "s", 48 }, members = { "L", 5, 48 }, bench = { "L", 2, 48 },
+    name = { "s", 24 }, captain = { "s", 64 }, members = { "L", 5, 64 }, bench = { "L", 2, 64 },
     icon = { "n" }, color = { "n" }, border = { "n" }, motto = { "s", 60 }, tags = { "L", 6, 16 },
-    open = { "b" }, approved = { "b" }, disbanded = { "b" }, xferFrom = { "s", 48 },
+    open = { "b" }, approved = { "b" }, disbanded = { "b" }, xferFrom = { "s", 64 },
     ct = { "n" },          -- creation ts, carried by every edit (deterministic name/limit races)
     nts = { "n" },         -- ts since the squad has its current name (absent = ct)
   },
@@ -53,7 +53,7 @@ M.SCHEMA = {
   boss = { inst = { "s", 64 }, enc = { "n" }, name = { "s", 64 }, kind = { "s", 8 }, final = { "b" } },
   -- durable rejection. id = sid .. "|" .. name .. "|" .. kind ; kind "req" (captain rejects a request)
   -- or "inv" (the invited player declines). at = the reqAt (req) the rejection refers to; on = false withdraws it.
-  reject = { sid = { "s", 64 }, name = { "s", 48 }, kind = { "s", 3 }, at = { "n" }, on = { "b" } },
+  reject = { sid = { "s", 64 }, name = { "s", 64 }, kind = { "s", 3 }, at = { "n" }, on = { "b" } },
 }
 
 -- allowed values (anything else is normalised on receipt)

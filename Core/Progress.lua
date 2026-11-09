@@ -30,9 +30,9 @@ local DAY, WEEK = 86400, 604800
 -- schema
 -- type codes: s = string(max len), n = number, L = list of strings (max n, max len)
 P.SCHEMA = {
-  t = { "s", 8 }, who = { "s", 48 }, ts = { "n" }, sid = { "s", 80 }, lv = { "n" },
+  t = { "s", 8 }, who = { "s", 64 }, ts = { "n" }, sid = { "s", 80 }, lv = { "n" },
   inst = { "s", 64 }, iid = { "n" }, it = { "s", 8 }, diff = { "n" }, enc = { "n" }, boss = { "s", 64 },
-  gs = { "n" }, pres = { "L", 40, 48 },
+  gs = { "n" }, pres = { "L", 40, 64 },
   win = { "n" }, n = { "n" },             -- bg result, hk / capture count
 }
 P.MAX_HK_PER_EVENT = 100     -- one hk event never carries more than this (anti-jump)

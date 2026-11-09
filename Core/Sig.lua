@@ -18,8 +18,9 @@ local G = {}
 ns.Sig = G
 local E, S = ns.Ed25519, ns.Serialize
 
-G.TAG = "GSQ-MAN1"             -- domain separation of the record hash
-G.STMT_TAG = "GSQ-MAN2"        -- domain separation of the manifest statement (sec r3 S1: length-prefixed kids)
+-- 2.0 (SPEC-v2.0 §4.2): new tags, so a 1.x signature never verifies here, not even with the same name and key
+G.TAG = "GSQ-MAN3"             -- domain separation of the record hash (1.x: GSQ-MAN1)
+G.STMT_TAG = "GSQ-MAN4"        -- domain separation of the manifest statement (sec r3 S1: length-prefixed kids; 1.x: GSQ-MAN2)
 G.HASH_LEN = 16                -- bytes of sha512 kept per record
 G.MAX_ENTRIES = 400            -- records listed in one manifest
 G.MAX_QUEUE = 300              -- manifests waiting for a verify on one client

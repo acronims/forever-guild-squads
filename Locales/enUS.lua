@@ -90,8 +90,8 @@ L.ERR_benchFull = "the bench is full"
 L.ERR_notInGuild = "guild roster not loaded yet, try again in a few seconds"
 L.ERR_notGuildMember = "that player is not in the guild"
 L.ERR_notInRoster = "your character (%s) was not found in the guild roster (%d members); send /gsq diag"
--- 1.2.2: a client of the 2.0 (PROTO 3) heard in the guild; shown once per session
-L.NEWER_VERSION = "There is a new version of Guild Squads (2.0) in your guild: please update."
+-- 1.2.2: a client of a newer protocol heard in the guild; shown once per session (2.0: newer than PROTO 3)
+L.NEWER_VERSION = "There is a newer version of Guild Squads in your guild: please update."
 -- every code Model / Sync can return has a text
 L.ERR_captainNotMember = "the captain must be one of the members"
 L.ERR_disbanded = "that squad was disbanded"
@@ -123,7 +123,7 @@ L.TRUST_NEWKEY_CONFIRM = "You are about to delete your Guild Squads signing key.
 L.TRUST_NEWKEY_DONE = "Key deleted. A new one is made in a few seconds and your data is signed again with it."
 L.TRUST_USAGE = "/gsq trust reset <name>: forget a member's key (if they lost their saved data)."
 L.SYNCED = "Guild Squads: synced (%d records, %d pending verification)"
-L.OLD_PEERS = "Guild Squads: %d guild members use an old version and cannot sync until they update"
+L.OLD_PEERS = "Guild Squads: %d members use a version older than 2.0 and do not sync with you until they update"
 L.SYNC_COOLDOWN = "Sync was requested less than a minute ago. Try again in a moment."
 L.DEBUG = "Debug: %s"
 

@@ -199,20 +199,22 @@ test("1.2.2 Comm: WHISPER_GUILD_FALLBACK = false: a marked member (or one missin
   end)
 end)
 
--- BRO 9-nov 03:49: a local notice, once per session, the first time a PROTO 3 (2.0) message is heard
-test("1.2.2 Comm: hearing PROTO 3 (2.0) prints «there is a new version» once per session", function()
+-- BRO 9-nov 03:49: a local notice, once per session, the first time a newer protocol is heard (in the 1.2.2: PROTO 3;
+-- in the 2.0: anything above PROTO 3)
+test("Comm: hearing a newer PROTO prints «there is a newer version» once per session", function()
   within(function()
     local printed = {}
     ns.print = function(m) printed[#printed + 1] = tostring(m) end
-    ns.L = { NEWER_VERSION = "Hay una versión nueva de Guild Squads (2.0) en tu guild: actualiza." }
+    ns.L = { NEWER_VERSION = "Hay una versión más nueva de Guild Squads en tu hermandad: actualiza." }
     local function hear(v, id, who)
       local body = NS.Serialize.encode({ v = v, t = "H", p = {} })
       frame.scripts.OnEvent(frame, "CHAT_MSG_ADDON", Comm.PREFIX, id .. ":1/1:" .. body, "GUILD", who)
     end
-    hear(3, "n1", "Neo-Realm"); hear(3, "n2", "Neo2-Realm"); hear(1, "o1", "Old-Realm"); hear(4, "n3", "Neo3-Realm")
+    local P = Comm.PROTO
+    hear(P + 1, "n1", "Neo-Realm"); hear(P + 1, "n2", "Neo2-Realm"); hear(1, "o1", "Old-Realm"); hear(P + 2, "n3", "Neo3-Realm")
     ns.print, ns.L = nil, nil
     eq(#printed, 1, "printed once: " .. table.concat(printed, " | "))
-    ok(printed[1]:find("2.0", 1, true), "the notice names the 2.0")
+    ok(printed[1]:find("más nueva", 1, true), "the notice says there is a newer version")
   end)
 end)
 

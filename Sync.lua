@@ -757,7 +757,7 @@ function Sync.OldPeersLine()
   local old = ns.Comm and ns.Comm.OldPeerCount and ns.Comm.OldPeerCount() or 0
   if old == 0 or synced.oldTold then return nil end
   synced.oldTold = true
-  return ((ns.L and ns.L.OLD_PEERS) or "Guild Squads: %d guild members use an old version and cannot sync until they update"):format(old)
+  return ((ns.L and ns.L.OLD_PEERS) or "Guild Squads: %d members use a version older than 2.0 and do not sync with you until they update"):format(old)
 end
 function Sync.OnOldPeer()
   if synced.oldTold or synced.oldWait or not ns.After then return end

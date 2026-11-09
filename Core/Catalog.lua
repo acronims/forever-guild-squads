@@ -30,7 +30,7 @@ C.GROUPS = { "level", "class", "race", "dungeon", "raid", "pvp", "prof", "rep", 
 C.SCHEMA_DEF = { on = { "b" }, size = { "n" }, name = { "s", 160 }, custom = { "b" }, metric = { "s", 8 },
                  param = { "s", 48 }, thr = { "n" }, scope = { "s", 6 },
                  sts = { "n" } }   -- sts: when the current size was set (Top floor, see R.place); absent = record ts
-C.SCHEMA_GRANT = { ach = { "s", 64 }, who = { "s", 48 }, reason = { "s", 80 }, on = { "b" } }
+C.SCHEMA_GRANT = { ach = { "s", 64 }, who = { "s", 64 }, reason = { "s", 80 }, on = { "b" } }
 
 -------------------------------------------------------------------------------
 -- the catalog in use: state.achdefs / state.achgrants of C.state (tests) or ns.state (the addon)

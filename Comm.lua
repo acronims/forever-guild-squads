@@ -9,7 +9,7 @@ ns.Comm = Comm
 local S, C, Q = ns.Serialize, ns.Chunk, ns.Queue
 
 Comm.PREFIX = "GSquads"
-Comm.PROTO = 2   -- v1.2 (BRO 7-nov 21:20): 1.0.x / 1.1 speak 1 and drop every v ~= 1, so they get nothing from a 1.2
+Comm.PROTO = 3   -- 2.0 (SPEC-v2.0 §4): what is signed carries the identity «Name Surname»; a 1.x drops v ~= 2 and we drop v ~= 3
 -- distinct senders seen on an older protocol (members who still have to update); local count only, never sent
 Comm.oldPeers = {}
 Comm.OLD_PEERS_MAX = 1000
@@ -294,6 +294,8 @@ function Comm.ForMe(to)
   if string.match(key, "^([^-]+)") ~= string.match(me, "^([^-]+)") then return false end
   return not (ns.roster and ns.roster(key))
 end
+-- /gsq diag (SPEC-v2.0 §4.3): our protocol and how many identities we heard on an older one (Diag.lua prints it)
+function Comm.ProtoDiag() return ("proto v=%d old=%d"):format(Comm.PROTO, Comm.OldPeerCount()) end
 function Comm.WhisperDiag()
   local marked, alt = 0, 0
   for key, w in pairs(Comm.wstate) do
@@ -430,12 +432,14 @@ function Comm.OnEvent(event, ...)
     if data.v ~= Comm.PROTO then
       Comm.stats.badProto = Comm.stats.badProto + 1
       local v = tonumber(data.v)
-      if v and v < Comm.PROTO and not Comm.oldPeers[sender] and Comm.OldPeerCount() < Comm.OLD_PEERS_MAX then
-        Comm.oldPeers[sender] = true
+      -- 2.0 (SPEC-v2.0 §4.3): one entry per identity (the same member may come as «Name Surname» or with "-Realm")
+      local who = (ns.id and ns.id(sender)) or sender
+      if v and v < Comm.PROTO and not Comm.oldPeers[who] and Comm.OldPeerCount() < Comm.OLD_PEERS_MAX then
+        Comm.oldPeers[who] = true
         if ns.Sync and ns.Sync.OnOldPeer then pcall(ns.Sync.OnOldPeer) end
       end
-      -- 1.2.2 (BRO 9-nov 03:49): a newer protocol (PROTO 3 = the 2.0) heard in the guild: a local notice, once per
-      -- session (never sent anywhere)
+      -- 1.2.2 (BRO 9-nov 03:49): a newer protocol heard in the guild: a local notice, once per session (never sent
+      -- anywhere)
       if v and v > Comm.PROTO and not Comm.newerSeen then
         Comm.newerSeen = true
         local text = ns.L and ns.L.NEWER_VERSION

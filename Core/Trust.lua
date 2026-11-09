@@ -26,7 +26,7 @@ T.MAX_PEND_KEYS = 500          -- relayed keys waiting for quorum on one client
 T.MAX_PEND_RELAYER = 200       -- of those, brought by one relayer (same cap as the P2P pending records)
 T.PEND_TTL = 7 * 86400
 T.ALERTS_MAX = 20
-T.ROT_TAG = "GSQ-ROT1"         -- domain separation of the rotation statement
+T.ROT_TAG = "GSQ-ROT2"         -- domain separation of the rotation statement (2.0, SPEC-v2.0 §4.2; 1.x: GSQ-ROT1)
 
 local function hex(s) return (s:gsub(".", function(c) return string.format("%02x", c:byte()) end)) end
 T.hex = hex

@@ -74,10 +74,10 @@ R.REP_OK = set({ "stormwind", "ironforge", "darnassus", "gnomeregan_exiles", "gn
 -------------------------------------------------------------------------------
 -- schema
 R.SCHEMA = {
-  t = { "s", 5 }, who = { "s", 48 }, by = { "s", 48 }, ts = { "n" }, src = { "s", 6 },
+  t = { "s", 5 }, who = { "s", 64 }, by = { "s", 64 }, ts = { "n" }, src = { "s", 6 },
   lv = { "n" }, cls = { "s", 16 }, race = { "s", 24 },
   inst = { "s", 64 }, iid = { "n" }, it = { "s", 8 }, enc = { "n" }, boss = { "s", 64 }, gs = { "n" },
-  win = { "n" }, pres = { "L", 40, 48 }, sqm = { "L", 40, 100 },
+  win = { "n" }, pres = { "L", 40, 64 }, sqm = { "L", 40, 100 },
   k = { "s", 8 }, key = { "s", 48 }, n = { "n" }, sea = { "s", 16 },
 }
 local KEEP = {
