@@ -82,6 +82,8 @@ L.ERR_benchFull = "no quedan plazas de suplente"
 L.ERR_notInGuild = "la lista de la guild aún no ha cargado, prueba en unos segundos"
 L.ERR_notGuildMember = "ese jugador no está en la guild"
 L.ERR_notInRoster = "tu personaje (%s) no aparece en la lista de la guild (%d miembros); envía /gsq diag"
+-- 1.2.2: a client of the 2.0 (PROTO 3) heard in the guild; shown once per session
+L.NEWER_VERSION = "Hay una versión nueva de Guild Squads (2.0) en tu guild: actualiza."
 -- todos los códigos que pueden devolver Model / Sync tienen texto
 L.ERR_captainNotMember = "el capitán tiene que ser uno de los miembros"
 L.ERR_disbanded = "ese squad se disolvió"

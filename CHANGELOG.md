@@ -9,6 +9,7 @@
 - **Salón de la fama: fuera la pestaña «Otros».** Las carreras de «Puntos de Legado» no funcionan así en WoW Forever y salen del catálogo; «Squad con los 5 titulares al 60» y las carreras de profesión y reputación pasan a la pestaña «Nivel». Los datos guardados de esas carreras se quedan como estaban, pero no puntúan ni se muestran: no se pierde nada más.
 - Al cargar se borran las claves, manifiestos y certificados que la 1.2.0 guardó con apellido («Nombre Apellido-Reino»): ya no casaban con nadie e inflaban `keys strong=` del diag.
 - El botón «Susurrar» abre `/w Nombre Apellido`, la única forma que encuentra WoW Forever.
+- Aviso nuevo, solo para ti y una vez por sesión: «Hay una versión nueva de Guild Squads (2.0) en tu guild: actualiza.», cuando alguien de la guild ya usa la 2.0.
 - **Límite conocido: dos personajes del mismo reino con el mismo nombre de pila** (p. ej. «Kas Pitas» y «Kas Mora») comparten la clave interna «Kas-Reino». La 1.2.2 los detecta, no mezcla sus datos y los ignora a los dos (`/gsq diag`: `[roster] … ambiguous=`). **La 1.3** pasará la identidad a «Nombre Apellido», que es única en la región, con un protocolo nuevo.
 - `/gsq diag`: línea nueva `whisper` con los avisos ocultados (`notFound=`), quién va con la otra forma del nombre (`alt=`), quién está marcado (`marked=`), los mensajes por la guild con destinatario (`routed=`), los descartados por desconexión (`dropped=`) y las claves de la 1.2.0 borradas (`swept=`).
 
@@ -19,6 +20,7 @@
 - **Hall of fame: the "Others" tab is gone.** "Legacy points" races do not work that way in WoW Forever and leave the catalog; "Squad with the 5 starters at 60" and the profession and reputation races move to the "Level" tab. Saved data of those races stays as it was but is neither scored nor shown: nothing else is lost.
 - At load, the keys, manifests and certificates that 1.2.0 saved with the surname ("Name Surname-Realm") are dropped: they never matched anyone and inflated the diag's `keys strong=`.
 - The "Whisper" button opens `/w Name Surname`, the only form WoW Forever finds.
+- New notice, only for you and once per session: "There is a new version of Guild Squads (2.0) in your guild: please update.", when someone in the guild already runs 2.0.
 - **Known limit: two characters of the same realm with the same first name** (e.g. "Kas Pitas" and "Kas Mora") share the internal key "Kas-Realm". 1.2.2 detects them, never mixes their data and ignores both (`/gsq diag`: `[roster] … ambiguous=`). **1.3** will make the identity "Name Surname", unique in the region, with a new protocol.
 - `/gsq diag`: new `whisper` line with the hidden notices (`notFound=`), who gets the other form of the name (`alt=`), who is marked (`marked=`), the guild-channel messages with a recipient (`routed=`), the ones dropped because the target is offline (`dropped=`) and the 1.2.0 keys dropped (`swept=`).
 

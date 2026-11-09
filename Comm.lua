@@ -434,6 +434,13 @@ function Comm.OnEvent(event, ...)
         Comm.oldPeers[sender] = true
         if ns.Sync and ns.Sync.OnOldPeer then pcall(ns.Sync.OnOldPeer) end
       end
+      -- 1.2.2 (BRO 9-nov 03:49): a newer protocol (PROTO 3 = the 2.0) heard in the guild: a local notice, once per
+      -- session (never sent anywhere)
+      if v and v > Comm.PROTO and not Comm.newerSeen then
+        Comm.newerSeen = true
+        local text = ns.L and ns.L.NEWER_VERSION
+        if text and ns.print then pcall(ns.print, text) end
+      end
       return
     end
     Comm.stats.recv = Comm.stats.recv + 1

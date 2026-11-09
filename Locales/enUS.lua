@@ -90,6 +90,8 @@ L.ERR_benchFull = "the bench is full"
 L.ERR_notInGuild = "guild roster not loaded yet, try again in a few seconds"
 L.ERR_notGuildMember = "that player is not in the guild"
 L.ERR_notInRoster = "your character (%s) was not found in the guild roster (%d members); send /gsq diag"
+-- 1.2.2: a client of the 2.0 (PROTO 3) heard in the guild; shown once per session
+L.NEWER_VERSION = "There is a new version of Guild Squads (2.0) in your guild: please update."
 -- every code Model / Sync can return has a text
 L.ERR_captainNotMember = "the captain must be one of the members"
 L.ERR_disbanded = "that squad was disbanded"
