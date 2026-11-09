@@ -18,7 +18,7 @@ Any prefix works as long as `NODE_PATH` points at its `node_modules` (for exampl
 | Unit tests (every `tests/*_spec.lua`, run in fengari) | `node tests/run.js` |
 | Static gates (fail the build): Lua 5.1 syntax, calls/globals vs the vendored 1.60.1 API list in `tests/tools/` unless guarded, TOC, enUS/esES key parity | `node tests/gates.js` |
 | Docs links (relative links and anchors resolve; `docs/en` and `docs/es` hold the same files) | `node tests/tools/check-links.js` |
-| Multi-client simulator | `node tests/sim/run.js [S1 … S10] [--seed N] [--s5seeds N] [--s8min N] [--s9seeds N] [--s9min N]` |
+| Multi-client simulator (a WoW Forever realm by default; `--realm` = the 1.2.x world) | `node tests/sim/run.js [S1 … S22] [--seed N] [--s5seeds N] [--s8min N] [--s9seeds N] [--s9min N] [--realm]` |
 
 CI (`.github/workflows/ci.yml`) runs the unit tests, the gates and a gates self-test on every push and pull request, and the simulator in parallel jobs with seed 7303 (S9 also with 8303 and 9303). Scenarios and current numbers: [docs/en/SIMULATOR-RESULTS.md](docs/en/SIMULATOR-RESULTS.md).
 
@@ -49,31 +49,39 @@ By contributing you agree your work is released under the MIT license ([LICENSE]
 
 ## WoW Forever names
 
-In WoW Forever every character has a name **and a surname**. `GetGuildRosterInfo`, the raid roster and names typed by
-the player come as `Name Surname-Realm`; `UnitName` gives the bare `Name` and the sender of `CHAT_MSG_ADDON` gives
-`Name` or `Name-Realm` without the surname (a sender on a connected realm can come with it). The key of a character
-(its identity) is always `Name-Realm`:
+In WoW Forever every character has a name **and a surname**, and the full name is unique in the whole region
+(Blizzard: *"a full name that is unique within a region"*; research in `agents/research-surnames.md` of the dev
+workspace). Since 2.0 (`docs/SPEC-v2.0-identidad.md`) that full name is the **identity** of a character:
 
-- every author, roster, trust, signature, certificate and `ks` / `cert` name goes through `ns.charKey(name)` or
-  `ns.fullName(name)` (both drop the surname through `Model.charName`, 1.2.1). Signed data never changes form;
-- **identity without the surname, `WHISPER` target with it** (BRO's test in the game, 1.2.2): the server only
-  delivers a whisper to the full name with the surname, «Kas Pitas» («Kas» or «Kas-Realm» give «No hay ningún jugador
-  con el nombre …», shown as «Kas Realm»; `Name Surname-Realm` fails too: the full name is unique in the region,
-  research in `agents/research-surnames.md` of the dev workspace). Callers pass the character key to
-  `Comm.Send(…, "WHISPER", key)`; `ns.whisperTarget(key)` builds `Name Surname` from the roster entry, for any realm
-  (the suffixed form is only the other variant tried once). Never build a whisper target anywhere else, and never
-  sign, index or key anything with it;
-- a sender `Name Surname` without the realm (how WoW Forever gives it) takes the realm of the roster entry with that
-  name and surname. Known limit until the 1.3 (identity `Name Surname`, PROTO 3): two members of one realm with the
-  same first name share `Name-Realm`; that key is ambiguous (`ns.isAmbiguous`): out of the roster, their messages
-  dropped, nothing whispered, `[roster] … ambiguous=` in the diag;
-- a server «not found» for a name whispered in the last 5 s is hidden (`Comm.SystemFilter` on `CHAT_MSG_SYSTEM`,
-  matched through `ERR_CHAT_PLAYER_NOT_FOUND_S`), the message goes again once with the other variant (with / without
-  the realm suffix) and then the character is marked for 10 min: what went to him by whisper travels over `GUILD` in a
-  `W` envelope with the recipient key, and only he handles it (`Sync.WHISPER_GUILD_FALLBACK`; false = nothing more).
-  A character missing from the roster is never whispered (envelope); one offline in the roster gets nothing. The
-  visible guild chat is only written by the GM's celebrations (`celOn`, off by default; a test checks it);
-- the simulator gives every roster member a surname by default (`tests/sim/sim.js`, `surnames`); S19 also sends the
-  surname in the sender of a member on another realm. Its server only delivers a whisper to `Name Surname[-Realm]`
-  (`whisperMember`, `whisperSuffix`) and answers anything else with the `CHAT_MSG_SYSTEM` error; S19 fails if one of
-  those lines reaches the chat.
+- **One function for every name**: `ns.id(a, b)` (sender, roster name, typed name, saved 1.x name; `(a, b)` = what
+  `UnitName` gives). The pure part is `Core/Identity.lua` (`I.id(a, b, ctx)`). In mode **forever** the identity is
+  `Name Surname`, without the realm (`Kas Pitas`); in mode **realm** it is `Name-Realm`, the 1.2.x key. Never build,
+  cut or compare names anywhere else: authors, trust keys, signatures, certificates, indexes and `WHISPER` targets all
+  carry the identity. `ns.idFromUnit(unit)`, `ns.me()`, `ns.isSelf(x)`, `ns.roster(x)` (entry with `realm`, `raw`,
+  `surname`), `ns.rosterIndex()`, `ns.whisperTarget(id)` and `ns.displayName(id)` / `ns.shortName(id)` wrap it.
+- **The mode**: `forever` when `RegionalUniqueNamesEnabled()` is true (read at `ADDON_LOADED` and again at
+  `PLAYER_LOGIN`, which wins; frozen for the session), `realm` otherwise. `/gsq diag` prints
+  `id mode=forever me=Kas Pitas surname=yes`. Tests force it by setting `ns.ID_MODE` before loading the files.
+- **What the client gives** (forever): `GetGuildRosterInfo` and `GetRaidRosterInfo` give `Name Surname-Realm` (the
+  realm goes to `r.realm`, never into the identity); `UnitName` / `UnitNameUnmodified` give `(Name, Surname)` (the
+  2nd value is the surname, not the realm); `UnitFullName` gives `("Name Surname", "")` or `("Name", "Surname")`; the
+  sender of `CHAT_MSG_ADDON` comes as `Name Surname` from any realm. A bare `Name` (sender or unit whose surname is
+  not cached yet) resolves through the roster only when one member has that first name; with two `Kas` it is `nil`
+  and the message is dropped. A typed name is matched without case (ASCII only; the roster spelling wins) and
+  `Kas-Pitas` (the chat link separator) means `Kas Pitas` when that member exists. `ns.id` never raises, is
+  idempotent and splits with plain `string.find` (never `%s` / `%w`).
+- **`WHISPER` target = the identity**, `Kas Pitas`, never `-Realm` (also towards a connected realm: the server
+  refuses `Kas`, `Kas-Realm` and `Kas Pitas-Realm` with «No hay ningún jugador con el nombre …»). Only members in the
+  roster that are online (or were heard lately) are whispered; anyone else gets the message over `GUILD` in a `W`
+  envelope with the recipient identity. A server «not found» for a name whispered in the last 5 s is hidden
+  (`Comm.SystemFilter`).
+- **Only `Core/Identity.lua` and `GuildSquads.lua` call `UnitName`, `UnitNameUnmodified` or `UnitFullName`**; any
+  other call needs the `-- id-ok` mark (the gate checks it). Overlord keeps the bare first name (`-- id-ok`).
+- **The simulator is a WoW Forever realm by default** (`tests/sim/sim.js`, `forever`; `GSQ_SIM_FOREVER=0` gives the
+  1.2.x world back): roster and raid roster `Name Surname-Realm`, `UnitName` `(Name, Surname)`, `UnitFullName` in
+  both forms (alternating per client), senders `Name Surname`, and a server that delivers a whisper only to the
+  exact `Name Surname` of an online client (anything else gets the `CHAT_MSG_SYSTEM` error). A member handle with a
+  space gives the surname (`sim.addMember('Kas Pitas', 5)`); `sim.idOf(handle)` is its identity, `sim.whisperLog`
+  every whisper and where it went. S20 (with a self-test of that server), S21 (two `Kas` on one realm) and S22
+  (connected realms) cover it, and `tests/sim/run.js` fails when any «No hay ningún jugador» line reaches a chat
+  (`SYSSHOWN total=`).

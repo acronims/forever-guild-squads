@@ -19,10 +19,13 @@ do
 end
 local db
 local rosterCache, onlineN = {}, 0
-local fullIdx = {}   -- 1.2.2: "Name Surname" -> roster key ("Name-Realm"); false when two entries share it
--- 1.2.2 (known limit until the 1.3 makes «Name Surname» the identity): two members of one realm with the same first
--- name and different surnames share the key "Name-Realm". Such a key is ambiguous: out of the roster (their records
--- are refused as notInGuild), their messages are dropped and nothing is whispered to it. key -> { "Name Surname", ... }
+local I = ns.Identity
+-- 2.0 (SPEC-v2.0-identidad §2.4): the roster index of ns.id (byFirst, byFirstRealm, byLower, byFull, realms)
+local rosterIdx = I.newIndex()
+-- realm mode only (the 1.2.2): two members of one realm with the same first name and different surnames share the
+-- key "Name-Realm". Such a key is ambiguous: out of the roster (their records are refused as notInGuild), their
+-- messages are dropped and nothing is whispered to it. key -> { "Name Surname", ... }. In forever the identity
+-- «Name Surname» is unique in the region: never ambiguous.
 local ambig = {}
 
 -------------------------------------------------------------------------------
@@ -39,56 +42,117 @@ local function myRealm()
   return realm or ""
 end
 
--- 1.2.1 (BRO 9-nov: «No hay ningún jugador con el nombre Magic Essency-CAMWOWEU4Realm6PvP», over and over, with the
--- names of guildmates on 1.2): in WoW Forever every character has a name and a surname. GetGuildRosterInfo, the raid
--- roster and typed names give "Name Surname-Realm"; UnitName and CHAT_MSG_ADDON give "Name" (the sender of a member
--- on a connected realm came with the surname). The key of a character (author, roster, trust, signatures,
--- certificates, whisper target) is always "Name-Realm": a name with a space goes through M.charName, like charKey.
-function ns.fullName(name)
-  if type(name) ~= "string" or name == "" then return nil end
-  if name:find(" ", 1, true) then
-    -- 1.2.2: "Name Surname" without a realm is how WoW Forever gives a sender (the full name is unique in the region,
-    -- agents/research-surnames.md): the roster entry with that name and surname gives the realm of a member of another
-    -- connected realm. Not in the roster: my realm, as before.
-    if not name:find("-", 1, true) then
-      local k = fullIdx[name]
-      if k then return k end
-    end
-    return (M.charName(name, myRealm()))
+-------------------------------------------------------------------------------
+-- 2.0 identity (docs/SPEC-v2.0-identidad.md §2). One function for every input: ns.id(a, b).
+--   forever (WoW Forever, RegionalUniqueNamesEnabled() true): "Name Surname", no realm, unique in the region. It is
+--           the author, trust key, signature, certificate, index and WHISPER target.
+--   realm   (anything else): "Name-Realm", the 1.2.2 key.
+-- The mode is read at ADDON_LOADED and again at PLAYER_LOGIN (that one wins), then frozen for the session. Tests
+-- force it by setting ns.ID_MODE before loading the files. While it is nil, ns.id and ns.me give nil (nothing written).
+local forcedMode = ns.ID_MODE
+if forcedMode ~= "forever" and forcedMode ~= "realm" then forcedMode = nil end
+ns.ID_MODE = forcedMode
+local modeFrozen = forcedMode ~= nil
+local meA, meB, meId                   -- my identity, kept while the client gives the same name (ns.me)
+local function secret(v) return issecretvalue ~= nil and issecretvalue(v) and true or false end
+local idCtx = { mode = forcedMode, myRealm = "", index = rosterIdx, isSecret = secret }
+
+local function evalIdMode(final)
+  if modeFrozen then return ns.ID_MODE end
+  local mode = "realm"
+  if type(RegionalUniqueNamesEnabled) == "function" then
+    local okR, on = pcall(RegionalUniqueNamesEnabled)
+    if okR and on == true then mode = "forever" end
   end
-  if name:find("-", 1, true) then return name end
-  return name .. "-" .. myRealm()
+  if mode ~= ns.ID_MODE then meA, meB, meId = nil, nil, nil end
+  ns.ID_MODE = mode
+  if final then modeFrozen = true end
+  return mode
+end
+ns.EvalIdMode = evalIdMode
+do
+  local idFrame = CreateFrame("Frame")
+  idFrame:RegisterEvent("ADDON_LOADED")
+  idFrame:RegisterEvent("PLAYER_LOGIN")
+  idFrame:SetScript("OnEvent", function(_, ev, arg1)
+    if ev == "ADDON_LOADED" and arg1 == ADDON then evalIdMode(false)
+    elseif ev == "PLAYER_LOGIN" then evalIdMode(true) end
+  end)
 end
 
+-- the identity of a name. a = sender, roster name, typed name or saved 1.x name; (a, b) = what UnitName gives.
+-- Never raises; idempotent; nil when it is no character (or ambiguous: two «Kas» and no surname).
+function ns.id(a, b)
+  local mode = ns.ID_MODE
+  if mode == nil then return nil end
+  idCtx.mode, idCtx.myRealm, idCtx.index = mode, myRealm(), rosterIdx
+  return I.id(a, b, idCtx)
+end
+-- UnitNameUnmodified first (WoW Forever: (name, surname); Ace3 swapped to it for the surname), UnitName otherwise
+local function unitName(unit)
+  local fn = UnitNameUnmodified or UnitName
+  if type(fn) ~= "function" then return false end
+  return pcall(fn, unit)
+end
+function ns.idFromUnit(unit)
+  local okU, a, b = unitName(unit)
+  if not okU then return nil end
+  return ns.id(a, b)
+end
+-- my identity. Kept while the client gives the same (name, surname); TRP3 #1482: when the surname is missing for a
+-- moment ("Kas", nil) and the roster cannot tell, the identity I already had stays (it does not change in a session)
 function ns.me()
-  local n = UnitName and UnitName("player")
-  return ns.fullName(n)
+  if ns.ID_MODE == nil then return nil end
+  local okU, a, b = unitName("player")
+  if not okU or secret(a) or secret(b) then return meId end
+  if meId ~= nil and a == meA and b == meB then return meId end
+  -- realm (1.2.2): only the first value; for the player the realm is always mine
+  local id = ns.ID_MODE == "realm" and ns.id(a) or ns.id(a, b)
+  if id ~= nil then meA, meB, meId = a, b, id; return id end
+  if meId ~= nil and ns.ID_MODE == "forever" and type(a) == "string" and I.firstOf(meId) == a then return meId end
+  return nil
 end
 
-function ns.isSelf(sender) return ns.fullName(sender) == ns.me() end
--- 1.2.2: a name whose key two roster members share (never my own key: my entry is kept)
+function ns.isSelf(sender)
+  local id = ns.id(sender)
+  return id ~= nil and id == ns.me()
+end
+-- realm mode (1.2.2): a name whose key two roster members share (never my own key: my entry is kept)
 function ns.isAmbiguous(name)
-  local key = ns.fullName(name)
+  if ns.ID_MODE ~= "realm" then return false end
+  local key = ns.id(name)
   return key ~= nil and ambig[key] ~= nil and key ~= ns.me()
 end
 
--- character key of a name that may carry a WoW Forever surname (guild roster, raid roster, typed names).
--- Names without a space give exactly ns.fullName(name). Returns key, surname.
+-- TEMPORARY aliases (SPEC §2.4) so B and C merge in any order. C removes them at the end:
+-- git grep -nE 'ns\.(fullName|charKey)\(' -- '*.lua' ':!tests/*' = 0.
+function ns.fullName(name) return ns.id(name) end
 function ns.charKey(name)
-  if type(name) ~= "string" or name == "" then return nil end
-  return M.charName(name, myRealm())
+  local id = ns.id(name)
+  if id == nil then return nil end
+  idCtx.mode, idCtx.myRealm = ns.ID_MODE, myRealm()
+  return id, I.surnameOf(name, idCtx)
 end
 
-function ns.shortName(name) return (name and name:match("^([^-]+)")) or tostring(name) end
+-- forever: the identity itself («Kas Pitas»: nothing to cut, the realm is not part of it); realm: the 1.2.2
+function ns.shortName(name)
+  if ns.ID_MODE == "forever" then
+    return ns.id(name) or (type(name) == "string" and name) or tostring(name)
+  end
+  return (name and name:match("^([^-]+)")) or tostring(name)
+end
 
--- 1.2.2 (BRO in the game, 9-nov 03:11): the WHISPER target is the full name with the surname, «Kas Pitas» (on another
--- realm «Kas Pitas-Realm»), built from the roster entry of the character; the identity stays ns.charKey / fullName.
--- alt = the other variant (Comm tries it once when the server does not find the first one). nil when the character
--- is not in the roster: Comm then routes the message over GUILD with the recipient (never a blind whisper).
+-- the WHISPER target of a character, nil when it is not in the roster (Comm routes the message over GUILD with the
+-- recipient, never a blind whisper). forever (§6): the identity «Name Surname», never «-Realm», also towards a
+-- connected realm, and no other variant (alt -> nil). realm: the 1.2.2 («Name Surname», alt with «-Realm»).
 function ns.whisperTarget(name, alt)
-  local key = ns.fullName(name)
+  local key = ns.id(name)
   local r = key and rosterCache[key]
   if not r then return nil end
+  if ns.ID_MODE == "forever" then
+    if alt or not key:find(" ", 1, true) then return nil end
+    return key
+  end
   -- names are realm-unique only outside Forever: with regional unique names a roster entry without its surname (not
   -- cached yet) has no target that works (envelope instead)
   if not r.surname and type(RegionalUniqueNamesEnabled) == "function" then
@@ -135,13 +199,17 @@ end
 
 -------------------------------------------------------------------------------
 -- guild roster
+-- the roster entry of a character: { rank, level, class, online, zone, seen, surname, realm, raw }
 function ns.roster(name)
-  return rosterCache[ns.fullName(name) or ""]
+  return rosterCache[ns.id(name) or ""]
 end
 function ns.onlineCount() return onlineN end
 function ns.rosterList() return rosterCache end
--- "Fire Essency" when the roster gave a surname, otherwise the short name
+function ns.rosterIndex() return rosterIdx end
+-- forever: the identity «Kas Pitas» (two Kas never look the same; never «-Realm»). realm: «Fire Essency» when the
+-- roster gave a surname, otherwise the short name (1.2.2)
 function ns.displayName(name)
+  if ns.ID_MODE == "forever" then return ns.shortName(name) end
   local r = ns.roster(name)
   local short = ns.shortName(name)
   return (r and r.surname) and (short .. " " .. r.surname) or short
@@ -159,11 +227,13 @@ end
 -- /gsq diag line
 -- 1.2.1: plus the realms of the roster keys, most common first (connected realms: senders and authors must carry
 -- the same realm as these keys, see the diag line `peers ... notInRoster=`)
+-- 2.0: plus the line `id mode=<forever|realm> me=<identity> surname=<yes|no>` first; in forever the realms come
+-- from r.realm (the identity carries none)
 function ns.RosterDiag()
   local n, s, realms = 0, 0, {}
   for key, r in pairs(rosterCache) do
     n = n + 1; if r.surname then s = s + 1 end
-    local rl = key:match("%-(.*)$") or "?"
+    local rl = (ns.ID_MODE == "forever" and r.realm) or key:match("%-(.*)$") or "?"
     realms[rl] = (realms[rl] or 0) + 1
   end
   local list = {}
@@ -172,11 +242,15 @@ function ns.RosterDiag()
   local parts = {}
   for i = 1, math.min(#list, 4) do parts[i] = list[i][1] .. ":" .. list[i][2] end
   local me = ns.me()
-  -- 1.2.2: keys two members share (same realm, same first name): ignored until the 1.3
+  -- realm mode (1.2.2): keys two members share (same realm, same first name)
   local na, first = 0, nil
   for key, names in pairs(ambig) do na = na + 1; first = first or (key .. ": " .. table.concat(names, ", ")) end
-  return ("[roster] me=%s found=%s entries=%d surnames=%d online=%d realms=%s ambiguous=%d%s"):format(tostring(me),
-    (me and rosterCache[me]) and "yes" or "no", n, s, onlineN, table.concat(parts, ","), na, first and (" (" .. first .. ")") or "")
+  local mine = me and rosterCache[me]
+  local hasSurname = ns.ID_MODE == "forever" and me ~= nil and me:find(" ", 1, true) ~= nil or (mine and mine.surname ~= nil)
+  return ("id mode=%s me=%s surname=%s\n"):format(tostring(ns.ID_MODE), tostring(me), hasSurname and "yes" or "no") ..
+    ("[roster] me=%s found=%s entries=%d surnames=%d online=%d realms=%s ambiguous=%d%s mode=%s"):format(tostring(me),
+    mine and "yes" or "no", n, s, onlineN, table.concat(parts, ","), na, first and (" (" .. first .. ")") or "",
+    tostring(ns.ID_MODE))
 end
 
 local function requestRoster()
@@ -253,8 +327,9 @@ end
 ns.UnloadGuild = unloadGuild
 
 local function readRoster()
+  if not ns.ID_MODE then return end   -- no identity yet (before ADDON_LOADED): nothing to key the roster with
   if not (IsInGuild and IsInGuild()) then
-    rosterCache = {}; onlineN = 0; fullIdx = {}; ambig = {}
+    rosterCache = {}; onlineN = 0; rosterIdx = I.newIndex(); ambig = {}
     unloadGuild()   -- no guild -> no partition
     return
   end
@@ -264,11 +339,23 @@ local function readRoster()
   end
   local n = GetNumGuildMembers and GetNumGuildMembers() or 0
   if n == 0 then return end
-  local cache, online, idx, amb, full = {}, 0, {}, {}, {}
+  local cache, online, ix, amb, full = {}, 0, I.newIndex(), {}, {}
+  local forever = ns.ID_MODE == "forever"
   for i = 1, n do
     local ok, name, rankLabel, rankIndex, level, _, zone, _, _, isOnline, _, classFile = pcall(GetGuildRosterInfo, i)
-    local key, surname -- "Fire Essency" -> "Fire-Realm" + surname "Essency" (same key as ns.me() and senders)
-    if ok and type(name) == "string" then key, surname = ns.charKey(name) end
+    -- 2.0: the identity of the entry. forever: «Kas Pitas-Realm» -> «Kas Pitas», the realm apart (r.realm); an entry
+    -- without its surname is no identity there. realm (1.2.2): «Fire Essency» -> «Fire-Realm» + surname «Essency».
+    local key, first, surname, rl
+    if ok and type(name) == "string" and not secret(name) then
+      first, surname, rl = I.split(name)
+      if forever then
+        if first and first ~= "" and surname then key = first .. " " .. surname end
+      else
+        key, surname = I.realmKey(name, myRealm())
+        if key then first, _, rl = I.split(key) end
+      end
+      if not rl or rl == "" then rl = myRealm() end
+    end
     if key then
       -- real rank names (fallback when GuildControlGetRankName is missing)
       if type(rankIndex) == "number" and type(rankLabel) == "string" and rankLabel ~= "" then ns.rankNames[rankIndex] = rankLabel end
@@ -282,24 +369,26 @@ local function readRoster()
         end
       end
       cache[key] = { rank = rankIndex, level = level, class = classFile, online = isOnline and true or false,
-                     zone = type(zone) == "string" and zone or nil, seen = seen, surname = surname }
-      local fk = key:match("^([^-]+)") .. (surname and (" " .. surname) or "")
-      if surname then
-        if idx[fk] == nil then idx[fk] = key elseif idx[fk] ~= key then idx[fk] = false end
+                     zone = type(zone) == "string" and zone or nil, seen = seen, surname = surname, realm = rl,
+                     raw = name }
+      I.indexAdd(ix, key, first, surname, rl)
+      if not forever then
+        local fk = first .. (surname and (" " .. surname) or "")
+        if full[key] and full[key] ~= fk then
+          amb[key] = amb[key] or { full[key] }
+          local seen = false
+          for _, x in ipairs(amb[key]) do if x == fk then seen = true end end
+          if not seen then amb[key][#amb[key] + 1] = fk end
+        end
+        full[key] = full[key] or fk
       end
-      if full[key] and full[key] ~= fk then
-        amb[key] = amb[key] or { full[key] }
-        local seen = false
-        for _, x in ipairs(amb[key]) do if x == fk then seen = true end end
-        if not seen then amb[key][#amb[key] + 1] = fk end
-      end
-      full[key] = full[key] or fk
       if isOnline then online = online + 1 end
     end
   end
+  rosterIdx = ix   -- before ns.me(): a player whose surname is not cached yet is found through it
   local me = ns.me()
   for key in pairs(amb) do if key ~= me then cache[key] = nil end end
-  rosterCache, onlineN, fullIdx, ambig = cache, online, idx, amb
+  rosterCache, onlineN, ambig = cache, online, amb
   if ns.HallGlue and ns.HallGlue.OnRoster then pcall(ns.HallGlue.OnRoster, cache) end -- level races (roster)
   if not ns.rosterReady then
     if not selectGuild() then return end

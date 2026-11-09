@@ -106,7 +106,14 @@ const luaStr = (s) => JSON.stringify(String(s)); // JSON string literal is a val
 class Client {
   constructor(sim, name, opts) {
     // 1.2.1: opts.realm = the character's realm (connected realms: it may differ from the guild's, sim.guildRealm)
-    this.sim = sim; this.name = name; this.realm = opts.realm || sim.realm; this.full = name + '-' + this.realm;
+    // 2.0: `name` is the handle of the client (unique in the sim): "Ann", or "Kas Pitas" for a given surname. first /
+    // surname are the character's; full = its identity in the sim's mode (forever «Kas Pitas», realm «Kas-Realm»)
+    const m = sim.member(name);
+    this.sim = sim; this.name = name; this.realm = opts.realm || sim.realm;
+    const p = Sim.parts(name);
+    this.first = p.first; this.surname = (m && m.surname) || p.surname || sim.surnameOf(p.first);
+    this.full = sim.forever ? this.first + ' ' + this.surname : this.first + '-' + this.realm;
+    this.fullForm = opts.fullForm || (1 + (Object.keys(sim.clients).length % 2));   // UnitFullName form, alternating
     this.skew = opts.skew || 0; this.saved = opts.saved || null; this.online = false;
     this.guild = opts.guild === undefined ? sim.guild : opts.guild;
     this.next = null; this.bucket = {}; this.errorsBefore = 0;
@@ -119,8 +126,9 @@ class Client {
     lualib.luaL_openlibs(L);
     this.L = L;
     const seed = Math.floor(sim.rand() * 2147483647);
-    loadRun(L, `math.randomseed(${seed}); SIM_T = ${sim.t}; SIM_CFG = { name = ${luaStr(this.name)}, realm = ${luaStr(this.realm)}, grealm = ${luaStr(sim.guildRealm || sim.realm)}, ` +
-      `guild = ${this.guild ? luaStr(this.guild) : 'nil'}, skew = ${this.skew}, epoch = ${sim.epoch}, uptime0 = ${1000 + Math.floor(sim.rand() * 5000)} }`, 'cfg');
+    loadRun(L, `math.randomseed(${seed}); SIM_T = ${sim.t}; SIM_CFG = { name = ${luaStr(this.first)}, realm = ${luaStr(this.realm)}, grealm = ${luaStr(sim.guildRealm || sim.realm)}, ` +
+      `guild = ${this.guild ? luaStr(this.guild) : 'nil'}, skew = ${this.skew}, epoch = ${sim.epoch}, uptime0 = ${1000 + Math.floor(sim.rand() * 5000)}, ` +
+      `forever = ${sim.forever ? 'true' : 'false'}, surname = ${luaStr(this.surname)}, id = ${luaStr(this.full)}, fullForm = ${this.fullForm} }`, 'cfg');
     lua.lua_pushjsfunction(L, (Ls) => {   // SIM_canSend(prefix) -> 0 | 3 (per-prefix throttle like the client)
       const prefix = str(lua.lua_tolstring(Ls, 1));
       lua.lua_pushinteger(Ls, this.takeToken(prefix));
@@ -197,7 +205,13 @@ class Client {
   fire(ev, ...args) { callG(this.L, 'SIM_step', this.sim.t); callG(this.L, 'SIM_fire', ev, ...args); this.after(); }
   step() { callG(this.L, 'SIM_step', this.sim.t); this.after(); }
   // 1.2.2: a CHAT_MSG_SYSTEM line through the chat filters; counted in SIM_SYSSHOWN when no filter hides it
-  systemMessage(msg) { callG(this.L, 'SIM_step', this.sim.t); callG(this.L, 'SIM_system', msg); this.after(); }
+  // 2.0 (AC8): every line shown is also counted for the whole run (Sim.sysShownTotal, printed by tests/sim/run.js)
+  systemMessage(msg) {
+    callG(this.L, 'SIM_step', this.sim.t);
+    const r = callG(this.L, 'SIM_system', msg);
+    if (Number(r[0]) === 1) { this.sim.stats.sysShown = (this.sim.stats.sysShown || 0) + 1; Sim.sysShownTotal++; }
+    this.after();
+  }
   after() {
     if (!this.L) return;
     const L = this.L;
@@ -242,6 +256,15 @@ class Sim {
     // character (a surname in it) is never delivered and counted in stats.badWhisper (first one in badWhisperTo).
     this.surnames = opts.surnames !== false;
     this.surnameSenders = !!opts.surnameSenders;
+    // 2.0 (SPEC-v2.0-identidad AC2): forever = a WoW Forever realm. Every member has a surname; the roster (guild and
+    // raid) gives «Name Surname-Realm», UnitName (Name, Surname), the CHAT_MSG_ADDON sender «Name Surname» without the
+    // realm from any realm, and the server delivers a WHISPER only to the exact «Name Surname» of an online client
+    // (anything else: «No hay ningún jugador con el nombre X.»). Every delivery is logged in whisperLog. The 1.2.x
+    // knobs (surnames, surnameSenders, senderFullName, bareSameRealm, whisperSuffix) are the realm-mode world.
+    // Default: forever (Sim.FOREVER_DEFAULT).
+    this.forever = opts.forever !== undefined ? !!opts.forever : Sim.FOREVER_DEFAULT;
+    this.whisperLog = [];                         // every WHISPER sent: { t, from, target, to (handle or null) }
+    this.whisperDelivered = [];                   // every WHISPER that reached a client: { t, to, prefix, sender }
     // 1.2.2 (BRO in the game, 9-nov 03:11): the server only delivers a whisper to the full name WITH the surname
     // («Kas Pitas»); «Kas» / «Kas-Realm» are not found (the server shows «Kas-Realm» as «Kas Realm»). The realm suffix:
     // whisperSuffix 'never' (default, agents/research-surnames.md: the full name is unique in the region and
@@ -267,34 +290,54 @@ class Sim {
     this.stats = { posted: 0, delivered: 0, lost: 0 };
     this.rosterDirty = false;
   }
-  addMember(name, rank, level, realm) { this.roster.push({ name, rank, level: level || 60, realm: realm || null }); this.markRoster(); }
+  // name = the handle: "Ann" (surname 'Apann') or "Kas Pitas" (first "Kas", surname "Pitas"; two Kas, S21)
+  addMember(name, rank, level, realm) {
+    const p = Sim.parts(name);
+    this.roster.push({ name, first: p.first, surname: p.surname || this.surnameOf(p.first), rank, level: level || 60, realm: realm || null });
+    this.markRoster();
+  }
+  member(name) { return this.roster.find((m) => m.name === name) || null; }
+  // the identity of a member (or client handle) in this sim's mode: forever «Kas Pitas», realm «Kas-Realm»
+  idOf(name) {
+    const m = this.member(name), p = Sim.parts(name);
+    const first = m ? m.first : p.first, realm = (m && m.realm) || this.realm;
+    if (this.forever) return first + ' ' + ((m && m.surname) || p.surname || this.surnameOf(first));
+    return first + '-' + realm;
+  }
   // 1.2.1: a member online in the roster that runs no client of this build (no addon, or an old one, BRO's guild)
   setPresent(name, on) { if (on) this.present.add(name); else this.present.delete(name); this.markRoster(); }
   surnameOf(name) { return 'Ap' + name.toLowerCase(); }
   rosterName(r, readerRealm) {
     const realm = r.realm || this.realm;
-    if (this.surnames) return r.name + ' ' + this.surnameOf(r.name) + '-' + realm;
-    return (this.bareSameRealm && realm === readerRealm) ? r.name : r.name + '-' + realm;
+    if (this.forever || this.surnames) return r.first + ' ' + r.surname + '-' + realm;
+    return (this.bareSameRealm && realm === readerRealm) ? r.first : r.first + '-' + realm;
   }
   senderName(from, to) {
-    if (this.senderFullName && this.surnames) return from.name + ' ' + this.surnameOf(from.name);
-    if (this.bareSameRealm && from.realm === to.realm) return from.name;
-    if (this.surnameSenders && from.realm !== to.realm) return from.name + ' ' + this.surnameOf(from.name) + '-' + from.realm;
+    // (scenarios also post as emulated old clients: { name, full, realm }, no first / surname)
+    const first = from.first || Sim.parts(from.name).first;
+    const sur = from.surname || (this.member(from.name) || {}).surname || this.surnameOf(first);
+    if (this.forever) return first + ' ' + sur;                    // «Name Surname», no realm, from any realm
+    if (this.senderFullName && this.surnames) return first + ' ' + sur;
+    if (this.bareSameRealm && from.realm === to.realm) return first;
+    if (this.surnameSenders && from.realm !== to.realm) return first + ' ' + sur + '-' + from.realm;
     return from.full;
   }
-  // 1.2.2: the roster member a whisper target reaches (null = the server does not find that name)
+  // 1.2.2: the roster member a whisper target reaches (null = the server does not find that name). 2.0 forever: only
+  // the exact «Name Surname» of a member («Kas», «Kas-Realm» and «Kas Pitas-Realm» are no character there)
   whisperMember(from, target) {
+    if (this.forever) return this.roster.find((m) => m.first + ' ' + m.surname === target) || null;
     let name = target, realm = null;
     const dash = target.indexOf('-');
     if (dash >= 0) { name = target.slice(0, dash); realm = target.slice(dash + 1); }
     let first = name, surname = null;
     const sp = name.indexOf(' ');
     if (sp >= 0) { first = name.slice(0, sp); surname = name.slice(sp + 1); }
-    const r = this.roster.find((m) => m.name === first);
+    const r = this.roster.find((m) => m.first === first && (surname === null || !this.surnames || m.surname === surname)) ||
+              this.roster.find((m) => m.first === first);
     if (!r) return null;
     if (!this.surnames) return surname === null ? r : null;      // the old form: «Name» / «Name-Realm»
     const rRealm = r.realm || this.realm, fromRealm = from.realm || this.realm;
-    if (surname !== this.surnameOf(first)) return null;           // «Kas», «Kas-Realm»: no such character
+    if (surname !== r.surname) return null;                       // «Kas», «Kas-Realm»: no such character
     if (realm === null) return (this.whisperSuffix === 'never' || rRealm === fromRealm) ? r : null;
     if (this.whisperSuffix === 'never' || realm !== rRealm || rRealm === fromRealm) return null;
     return r;
@@ -316,7 +359,11 @@ class Sim {
     else if (channel === 'WHISPER') {
       const r = this.whisperMember(from, target);
       const c = r && this.clients[r.name];
+      // 2.0: the delivery log (S21: no whisper for Kas Pitas ever reaches Kas Mora) and the targets with a dash
+      this.whisperLog.push({ t: this.t, from: from.name, target, to: (c && c.online) ? c.name : null });
+      if (target.indexOf('-') >= 0) this.stats.dashWhisper = (this.stats.dashWhisper || 0) + 1;
       if (c && c.online) targets.push(c);
+      else if (this.forever && r && this.present.has(r.name)) { /* online without this addon: delivered to nobody */ }
       else {
         if (!r) { this.stats.badWhisper = (this.stats.badWhisper || 0) + 1; if (!this.badWhisperTo) this.badWhisperTo = target; }
         // the server's answer to the sender (offline members too), shown its way: «Kas-Realm» -> «Kas Realm»
@@ -353,7 +400,11 @@ class Sim {
       if (this.queue.length && this.queue[0].t <= this.t) {
         const d = this.queue.shift();
         if (d.system) { if (d.to.online && d.to.L === d.toGen) d.to.systemMessage(d.system); }
-        else if (d.to.online && d.to.L === d.toGen) { this.stats.delivered++; d.to.fire('CHAT_MSG_ADDON', d.prefix, d.msg, d.channel, d.sender); }
+        else if (d.to.online && d.to.L === d.toGen) {
+          this.stats.delivered++;
+          if (d.channel === 'WHISPER') this.whisperDelivered.push({ t: this.t, to: d.to.name, prefix: str(d.prefix), sender: d.sender });
+          d.to.fire('CHAT_MSG_ADDON', d.prefix, d.msg, d.channel, d.sender);
+        }
       } else if (who) who.step();
       else for (const c of this.online()) if (c.next !== null && c.next <= this.t) c.step();
     }
@@ -374,5 +425,15 @@ class Sim {
   errors() { let n = 0; for (const c of Object.values(this.clients)) n += c.totalErrors(); return n; }
   errorText() { return Object.values(this.clients).map((c) => c.errorText()).filter(Boolean).join('\n'); }
 }
+
+// "Kas Pitas" -> { first: "Kas", surname: "Pitas" }; "Ann" -> { first: "Ann", surname: null }
+Sim.parts = (name) => {
+  const sp = String(name).indexOf(' ');
+  return sp < 0 ? { first: String(name), surname: null } : { first: name.slice(0, sp), surname: name.slice(sp + 1) };
+};
+// the mode of a Sim built without opts.forever: a WoW Forever realm (2.0, AC7). GSQ_SIM_FOREVER=0 or run.js --realm
+// give the 1.2.x world back
+Sim.FOREVER_DEFAULT = process.env.GSQ_SIM_FOREVER !== '0';
+Sim.sysShownTotal = 0;          // «No hay ningún jugador…» lines shown in any chat of any client, whole process
 
 module.exports = { Sim, luaStr, mulberry32, sourcesAt };

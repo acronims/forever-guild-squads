@@ -788,43 +788,13 @@ end
 -- guild. Otherwise it stays untouched for the character of the right guild. inGuild(name) -> bool.
 M.LEGACY_KEYS = { "records", "progress", "races" }
 
--- WoW Forever surnames. GetGuildRosterInfo returns "Fire Essency" (character +
--- space + surname) while UnitName / CHAT_MSG_ADDON give "Fire". Character names have no spaces, so everything after
--- the first space is the surname. Accepted: "Fire", "Fire Essency", "Fire-Realm", "Fire Essency-Realm",
--- "Fire-Realm Essency". Returns the character key ("Fire-Realm", the same as ns.fullName of the bare name) and the
--- surname (nil when there is none). Plain find, never %s patterns: the split must not depend on the locale.
-function M.charName(raw, realm)
-  if type(raw) ~= "string" or raw == "" then return nil end
-  local name, surname = raw, nil
-  local sp = string.find(raw, " ", 1, true)
-  if sp then
-    local head, tail = string.sub(raw, 1, sp - 1), string.sub(raw, sp + 1)
-    local dash = string.find(tail, "-", 1, true)
-    if string.find(head, "-", 1, true) or not dash then
-      name, surname = head, tail                                                   -- "Fire Essency", "Fire-Realm Essency"
-    else
-      name, surname = head .. string.sub(tail, dash), string.sub(tail, 1, dash - 1) -- "Fire Essency-Realm"
-    end
-  end
-  if name == "" or string.sub(name, 1, 1) == "-" then return nil end
-  if surname == "" then surname = nil end
-  if not string.find(name, "-", 1, true) then name = name .. "-" .. tostring(realm or "") end
-  return name, surname
-end
--- 1.2.2 (BRO in the game, 9-nov 03:11): WoW Forever delivers a whisper only to the full name WITH the surname.
--- «Kas Pitas» works; «Kas» (what the 1.2.1 sent, as «Kas-Realm», shown by the server as «Kas Realm») does not, and
--- neither does «Kas Pitas-Realm» (the 1.2.0; Guild-Finder-Forever PR #45 measured it for another realm too: the full
--- name is unique in the region, agents/research-surnames.md). The identity of a character stays "Name-Realm"
--- (M.charName: author, signatures, certificates, indexes); the whisper target is built apart, from the key and the
--- roster surname: "Name Surname", any realm. alt = "Name Surname-Realm", tried once when the first one fails.
-function M.whisperTarget(key, surname, myRealm, alt)
-  if type(key) ~= "string" or key == "" then return nil end
-  local short, realm = string.match(key, "^([^-]+)%-(.+)$")
-  if not short then short, realm = key, myRealm end
-  local full = (type(surname) == "string" and surname ~= "") and (short .. " " .. surname) or short
-  if alt and type(realm) == "string" and realm ~= "" then return full .. "-" .. realm end
-  return full
-end
+-- 2.0: the identity lives in Core/Identity.lua (docs/SPEC-v2.0-identidad.md §2). These two stay as wrappers of its
+-- realm mode (the 1.2.2 answers, unchanged). M.charName: "Fire", "Fire Essency", "Fire-Realm", "Fire Essency-Realm",
+-- "Fire-Realm Essency" -> the realm key "Fire-Realm" and the surname (nil when there is none).
+function M.charName(raw, realm) return ns.Identity.realmKey(raw, realm) end
+-- M.whisperTarget: the 1.2.2 target "Name Surname" (any realm) from a realm key and the roster surname; alt = with
+-- "-Realm". In WoW Forever (mode forever) the target is the identity itself: ns.whisperTarget, never this.
+function M.whisperTarget(key, surname, myRealm, alt) return ns.Identity.realmWhisper(key, surname, myRealm, alt) end
 -- 1.2.2: the 1.2.0 keyed trust, manifests and certificates under "Name Surname-Realm" (the roster form): they never
 -- match a character again but inflate `keys strong=` and our own certificate. A character name has no space, so
 -- every saved name with one is such a leftover. g = a guild partition of GuildSquadsDB; returns how many went.
