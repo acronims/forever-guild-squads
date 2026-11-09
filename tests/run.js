@@ -70,6 +70,7 @@ const ORDER = [
   'proto3_spec.lua',
   'migration_spec.lua',
   'periphery_spec.lua',
+  'canon_spec.lua',
   'zload_spec.lua',
   'zzcold_spec.lua',
 ];
