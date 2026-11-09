@@ -431,10 +431,18 @@ end)
 
 test("B4: rejecting a typed name that matches nobody in the roster stores no rejection", function()
   local ns, env, fire, diag, printed = boot(F())
-  local A = ns.Actions
+  local A, S, me = ns.Actions, ns.Sync, ns.me()
+  -- a squad of mine (the GM's settings first), so the Model would take a «req» rejection from its captain
+  local okS, wS = S.Apply({ k = "settings", id = "settings", a = "Ann Oak", ts = 1000010, sq = 1, d = { squadsEnabled = true, bench = 2, minCreateRank = 9 } })
+  ok(okS, "settings: " .. tostring(wS))
+  local okQ, wQ = S.Apply({ k = "squad", id = me .. ":1", a = me, ts = 1000020, sq = 2, d = { name = "Lobos", captain = me, members = { me }, bench = {},
+                            icon = 1, color = 1, border = 1, tags = {}, open = true } })
+  ok(okQ, "squad: " .. tostring(wQ))
+  local okR = A.Reject(me .. ":1", "Kas Mora", "req")
+  ok(okR and ns.state.rejects and ns.state.rejects[me .. ":1|Kas Mora|req"], "control: a member's request is rejected")
   local before = 0
   for _ in pairs(ns.state.rejects or {}) do before = before + 1 end
-  A.Reject("Kas Pitas:1", "Nadie Nunca", "req")
+  A.Reject(me .. ":1", "Nadie Nunca", "req")
   local after = 0
   for _ in pairs(ns.state.rejects or {}) do after = after + 1 end
   eq(after, before, "rejection stored for a name outside the roster")
