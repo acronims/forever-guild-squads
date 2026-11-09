@@ -19,6 +19,11 @@ do
 end
 local db
 local rosterCache, onlineN = {}, 0
+local fullIdx = {}   -- 1.2.2: "Name Surname" -> roster key ("Name-Realm"); false when two entries share it
+-- 1.2.2 (known limit until the 1.3 makes «Name Surname» the identity): two members of one realm with the same first
+-- name and different surnames share the key "Name-Realm". Such a key is ambiguous: out of the roster (their records
+-- are refused as notInGuild), their messages are dropped and nothing is whispered to it. key -> { "Name Surname", ... }
+local ambig = {}
 
 -------------------------------------------------------------------------------
 -- helpers
@@ -41,7 +46,16 @@ end
 -- certificates, whisper target) is always "Name-Realm": a name with a space goes through M.charName, like charKey.
 function ns.fullName(name)
   if type(name) ~= "string" or name == "" then return nil end
-  if name:find(" ", 1, true) then return (M.charName(name, myRealm())) end
+  if name:find(" ", 1, true) then
+    -- 1.2.2: "Name Surname" without a realm is how WoW Forever gives a sender (the full name is unique in the region,
+    -- agents/research-surnames.md): the roster entry with that name and surname gives the realm of a member of another
+    -- connected realm. Not in the roster: my realm, as before.
+    if not name:find("-", 1, true) then
+      local k = fullIdx[name]
+      if k then return k end
+    end
+    return (M.charName(name, myRealm()))
+  end
   if name:find("-", 1, true) then return name end
   return name .. "-" .. myRealm()
 end
@@ -52,6 +66,11 @@ function ns.me()
 end
 
 function ns.isSelf(sender) return ns.fullName(sender) == ns.me() end
+-- 1.2.2: a name whose key two roster members share (never my own key: my entry is kept)
+function ns.isAmbiguous(name)
+  local key = ns.fullName(name)
+  return key ~= nil and ambig[key] ~= nil and key ~= ns.me()
+end
 
 -- character key of a name that may carry a WoW Forever surname (guild roster, raid roster, typed names).
 -- Names without a space give exactly ns.fullName(name). Returns key, surname.
@@ -70,6 +89,12 @@ function ns.whisperTarget(name, alt)
   local key = ns.fullName(name)
   local r = key and rosterCache[key]
   if not r then return nil end
+  -- names are realm-unique only outside Forever: with regional unique names a roster entry without its surname (not
+  -- cached yet) has no target that works (envelope instead)
+  if not r.surname and type(RegionalUniqueNamesEnabled) == "function" then
+    local okR, on = pcall(RegionalUniqueNamesEnabled)
+    if okR and on then return nil end
+  end
   return M.whisperTarget(key, r.surname, myRealm(), alt)
 end
 
@@ -147,8 +172,11 @@ function ns.RosterDiag()
   local parts = {}
   for i = 1, math.min(#list, 4) do parts[i] = list[i][1] .. ":" .. list[i][2] end
   local me = ns.me()
-  return ("[roster] me=%s found=%s entries=%d surnames=%d online=%d realms=%s"):format(tostring(me),
-    (me and rosterCache[me]) and "yes" or "no", n, s, onlineN, table.concat(parts, ","))
+  -- 1.2.2: keys two members share (same realm, same first name): ignored until the 1.3
+  local na, first = 0, nil
+  for key, names in pairs(ambig) do na = na + 1; first = first or (key .. ": " .. table.concat(names, ", ")) end
+  return ("[roster] me=%s found=%s entries=%d surnames=%d online=%d realms=%s ambiguous=%d%s"):format(tostring(me),
+    (me and rosterCache[me]) and "yes" or "no", n, s, onlineN, table.concat(parts, ","), na, first and (" (" .. first .. ")") or "")
 end
 
 local function requestRoster()
@@ -226,7 +254,7 @@ ns.UnloadGuild = unloadGuild
 
 local function readRoster()
   if not (IsInGuild and IsInGuild()) then
-    rosterCache = {}; onlineN = 0
+    rosterCache = {}; onlineN = 0; fullIdx = {}; ambig = {}
     unloadGuild()   -- no guild -> no partition
     return
   end
@@ -236,7 +264,7 @@ local function readRoster()
   end
   local n = GetNumGuildMembers and GetNumGuildMembers() or 0
   if n == 0 then return end
-  local cache, online = {}, 0
+  local cache, online, idx, amb, full = {}, 0, {}, {}, {}
   for i = 1, n do
     local ok, name, rankLabel, rankIndex, level, _, zone, _, _, isOnline, _, classFile = pcall(GetGuildRosterInfo, i)
     local key, surname -- "Fire Essency" -> "Fire-Realm" + surname "Essency" (same key as ns.me() and senders)
@@ -255,10 +283,23 @@ local function readRoster()
       end
       cache[key] = { rank = rankIndex, level = level, class = classFile, online = isOnline and true or false,
                      zone = type(zone) == "string" and zone or nil, seen = seen, surname = surname }
+      local fk = key:match("^([^-]+)") .. (surname and (" " .. surname) or "")
+      if surname then
+        if idx[fk] == nil then idx[fk] = key elseif idx[fk] ~= key then idx[fk] = false end
+      end
+      if full[key] and full[key] ~= fk then
+        amb[key] = amb[key] or { full[key] }
+        local seen = false
+        for _, x in ipairs(amb[key]) do if x == fk then seen = true end end
+        if not seen then amb[key][#amb[key] + 1] = fk end
+      end
+      full[key] = full[key] or fk
       if isOnline then online = online + 1 end
     end
   end
-  rosterCache, onlineN = cache, online
+  local me = ns.me()
+  for key in pairs(amb) do if key ~= me then cache[key] = nil end end
+  rosterCache, onlineN, fullIdx, ambig = cache, online, idx, amb
   if ns.HallGlue and ns.HallGlue.OnRoster then pcall(ns.HallGlue.OnRoster, cache) end -- level races (roster)
   if not ns.rosterReady then
     if not selectGuild() then return end

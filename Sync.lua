@@ -17,6 +17,12 @@ ns = ns or {}
 
 local Sync = {}
 ns.Sync = Sync
+-- 1.2.2: what goes to a member whose whisper target failed twice (or who has no roster entry). true = over the
+-- hidden GUILD addon channel in a "W" envelope with his key (only he handles it); false = nothing more is sent to
+-- him while he is marked (BRO, 9-nov 03:35: «por el canal de la guild no envíes nada sin permiso»; pending his
+-- answer on whether that covers the hidden addon channel). The visible guild chat is never written but by the GM's
+-- celebrations (settings celOn, off by default).
+Sync.WHISPER_GUILD_FALLBACK = true
 local M, Comm, X = ns.Model, ns.Comm, ns.P2P
 
 local KINDS = { "settings", "squad", "profile", "reject", "boss", "annul" }

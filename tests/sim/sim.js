@@ -244,10 +244,13 @@ class Sim {
     this.surnameSenders = !!opts.surnameSenders;
     // 1.2.2 (BRO in the game, 9-nov 03:11): the server only delivers a whisper to the full name WITH the surname
     // («Kas Pitas»); «Kas» / «Kas-Realm» are not found (the server shows «Kas-Realm» as «Kas Realm»). The realm suffix:
-    // whisperSuffix 'other' (default) = required for a member of another realm and refused for one of the sender's
-    // realm; 'never' = refused always (the bare «Name Surname» reaches any realm). A refused whisper is not delivered,
-    // counts in stats.badWhisper and the sender gets CHAT_MSG_SYSTEM «No hay ningún jugador con el nombre ...».
-    this.whisperSuffix = opts.whisperSuffix || 'other';
+    // whisperSuffix 'never' (default, agents/research-surnames.md: the full name is unique in the region and
+    // «Name Surname-Realm» is refused, Guild-Finder-Forever PR #45) = «Name Surname» reaches any realm; 'other' = the
+    // suffix is required for a member of another realm (the unmeasured alternative). A refused whisper is not
+    // delivered, counts in stats.badWhisper and the sender gets CHAT_MSG_SYSTEM «No hay ningún jugador con el nombre».
+    // senderFullName: the sender of CHAT_MSG_ADDON comes as «Name Surname», without the realm (3 addons measured it).
+    this.whisperSuffix = opts.whisperSuffix || 'never';
+    this.senderFullName = !!opts.senderFullName;
     this.present = new Set();                     // roster members online WITHOUT a client of this addon
     this.guild = opts.guild || 'Forever';
     this.epoch = opts.epoch || 1795000000;      // run second 0 in server time
@@ -274,6 +277,7 @@ class Sim {
     return (this.bareSameRealm && realm === readerRealm) ? r.name : r.name + '-' + realm;
   }
   senderName(from, to) {
+    if (this.senderFullName && this.surnames) return from.name + ' ' + this.surnameOf(from.name);
     if (this.bareSameRealm && from.realm === to.realm) return from.name;
     if (this.surnameSenders && from.realm !== to.realm) return from.name + ' ' + this.surnameOf(from.name) + '-' + from.realm;
     return from.full;

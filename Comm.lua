@@ -185,6 +185,8 @@ end
 -- the message over GUILD in a "W" envelope with the recipient key (only he processes it, as a whisper)
 local function routeGuild(tag, payload, key, onSent, urgent, skip)
   if tag == Comm.ROUTED then return false end
+  -- Sync.WHISPER_GUILD_FALLBACK = false: a marked member (or one missing from the roster) gets nothing more
+  if ns.Sync and ns.Sync.WHISPER_GUILD_FALLBACK == false then Comm.stats.wdropped = Comm.stats.wdropped + 1; return false end
   Comm.stats.routed = Comm.stats.routed + 1
   return Comm.Send(Comm.ROUTED, { to = key, t = tag, p = payload }, "GUILD", nil, onSent, urgent, skip)
 end
@@ -311,7 +313,7 @@ function Comm.Send(tag, payload, channel, target, onSent, urgent, skip)
   if ch == "WHISPER" then
     local key = keyOf(target)
     if type(key) ~= "string" then return false end
-    if offline(key) then Comm.stats.wdropped = Comm.stats.wdropped + 1; return false end
+    if offline(key) or (ns.isAmbiguous and ns.isAmbiguous(key)) then Comm.stats.wdropped = Comm.stats.wdropped + 1; return false end
     local v = variant(key)
     if v == "gone" then return routeGuild(tag, payload, key, onSent, urgent, skip) end
     local wt = target
@@ -321,7 +323,9 @@ function Comm.Send(tag, payload, channel, target, onSent, urgent, skip)
     end
     target = wt
     wm = { key = key, variant = v, alt = (v == "alt") }
-    function wm.resend() return Comm.Send(tag, payload, "WHISPER", key, (not wm.done) and onSent or nil, urgent, skip) end
+    -- never urgent: a re-send can run inside Q:pump (a drop check, TargetOffline), where pushing in front of the head
+    -- being processed would lose the first part
+    function wm.resend() return Comm.Send(tag, payload, "WHISPER", key, (not wm.done) and onSent or nil, nil, skip) end
   end
   local key = ch .. "|" .. tostring(target or "") .. "|" .. S.escape(S.encode({ v = Comm.PROTO, t = tag, p = payload }))
   if Comm.queue.pending and Comm.queue:pending(key) then
@@ -415,6 +419,8 @@ function Comm.OnEvent(event, ...)
     -- never index tables with Midnight secret values
     if issecretvalue and (issecretvalue(sender) or issecretvalue(msg)) then return end
     if ns.isSelf and ns.isSelf(sender) then return end
+    -- 1.2.2: two members share this sender's key (same realm and first name): nobody can tell them apart, ignore both
+    if ns.isAmbiguous and ns.isAmbiguous(sender) then Comm.stats.ambiguous = (Comm.stats.ambiguous or 0) + 1; return end
     -- only the GUILD channel, or a WHISPER from a member of the guild roster
     if not Comm.ChannelOk(channel, sender) then Comm.stats.badChannel = (Comm.stats.badChannel or 0) + 1; return end
     local full = C.feed(Comm.assembler, sender, msg, now())

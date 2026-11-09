@@ -83,12 +83,12 @@ test("1.2.2 names: the character key never carries the surname, in every plausib
   end
 end)
 
-test("1.2.2 names: the whisper target is the full name with the surname (realm suffix only for another realm)", function()
+test("1.2.2 names: the whisper target is the full name with the surname, without the realm (the suffix only as the other variant)", function()
   ok(type(M.whisperTarget) == "function", "Model.whisperTarget exists")
   eq(M.whisperTarget("Kas-Realm", "Pitas", "Realm"), "Kas Pitas", "same realm: «Kas Pitas» (BRO's test)")
   eq(M.whisperTarget("Kas-Realm", "Pitas", "Realm", true), "Kas Pitas-Realm", "the other variant adds the suffix")
-  eq(M.whisperTarget("Ñoño-Otro", "Pérez", "Realm"), "Ñoño Pérez-Otro", "another realm: «Name Surname-Realm»")
-  eq(M.whisperTarget("Ñoño-Otro", "Pérez", "Realm", true), "Ñoño Pérez", "the other variant drops the suffix")
+  eq(M.whisperTarget("Ñoño-Otro", "Pérez", "Realm"), "Ñoño Pérez", "another realm: «Name Surname» too (unique in the region)")
+  eq(M.whisperTarget("Ñoño-Otro", "Pérez", "Realm", true), "Ñoño Pérez-Otro", "the other variant adds the suffix")
   eq(M.whisperTarget("Kas-Realm", nil, "Realm"), "Kas", "no surname in the roster: the bare name")
   ok(M.whisperTarget(nil, "Pitas", "Realm") == nil, "no key, no target")
 end)
@@ -102,7 +102,7 @@ test("1.2.2 Comm: a whisper leaves to «Name Surname» (the roster name), never 
     Comm.Send("X", { a = 2 }, "WHISPER", "Kas Pitas-Realm"); pump(2)
     eq(lastTo(), "Kas Pitas", "a key with the surname gives the same target")
     Comm.Send("X", { a = 3 }, "WHISPER", "Ñoño-Otro"); pump(2)
-    eq(lastTo(), "Ñoño Pérez-Otro", "another realm keeps the suffix")
+    eq(lastTo(), "Ñoño Pérez", "another realm: no suffix either")
   end)
 end)
 
@@ -143,6 +143,29 @@ test("1.2.2 Comm: the server's not found for our whisper is hidden; the other va
   end)
 end)
 
+-- a failure seen while the queue pumps (SendAddonMessage -> 12 TargetOffline) re-sends from inside Q:pump: an urgent
+-- message must not be pushed in front of the head being processed (its first part would be lost)
+test("1.2.2 Comm: TargetOffline (12) on an urgent whisper: the other variant goes whole", function()
+  within(function()
+    sent = {}; clock = clock + 5000; Comm.wstate = {}
+    local origSend = C_ChatInfo.SendAddonMessage
+    C_ChatInfo.SendAddonMessage = function(p, msg, ch, to)
+      if to == "Ñoño Pérez" then return 12 end
+      return origSend(p, msg, ch, to)
+    end
+    Comm.Send("X", { u = string.rep("z", 400) }, "WHISPER", "Ñoño-Otro", nil, true); pump(6)
+    local alt = {}
+    for _, x in ipairs(sent) do if x.ch == "WHISPER" and x.to == "Ñoño Pérez-Otro" then alt[#alt + 1] = x end end
+    ok(#alt >= 2, "the other variant left with every part: " .. #alt)
+    local asm, full = NS.Chunk.newAssembler(), nil
+    for _, x in ipairs(alt) do full = NS.Chunk.feed(asm, "x", x.msg, 0) or full end
+    local okD, d = false, nil
+    if full then okD, d = NS.Serialize.decode(NS.Serialize.unescape(full)) end
+    ok(okD and d and d.t == "X" and d.p and d.p.u == string.rep("z", 400), "and it reassembles")
+    Comm.wstate = {}
+  end)
+end)
+
 test("1.2.2 Comm: no roster entry = no whisper (GUILD envelope); offline in the roster = nothing sent", function()
   within(function()
     sent = {}
@@ -152,6 +175,27 @@ test("1.2.2 Comm: no roster entry = no whisper (GUILD envelope); offline in the 
     sent = {}
     Comm.Send("X", { f = 2 }, "WHISPER", "Off-Realm"); pump(2)
     eq(#sent, 0, "offline in the roster: nothing sent")
+  end)
+end)
+
+-- BRO 9-nov 03:35 («por el canal de la guild no envíes nada sin permiso»): Sync.WHISPER_GUILD_FALLBACK = false
+test("1.2.2 Comm: WHISPER_GUILD_FALLBACK = false: a marked member (or one missing from the roster) gets nothing over GUILD", function()
+  within(function()
+    sent = {}; clock = clock + 9000; Comm.wstate = {}
+    ns.Sync = { WHISPER_GUILD_FALLBACK = false }
+    local okF, errF = pcall(function()
+      Comm.Send("X", { g = 1 }, "WHISPER", "Kas-Realm"); pump(1)
+      ok(sys("Kas Pitas") == true, "hidden"); pump(2)
+      ok(sys("Kas Pitas-Realm") == true, "hidden"); pump(2)
+      for i = 1, 3 do Comm.Send("X", { h = i }, "WHISPER", "Kas-Realm"); pump(1) end
+      Comm.Send("X", { h = 9 }, "WHISPER", "Zed-Realm"); pump(2)
+      local guild = 0
+      for _, x in ipairs(sent) do if x.ch == "GUILD" then guild = guild + 1 end end
+      eq(guild, 0, "nothing over GUILD")
+      eq(#sent, 2, "only the two whispers (main and the other variant): " .. #sent)
+    end)
+    ns.Sync = nil; Comm.wstate = {}
+    if not okF then error(errF, 0) end
   end)
 end)
 
@@ -218,8 +262,23 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.2: roster «Name Surname-Realm»: SendA
     ok(type(ns.whisperTarget) == "function", "ns.whisperTarget exists")
     eq(ns.whisperTarget("Bob-Realm"), "Bob Pitas", "same realm: «Bob Pitas»")
     eq(ns.whisperTarget("Bob"), "Bob Pitas", "a bare sender too")
-    eq(ns.whisperTarget("Cid-Otro"), "Cid Ñúñez-Otro", "another realm: with the suffix")
+    eq(ns.whisperTarget("Cid-Otro"), "Cid Ñúñez", "another realm: «Name Surname» too")
+    eq(ns.whisperTarget("Cid-Otro", true), "Cid Ñúñez-Otro", "the other variant: with the suffix")
+    -- a sender «Name Surname» without the realm (WoW Forever, research-surnames.md): the roster gives his realm
+    eq(ns.fullName("Cid Ñúñez"), "Cid-Otro", "sender «Cid Ñúñez» = Cid-Otro (roster)")
+    eq(ns.fullName("Bob Pitas"), "Bob-Realm", "sender «Bob Pitas» = Bob-Realm")
+    eq(ns.fullName("Zed Nadie"), "Zed-Realm", "not in the roster: my realm, as before")
+    ok(ns.isSelf("Ann Essency"), "our own echo «Ann Essency» is ours")
+    ok(Comm.ChannelOk("WHISPER", "Cid Ñúñez"), "a whisper from «Cid Ñúñez» (another realm) is accepted")
     ok(ns.whisperTarget("Zed-Realm") == nil, "not in the roster: no target")
+    -- with regional unique names (WoW Forever) a roster entry without its surname has no target that works
+    c.roster[2][1] = "Bob-Realm"; c.fire("GUILD_ROSTER_UPDATE"); c.tick(2)
+    eq(ns.whisperTarget("Bob-Realm"), "Bob", "classic client: the bare name")
+    RegionalUniqueNamesEnabled = function() return true end
+    local tNo = ns.whisperTarget("Bob-Realm")
+    RegionalUniqueNamesEnabled = nil
+    ok(tNo == nil, "Forever, no surname cached: no whisper target (GUILD envelope)")
+    c.roster[2][1] = "Bob Pitas-Realm"; c.fire("GUILD_ROSTER_UPDATE"); c.tick(2)
     Comm.Send("X", { s = 1 }, "WHISPER", "Bob-Realm", nil, true)   -- urgent: ahead of any backlog
     c.tick(3)
     local toBob, bad = 0, {}
@@ -237,5 +296,86 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.2: roster «Name Surname-Realm»: SendA
   c.roster[1][1], c.roster[2][1], c.roster[3][1] = orig[1], orig[2], orig[3]
   c.fire("GUILD_ROSTER_UPDATE"); c.tick(2)
   if Comm.wstate then Comm.wstate = {} end
+  if not okAll then error(err, 0) end
+end }
+
+-- Anton's condition for 1.2.2 (9-nov 03:32): two members of the same realm with the same first name and different
+-- surnames («Cid Pitas-Realm», «Cid Mora-Realm») share the key Cid-Realm until the 1.3 changes the identity. No crash,
+-- and never the data of one on the other: the key is detected as ambiguous and both are ignored (diag line).
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.2: two «Cid» of the same realm with different surnames: ambiguous, both ignored, diag", function(c)
+  local ns = c.ns
+  local Comm = ns.Comm
+  local origN, origCid = GetNumGuildMembers, c.roster[3][1]
+  c.roster[3][1] = "Cid Pitas-Realm"
+  c.roster[4] = { "Cid Mora-Realm", "Member", 4, 25, "Mage", "Durotar", "", "", true, 0, "MAGE" }
+  GetNumGuildMembers = function() return 4 end
+  c.fire("GUILD_ROSTER_UPDATE"); c.tick(2)
+  local origH, got = Comm.handler, {}
+  local okAll, err = pcall(function()
+    ok(type(ns.isAmbiguous) == "function", "ns.isAmbiguous exists")
+    ok(ns.isAmbiguous("Cid Pitas") and ns.isAmbiguous("Cid Mora") and ns.isAmbiguous("Cid-Realm"), "Cid-Realm is ambiguous")
+    ok(not ns.isAmbiguous("Bob-Realm"), "Bob is not")
+    ok(ns.roster("Cid-Realm") == nil, "the ambiguous key is not in the roster (records refused as notInGuild)")
+    -- messages from either Cid never reach the handler
+    Comm.handler = function(tag, p, sender) got[#got + 1] = sender end
+    local body = NS.Serialize.escape(NS.Serialize.encode({ v = Comm.PROTO, t = "X", p = { a = 1 } }))
+    for i, who in ipairs({ "Cid Pitas", "Cid Mora", "Cid-Realm", "Bob-Realm" }) do
+      for _, part in ipairs(NS.Chunk.split(body, "a" .. i)) do Comm.OnEvent("CHAT_MSG_ADDON", Comm.PREFIX, part, "GUILD", who) end
+    end
+    eq(#got, 1, "only Bob's message was handled"); eq(got[1], "Bob-Realm")
+    ok((Comm.stats.ambiguous or 0) >= 3, "counted: " .. tostring(Comm.stats.ambiguous))
+    -- nothing is whispered to the ambiguous key, not even in an envelope
+    local q, pushed = Comm.queue, 0
+    local origPush = q.pushMessage
+    q.pushMessage = function() pushed = pushed + 1; return true end
+    Comm.Send("X", { b = 1 }, "WHISPER", "Cid-Realm")
+    q.pushMessage = origPush
+    eq(pushed, 0, "no whisper and no envelope to an ambiguous key")
+    local diag = ns.RosterDiag()
+    ok(diag:find("ambiguous=1", 1, true) and diag:find("Cid Pitas", 1, true) and diag:find("Cid Mora", 1, true), "diag: " .. diag)
+  end)
+  Comm.handler = origH
+  GetNumGuildMembers = origN
+  c.roster[4] = nil; c.roster[3][1] = origCid
+  c.fire("GUILD_ROSTER_UPDATE"); c.tick(2)
+  if not okAll then error(err, 0) end
+end }
+
+-- BRO 9-nov 03:35: nothing goes to the visible guild chat but the GM's celebrations (settings celOn, off by default)
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.2: the visible GUILD chat only gets the GM's celebrations (celOn, off by default)", function(c)
+  local ns = c.ns
+  local hits = {}
+  for line in SOURCES["GuildSquads.toc"]:gmatch("[^\r\n]+") do
+    if line:match("%.lua$") then
+      local f = line:gsub("\\", "/")
+      for l in (SOURCES[f] or ""):gmatch("[^\n]+") do
+        local code = l:gsub("%-%-.*$", ""):gsub('"[^"]*"', '""')   -- code only (API names in strings are no call)
+        if code:find("SendChatMessage", 1, true) then hits[#hits + 1] = f end   -- (SendTell only opens the edit box)
+      end
+    end
+  end
+  ok(#hits >= 1, "the celebrations send is found")
+  for _, f in ipairs(hits) do eq(f, "Hall.lua", "a chat send outside the celebrations") end
+  local src = SOURCES["Hall.lua"]
+  local fn = src:match("function H%.PumpCelebrations%(%)(.-)\nend")
+  ok(fn and fn:find("s.celOn ~= true", 1, true) and fn:find('"GUILD"', 1, true), "PumpCelebrations is gated by celOn")
+  local outside = src:gsub("function H%.PumpCelebrations%(%).-\nend", "")
+  for l in outside:gmatch("[^\n]+") do
+    local code = l:gsub("%-%-.*$", ""):gsub('"[^"]*"', '""')
+    ok(not code:find("SendChatMessage", 1, true), "SendChatMessage outside PumpCelebrations: " .. l)
+  end
+  eq(ns.Model.settingsOf(ns.Model.newState()).celOn, false, "celebrations off by default")
+  -- dynamic: with celOn off, a pump never writes to the chat
+  local spy, origG = {}, SendChatMessage
+  local origC = C_ChatInfo.SendChatMessage
+  SendChatMessage = function(_, ch) spy[#spy + 1] = tostring(ch) end
+  C_ChatInfo.SendChatMessage = SendChatMessage
+  local okAll, err = pcall(function()
+    if ns.Model.settingsOf(ns.state).celOn ~= true then
+      for _ = 1, 5 do ns.HallGlue.PumpCelebrations(); c.tick(1) end
+      eq(#spy, 0, "nothing written to the chat with celebrations off")
+    end
+  end)
+  SendChatMessage, C_ChatInfo.SendChatMessage = origG, origC
   if not okAll then error(err, 0) end
 end }

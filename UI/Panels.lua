@@ -30,7 +30,8 @@ local function nameColored(name, class)
 end
 -- ChatFrame_SendTell, then ChatFrameUtil.SendTell, then open the chat with "/w name "
 local function whisper(name)
-  local short = ns.shortName(name)
+  -- 1.2.2: WoW Forever only finds «Name Surname» (ns.whisperTarget); the bare name when the roster has no surname
+  local short = (ns.whisperTarget and ns.whisperTarget(name)) or ns.shortName(name)
   if ChatFrame_SendTell and pcall(ChatFrame_SendTell, short) then return end
   if ChatFrameUtil and ChatFrameUtil.SendTell and pcall(ChatFrameUtil.SendTell, short) then return end
   if ChatFrame_OpenChat then pcall(ChatFrame_OpenChat, "/w " .. short .. " "); return end

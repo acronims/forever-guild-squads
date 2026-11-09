@@ -1252,9 +1252,11 @@ function S18(seed) {
 function s19run(seed, connected, check) {
   const tag = connected ? '[connected realms]' : '[one realm]';
   // connected realms: names of the reader's own realm come bare, a sender on the other realm with its surname
-  // 1.2.2: whispers only reach «Name Surname»; across realms the suffix is refused (whisperSuffix 'never'), so every
-  // first whisper to the other realm fails and the other variant has to take over without a line in the chat
-  const sim = new Sim(connected ? { seed, realm: 'RealmB', guildRealm: 'RealmB', bareSameRealm: true, surnameSenders: true, whisperSuffix: 'never' } : { seed });
+  // 1.2.2: whispers only reach «Name Surname». Connected realms: senders come as «Name Surname» without the realm
+  // (research-surnames.md) and the server is the unmeasured variant that wants the realm suffix across realms
+  // (whisperSuffix 'other'), so every first whisper to the other realm fails and the other variant has to take over
+  // without a line in the chat
+  const sim = new Sim(connected ? { seed, realm: 'RealmB', guildRealm: 'RealmB', senderFullName: true, whisperSuffix: 'other' } : { seed });
   const realmOf = (n) => {
     if (!connected) return sim.realm;
     if (n === 'Mb1' || n === 'Mb3') return 'RealmA';
