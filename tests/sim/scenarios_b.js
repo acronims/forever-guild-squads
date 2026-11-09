@@ -135,7 +135,11 @@ function S17v2(seed) {
   const cnt = news.map((n) => `${n}:${num(cs[n], 'NS.Comm.OldPeerCount()')}`);
   // Mb1 reloaded after the old ones spoke: it counts the ones it heard again (Mb4 reloaded after it)
   check('the 2.0 clients count old = 2 (Comm.OldPeerCount, one per identity)', news.filter((n) => n !== 'Mb1').every((n) => num(cs[n], 'NS.Comm.OldPeerCount()') === 2), cnt.join(','));
-  check('the diag line says proto v=3 old=N', news.every((n) => /^proto v=3 old=\d+$/.test(s(cs[n], 'NS.Comm.ProtoDiag()'))), s(cs.Gm, 'NS.Comm.ProtoDiag()'));
+  // the local OLD_PEERS line (§4.3: «... anterior a la 2.0 ...»), once per session
+  const lines = news.map((n) => [n, (s(cs[n], '(function() local o = {} for _, e in ipairs(SIM_LOCAL or {}) do if type(e) == "table" and e.s then o[#o + 1] = e.s end end return table.concat(o, "\\n") end)()').match(/anterior a la 2\.0|older than 2\.0/g) || []).length]);
+  check('every 2.0 client writes the OLD_PEERS line («... 2.0 ...») exactly once', lines.every((x) => x[1] === 1), lines.map((x) => x.join(':')).join(','));
+  const diag = (c) => s(c, 'NS.Comm.ProtoDiag and NS.Comm.ProtoDiag() or "no ProtoDiag"');
+  check('the diag line says proto v=3 old=N', news.every((n) => /^proto v=3 old=\d+$/.test(diag(cs[n]))), diag(cs.Gm));
   const badOld = olds.map((o) => `${o}:${num(cs[o], 'NS.Comm.stats.badProto')}`);
   check('the 1.2.2 clients drop the 2.0 messages (badProto > 0) without Lua errors', olds.every((o) => num(cs[o], 'NS.Comm.stats.badProto') > 0), badOld.join(','));
   errorsCheck(sim, check);
