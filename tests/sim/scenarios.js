@@ -1240,4 +1240,116 @@ function S18(seed) {
   return { pass: pass(), checks, metrics: { keys, certHeld, verified, total, sqVerified, sqTotal, maxOnline, sessions, t: Math.round(sim.t), ...sim.stats } };
 }
 
-module.exports = { S18, S8g, S15, S16, S16b, S16c, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+// S19 (1.2.1, BRO's real client 9-nov-2026: 317 members, ~60 online, 2-3 on 1.2; /gsq diag sample=0, sig verified=0,
+// cert held=0): a guild of 300 with 60 members online in the roster. Only 3 run this build (Mb1-Mb3); 5 run an old
+// 1.1 (emulated: online in the roster, a PROTO 1 hello every 2-4 min; like the real ones they never read PROTO 2) and
+// 52 have no addon. Each 1.2 client wrote its profile (Mb1 also a squad) in a session alone, so what the others lack
+// only comes in hello replies. Expected <= 10 min after the last login: the 3 hold the same model, every profile /
+// presence / squad of the 3 verified everywhere, each one holds the manifests of the other two, ns.peerCount() = 3.
+// RED on 1.2.0: the reply draw (8 / online) and the cube sample (online > SAMPLE_MIN_ONLINE) counted the 60 online.
+// Two runs: one realm; connected realms (the guild and Mb2 on RealmB, Mb1 = BRO and Mb3 on RealmA, the roster split
+// between both; names on the reader's own realm come without "-Realm" in the roster and in CHAT_MSG_ADDON).
+function s19run(seed, connected, check) {
+  const tag = connected ? '[connected realms]' : '[one realm]';
+  const sim = new Sim(connected ? { seed, realm: 'RealmB', guildRealm: 'RealmB', bareSameRealm: true } : { seed });
+  const realmOf = (n) => {
+    if (!connected) return sim.realm;
+    if (n === 'Mb1' || n === 'Mb3') return 'RealmA';
+    if (n === 'Mb2' || n === 'Gm') return 'RealmB';
+    return (Number(n.replace(/^\D+/, '')) || 0) % 2 ? 'RealmA' : 'RealmB';
+  };
+  const fullOf = (n) => n + '-' + realmOf(n);
+  const roster = ['Gm', 'Of1', 'Of2', 'Of3', 'Of4'];
+  for (let i = 1; i <= 295; i++) roster.push('Mb' + i);
+  roster.forEach((n) => sim.addMember(n, n === 'Gm' ? 0 : (n.startsWith('Of') ? 1 : 5), 60, realmOf(n)));
+  const names = ['Mb1', 'Mb2', 'Mb3'];
+  const olds = ['Mb4', 'Mb5', 'Mb6', 'Mb7', 'Mb8'];
+  const bare = ['Gm', 'Of1'];
+  for (let i = 9; i <= 58; i++) bare.push('Mb' + i);
+  for (const n of [...olds, ...bare]) sim.setPresent(n, true);
+  const cs = names.map((n) => sim.client(n, { realm: realmOf(n) }));
+  // history: every 1.2 client alone (its records reach the others only by hello replies)
+  let squadId = null;
+  for (const c of cs) {
+    c.login(); sim.run(30);
+    c.run(`return A.SaveProfile({ note = ${luaStr('soy ' + c.name)} })`);
+    if (c.name === 'Mb1') {
+      sim.run(5);
+      c.run('return A.CreateSquad({ name = "Squad S19", icon = 1, color = 1, border = 1, tags = {}, open = true })');
+      squadId = c.val('A.MySquadId()')[0];
+    }
+    sim.run(60); c.logout(); sim.run(30);
+  }
+  // PROTO 1 hellos of the 1.1 clients (the wire form of a 1.1 hello: v = 1)
+  cs[0].login();
+  const oldParts = cs[0].run('local S, C = NS.Serialize, NS.Chunk; return table.unpack(C.split(S.escape(S.encode({ v = 1, t = "H", p = { h = {}, p2 = 1 } })), "o1"))');
+  const oldAt = {};
+  for (const n of olds) oldAt[n] = sim.t + 20 + sim.rand() * 200;
+  const oldHellos = () => {
+    for (const n of olds) if (sim.t >= oldAt[n]) {
+      oldAt[n] = sim.t + 120 + sim.rand() * 120;
+      const from = { name: n, guild: sim.guild, full: fullOf(n), realm: realmOf(n) };
+      for (const part of oldParts) sim.post(from, 'GSquads', part, 'GUILD');
+    }
+  };
+  sim.run(30); oldHellos();
+  cs[1].login(); sim.run(30); oldHellos();
+  cs[2].login();
+  const tLast = sim.t;
+  const rosterOnline = roster.filter((n) => sim.isOnline(n)).length;
+  const authors = names.map((n) => `{ ${luaStr(fullOf(n))}, ${luaStr('soy ' + n)} }`).join(',');
+  const others = (c) => names.filter((n) => n !== c.name).map((n) => luaStr(fullOf(n))).join(',');
+  const state = (c) => {
+    const v = c.run(`local X, out = NS.P2P, {}
+      for _, e in ipairs({ ${authors} }) do
+        local p = NS.state.profiles[e[1]]
+        local u = X and X.unverified(NS.state, "profile", e[1])
+        out[#out + 1] = (p and p.d.note == e[2]) and "v" or ((u and u.r.d.note == e[2]) and "u" or "-")
+        local q = NS.state.presence and NS.state.presence[e[1]]
+        local uq = X and X.unverified(NS.state, "presence", e[1])
+        out[#out + 1] = q and "v" or (uq and "u" or "-")
+      end
+      local sq = ${luaStr(String(squadId))}
+      local us = X and X.unverified and X.unverified(NS.state, "squad", sq)
+      out[#out + 1] = NS.state.squads[sq] and "v" or (us and "u" or "-")
+      local man, crt = 0, 0
+      for _, n in ipairs({ ${others(c)} }) do
+        if NS.sigDB and NS.sigDB.man and NS.sigDB.man[n] then man = man + 1 end
+        if NS.certDB and NS.certDB.crt and NS.certDB.crt[n] then crt = crt + 1 end
+      end
+      return table.concat(out), man, crt, NS.peerCount and NS.peerCount() or "nil", NS.Comm.OldPeerCount(),
+        NS.Sync.stats.sampled or 0, NS.Comm.stats.badProto or 0, NS.Comm.stats.badChannel or 0,
+        tostring(NS.roster(NS.me()) ~= nil)`);
+    return { hold: String(v[0]), man: Number(v[1]), crt: Number(v[2]), peers: String(v[3]), old: Number(v[4]),
+             sampled: Number(v[5]), badProto: Number(v[6]), badChannel: Number(v[7]), meInRoster: String(v[8]) };
+  };
+  const good = (st) => st.hold === 'vvvvvvv' && st.man === 2;
+  let tConv = null, tAll = null, st = {};
+  while (sim.t - tLast < 600) {
+    sim.run(10); oldHellos();
+    if (tConv === null && sim.converged()) tConv = sim.t - tLast;
+    for (const c of cs) st[c.name] = state(c);
+    if (tConv !== null && cs.every((c) => good(st[c.name]))) { tAll = sim.t - tLast; break; }
+  }
+  for (const c of cs) st[c.name] = state(c);
+  check(`S19${tag}: roster of 300 with 60 online (3 on 1.2, 5 on 1.1, 52 without the addon)`, roster.length === 300 && rosterOnline === 60,
+    `${roster.length} members, ${rosterOnline} online at the last login`);
+  check(`S19${tag}: every 1.2 client finds itself in its roster`, cs.every((c) => st[c.name].meInRoster === 'true'), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].meInRoster]))));
+  check(`S19${tag}: the 3 clients on 1.2 hold the same model <= 600 s after the last login`, tConv !== null, tConv === null ? 'not converged after 600 s' : tConv + ' s');
+  check(`S19${tag}: every profile + presence + the squad of the 3 verified on the 3 (vvvvvvv), and each one holds the manifests of the other 2, <= 600 s`,
+    tAll !== null, (tAll === null ? 'not after 600 s ' : tAll + ' s ') + JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].hold + ' man=' + st[c.name].man]))));
+  check(`S19${tag}: ns.peerCount() = 3 on each 1.2 client`, cs.every((c) => st[c.name].peers === '3'), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].peers]))));
+  check(`S19${tag}: the 5 old clients are counted as old peers (OldPeerCount = 5) on each`, cs.every((c) => st[c.name].old === 5), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].old]))));
+  return { sim, metrics: { tConv, tAll, rosterOnline, squadId, st, t: Math.round(sim.t), ...sim.stats } };
+}
+function S19(seed) {
+  const { check, checks, pass } = checker();
+  const a = s19run(seed, false, check);
+  const b = s19run(seed + 1, true, check);
+  errorsCheck(a.sim, (l, o, d) => check('S19[one realm]: ' + l, o, d));
+  errorsCheck(b.sim, (l, o, d) => check('S19[connected realms]: ' + l, o, d));
+  return { pass: pass(), checks, metrics: { oneRealm: a.metrics, connected: b.metrics } };
+}
+
+
+module.exports = { S19, S18, S8g, S15, S16, S16b, S16c, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };

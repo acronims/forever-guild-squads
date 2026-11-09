@@ -105,7 +105,8 @@ const luaStr = (s) => JSON.stringify(String(s)); // JSON string literal is a val
 // ---- client ------------------------------------------------------------------------------------------------
 class Client {
   constructor(sim, name, opts) {
-    this.sim = sim; this.name = name; this.full = name + '-' + sim.realm;
+    // 1.2.1: opts.realm = the character's realm (connected realms: it may differ from the guild's, sim.guildRealm)
+    this.sim = sim; this.name = name; this.realm = opts.realm || sim.realm; this.full = name + '-' + this.realm;
     this.skew = opts.skew || 0; this.saved = opts.saved || null; this.online = false;
     this.guild = opts.guild === undefined ? sim.guild : opts.guild;
     this.next = null; this.bucket = {}; this.errorsBefore = 0;
@@ -118,7 +119,7 @@ class Client {
     lualib.luaL_openlibs(L);
     this.L = L;
     const seed = Math.floor(sim.rand() * 2147483647);
-    loadRun(L, `math.randomseed(${seed}); SIM_T = ${sim.t}; SIM_CFG = { name = ${luaStr(this.name)}, realm = ${luaStr(sim.realm)}, ` +
+    loadRun(L, `math.randomseed(${seed}); SIM_T = ${sim.t}; SIM_CFG = { name = ${luaStr(this.name)}, realm = ${luaStr(this.realm)}, grealm = ${luaStr(sim.guildRealm || sim.realm)}, ` +
       `guild = ${this.guild ? luaStr(this.guild) : 'nil'}, skew = ${this.skew}, epoch = ${sim.epoch}, uptime0 = ${1000 + Math.floor(sim.rand() * 5000)} }`, 'cfg');
     lua.lua_pushjsfunction(L, (Ls) => {   // SIM_canSend(prefix) -> 0 | 3 (per-prefix throttle like the client)
       const prefix = str(lua.lua_tolstring(Ls, 1));
@@ -188,7 +189,7 @@ class Client {
   }
   setRoster() {
     if (!this.L) return;
-    const rows = this.sim.roster.map((r) => `{${luaStr(r.name + '-' + this.sim.realm)},${r.rank},${r.level || 60},"WARRIOR",${this.sim.isOnline(r.name) ? 'true' : 'false'}}`);
+    const rows = this.sim.roster.map((r) => `{${luaStr(this.sim.rosterName(r, this.realm))},${r.rank},${r.level || 60},"WARRIOR",${this.sim.isOnline(r.name) ? 'true' : 'false'}}`);
     loadRun(this.L, 'SIM_ROSTER = {' + rows.join(',') + '}', 'roster');
   }
   // run Lua code inside this client (has A, NS, SIM_* globals)
@@ -228,6 +229,11 @@ class Sim {
     this.seed = opts.seed || 1;
     this.rand = mulberry32(this.seed);
     this.realm = opts.realm || 'Realm';
+    // 1.2.1 connected realms: the guild's realm (GetGuildInfo 4th value) and, with bareSameRealm, the client form of
+    // names on the reader's own realm (roster rows and CHAT_MSG_ADDON senders without "-Realm")
+    this.guildRealm = opts.guildRealm || null;
+    this.bareSameRealm = !!opts.bareSameRealm;
+    this.present = new Set();                     // roster members online WITHOUT a client of this addon
     this.guild = opts.guild || 'Forever';
     this.epoch = opts.epoch || 1795000000;      // run second 0 in server time
     this.t = 0;
@@ -243,10 +249,16 @@ class Sim {
     this.stats = { posted: 0, delivered: 0, lost: 0 };
     this.rosterDirty = false;
   }
-  addMember(name, rank, level) { this.roster.push({ name, rank, level: level || 60 }); this.markRoster(); }
+  addMember(name, rank, level, realm) { this.roster.push({ name, rank, level: level || 60, realm: realm || null }); this.markRoster(); }
+  // 1.2.1: a member online in the roster that runs no client of this build (no addon, or an old one, BRO's guild)
+  setPresent(name, on) { if (on) this.present.add(name); else this.present.delete(name); this.markRoster(); }
+  rosterName(r, readerRealm) {
+    const realm = r.realm || this.realm;
+    return (this.bareSameRealm && realm === readerRealm) ? r.name : r.name + '-' + realm;
+  }
   setRank(name, rank) { for (const r of this.roster) if (r.name === name) r.rank = rank; this.markRoster(); }
   removeMember(name) { this.roster = this.roster.filter((r) => r.name !== name); this.markRoster(); }
-  isOnline(name) { const c = this.clients[name]; return !!(c && c.online); }
+  isOnline(name) { const c = this.clients[name]; return !!(c && c.online) || this.present.has(name); }
   markRoster() { this.rosterDirty = true; }
   client(name, opts) {
     const c = new Client(this, name, opts || {});
@@ -269,7 +281,8 @@ class Sim {
       let at = this.t + this.latency[0] + this.rand() * (this.latency[1] - this.latency[0]);
       if (this.lastAt[key] && at < this.lastAt[key]) at = this.lastAt[key];
       this.lastAt[key] = at;
-      this.queue.push({ t: at, seq: ++this.seq, to, toGen: to.L, prefix, msg, channel, sender: from.full });
+      const sender = (this.bareSameRealm && from.realm === to.realm) ? from.name : from.full;
+      this.queue.push({ t: at, seq: ++this.seq, to, toGen: to.L, prefix, msg, channel, sender });
     }
     this.queue.sort((a, b) => a.t - b.t || a.seq - b.seq);
   }

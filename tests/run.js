@@ -51,6 +51,7 @@ const ORDER = [
   'observations_spec.lua',
   'races_spec.lua',
   'sync_spec.lua',
+  'peers_spec.lua',
   'robustness_spec.lua',
   'locales_spec.lua',
   'raids_attendance_spec.lua',

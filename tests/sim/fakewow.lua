@@ -83,7 +83,7 @@ InCombatLockdown = function() return false end
 
 -- guild roster (driver writes SIM_ROSTER = { {name, rankIndex, level, classFile, online}, ... })
 IsInGuild = function() return CFG.guild ~= nil end
-GetGuildInfo = function() if CFG.guild then return CFG.guild, "Rank", 0, CFG.realm end return nil end
+GetGuildInfo = function() if CFG.guild then return CFG.guild, "Rank", 0, CFG.grealm or CFG.realm end return nil end  -- 4th = the guild's realm
 GetNumGuildMembers = function() return CFG.guild and #(SIM_ROSTER or {}) or 0 end
 GetGuildRosterInfo = function(i)
   local r = SIM_ROSTER[i]
