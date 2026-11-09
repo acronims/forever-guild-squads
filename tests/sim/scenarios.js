@@ -955,6 +955,92 @@ function s16bRun(seed, withWit) {
   return { pass: pass(), checks, metrics: { zpk0, zpk1, before, after, mid, fin, t: Math.round(sim.t), ...sim.stats } };
 }
 
+// S16d (2.0, blind review D, A1): the ghost under another spelling. 2 alts known in person by the honest clients
+// certify the SAME fake key for spellings of the GM and of the officer that the roster resolves to them («gm apgm»,
+// «Gm-Realm», «Gm», «Gm-Apgm», «Gm Apgm-Realm», «of1 apof1», «Of1-Realm») and relay, under each spelling, a profile and
+// a squad signed with that key (ks + manifest + certificate). Before the fix the record was applied and shown as the
+// GM (isGM true). Control in the same run: the same forge for Mb11 under his canonical name (nobody heard him in
+// person) is certified and applied (the annex G limit, as S16c), so the certificate path did run. Nothing under a
+// spelling is kept on the honest clients (records, keys, candidates, manifests), the strict roster makes no spelling
+// GM or officer, the honest clients count the spellings (diag alias=N) and the GM's settings stay.
+function S16d(seed) {
+  const sim = new Sim({ seed });
+  const { check, checks, pass } = checker();
+  makeGuild(sim, 1, 12);
+  const gm = sim.client('Gm'), of1 = sim.client('Of1');
+  const alts = ['Mb2', 'Mb3'].map((n) => sim.client(n));
+  const [h1, h2] = ['Mb8', 'Mb9'].map((n) => sim.client(n));
+  const GM = full(sim, 'Gm'), OF = full(sim, 'Of1'), ZED = full(sim, 'Mb11');
+  check('forever identities', GM === 'Gm Apgm' && OF === 'Of1 Apof1', GM + ' / ' + OF);
+  for (const c of [gm, of1, h1, h2, ...alts]) { c.login(); sim.run(5); }
+  check('GM settings written', gmSettings(gm));
+  sim.run(60);
+  gm.logout(); of1.logout();
+  sim.run(30);
+  const R = sim.guildRealm || sim.realm;
+  const SPELL = ['gm apgm', 'Gm-' + R, 'Gm', 'Gm-Apgm', 'Gm Apgm-' + R, 'of1 apof1', 'Of1-' + R];
+  const resolve = h1.val(`(function() local o = {} for _, a in ipairs({ ${SPELL.map(luaStr).join(', ')} }) do
+    o[#o + 1] = a .. "=" .. tostring(NS.id(a)) .. ":" .. tostring(NS.Permissions.isGM(NS.roster, a)) end return table.concat(o, ",") end)()`)[0];
+  check('setup: every spelling resolves to the GM / the officer in the roster (D1)', SPELL.every((a) => resolve.includes(a + '=' + (a.toLowerCase().startsWith('of1') ? OF : GM))), resolve);
+  const FTS = sim.epoch + Math.round(sim.t) + 200;
+  const forge = (i) => `(function()
+    local E, G, C, T = NS.Ed25519, NS.Sig, NS.Cert, NS.Trust
+    local fsk = string.rep(string.char(78), 32); local fpk = E.publicKey(fsk); local fhex = T.hex(fpk)
+    local targets = { ${SPELL.map(luaStr).join(', ')}, ${luaStr(ZED)} }
+    local heard = {}
+    for name, k in pairs(NS.trustDB.keys) do if k.s == "strong" then heard[name] = T.unhex(k.pk) end end
+    for _, t in ipairs(targets) do heard[t] = fpk end
+    local osk, opk = T.own(GuildSquadsDB.ownKeys[NS.me()])
+    local c = C.build(NS.me(), ${FTS} + ${i}, heard, osk, opk)
+    for j, t in ipairs(targets) do
+      local recs = { { k = "profile", id = t, a = t, ts = ${FTS}, sq = 9100 + j, d = { note = "fantasma", level = 60 } },
+        { k = "squad", id = t .. ":${FTS}", a = t, ts = ${FTS}, sq = 9200 + j, d = { name = "Fantasma" .. j, captain = t, members = { t },
+          bench = {}, icon = 1, color = 1, border = 1, tags = {}, open = true, approved = true, ct = ${FTS} } } }
+      NS.Comm.Send("D", { r = recs, ks = { [t] = fhex }, m = { G.build(t, 2000000000, recs, fsk, fpk) }, c = { i = c.i, n = c.n, e = c.e, s = c.s } })
+    end
+    return true end)()`;
+  for (let i = 0; i < alts.length; i++) { alts[i].val(forge(i)); sim.run(2); }
+  sim.run(180);
+  for (let n = 0; n < 300; n++) for (const c of [h1, h2]) c.step();
+  sim.run(60);
+  for (let n = 0; n < 100; n++) for (const c of [h1, h2]) c.step();
+  // (the fallbacks keep the view readable on a build without the fix: the red run of agents/g20-fix.md)
+  const view = (c) => c.val(`(function() local T, db = NS.Trust, NS.trustDB
+    local strict = NS.rosterStrict or NS.roster
+    local isCanon = NS.isCanon or function(x) return NS.id(x) == x end
+    local spell = { ${SPELL.map(luaStr).join(', ')} }
+    local held, ghosts, gmish, bad = 0, 0, 0, 0
+    for _, a in ipairs(spell) do
+      if db.keys[a] or db.pend[a] or (NS.sigDB.man or {})[a] then held = held + 1 end
+      if NS.state.profiles[a] then ghosts = ghosts + 1 end
+      if NS.Permissions.isGM(strict, a) or NS.Permissions.isOfficer(strict, a, NS.Model.settingsOf(NS.state)) then gmish = gmish + 1 end
+    end
+    for _, r in ipairs(NS.Model.allRecords(NS.state)) do
+      if not isCanon(r.a) or (r.k == "squad" and not isCanon(r.d.captain)) then bad = bad + 1 end
+      if r.d and r.d.note == "fantasma" and r.a ~= ${luaStr(ZED)} then ghosts = ghosts + 1 end
+    end
+    local z = NS.state.profiles[${luaStr(ZED)}]
+    local _, zs = T.keyOf(db, ${luaStr(ZED)})
+    local n = NS.AliasCount and NS.AliasCount() or 0
+    local s = NS.Model.settingsOf(NS.state)
+    return ("held=%d ghosts=%d gm=%d bad=%d alias=%d zed=%s:%s gmIsGM=%s settings=%s"):format(held, ghosts, gmish, bad, n,
+      z and z.d.note or "nil", tostring(zs), tostring(NS.Permissions.isGM(strict, ${luaStr(GM)})), tostring(s.bench)) end)()`)[0];
+  const after = [h1, h2].map(view);
+  check('control: the canonical Mb11 forge is certified and applied (annex G limit, S16c): the certificate path ran', after.every((x) => /zed=fantasma:cert/.test(x)), after.join(' | '));
+  check('no record, key, candidate or manifest under any spelling of the GM / the officer', after.every((x) => /held=0 ghosts=0 /.test(x) && / bad=0 /.test(x)), after.join(' | '));
+  check('roster path: no spelling is GM or officer for the data; the GM is', after.every((x) => / gm=0 /.test(x) && /gmIsGM=true/.test(x)), after.join(' | '));
+  check('the spellings are counted (diag alias=N > 0)', after.every((x) => Number((x.match(/alias=(\d+)/) || [])[1]) > 0), after.join(' | '));
+  check("the GM's settings stay (bench 2)", after.every((x) => /settings=2$/.test(x)), after.join(' | '));
+  const diagLine = h1.val('NS.RosterDiag()')[0];
+  check('/gsq diag: the id line carries alias=N', /id mode=forever me=\S+ \S+ surname=yes alias=[1-9]\d*/.test(diagLine), String(diagLine).split('\n')[0]);
+  gm.login(); sim.run(90);
+  for (let n = 0; n < 100; n++) for (const c of [gm, h1, h2]) c.step();
+  const fin = [gm, h1, h2].map(view);
+  check('GM back: nothing under a spelling anywhere, his own view included', fin.every((x) => /held=0 ghosts=0 /.test(x) && / bad=0 /.test(x)), fin.join(' | '));
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { after, fin, t: Math.round(sim.t), ...sim.stats } };
+}
+
 // S13 (AC8): channel load. 40 clients (GM, 2 officers, 37 members) with 200 profiles + 20 squads on disk, 15 min
 // of profile edits: messages per minute per client of v1.1 vs the reference build (GSQ_REF, default v1.0.1 = 406029a)
 // with the same seed, the same MAX_REPLY and the same queue. Second run without GM / officers online. During an
@@ -1575,6 +1661,6 @@ function S22(seed) {
   return { pass: pass(), checks, metrics: { tAll, ref: REF122 || 'this build', across: across.length, st, t: Math.round(sim.t), ...sim.stats } };
 }
 
-module.exports = { S20, S21, S22, S19, S18, S8g, S15, S16, S16b, S16c, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
+module.exports = { S20, S21, S22, S19, S18, S8g, S15, S16, S16b, S16c, S16d, S17, S1, S2, S3, S4, S5, S5one, S6, S7, S8, S9, S10, S11, S12, S13, S14 };
 // 2.0: the scenarios of feat/2.0-proto (S23, S17v2) live in scenarios_b.js; hooked here when the file exists
 if (require('fs').existsSync(require('path').join(__dirname, 'scenarios_b.js'))) Object.assign(module.exports, require('./scenarios_b.js'));
