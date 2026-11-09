@@ -68,6 +68,7 @@ const ORDER = [
   'hall_others_spec.lua',
   'whisper_spec.lua',
   'proto3_spec.lua',
+  'migration_spec.lua',
   'zload_spec.lua',
   'zzcold_spec.lua',
 ];
@@ -79,7 +80,10 @@ if (unlisted.length || missing.length) {
 }
 const only = process.env.GSQ_ONLY ? process.env.GSQ_ONLY.split(',') : null; // iterate on a few specs
 const specs = ORDER.filter((f) => !only || only.includes(f)).map((f) => 'tests/' + f);
-const all = [...core, ...wow, ...specs, 'GuildSquads.toc'];
+// saved data the specs load by name (tests/fixtures/*.lua, e.g. the 1.2.2 SavedVariables of the 2.0 migration)
+const fixDir = path.join(root, 'tests', 'fixtures');
+const fixtures = fs.existsSync(fixDir) ? fs.readdirSync(fixDir).filter((f) => f.endsWith('.lua')).sort().map((f) => 'tests/fixtures/' + f) : [];
+const all = [...core, ...wow, ...specs, ...fixtures, 'GuildSquads.toc'];
 setGlobalTable('SOURCES', all.map((f) => [f, read(f)]));
 setGlobalTable('CORE', core.map((f, i) => [i + 1, f]));
 setGlobalTable('SPECS', specs.map((f, i) => [i + 1, f]));

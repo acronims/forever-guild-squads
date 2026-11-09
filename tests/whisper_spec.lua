@@ -34,10 +34,14 @@ local ns = { Serialize = NS.Serialize, Chunk = NS.Chunk, Queue = NS.Queue, Model
 -- roster of the fake: key -> entry (the surname comes from "Name Surname-Realm", like readRoster)
 local roster = { ["Kas-Realm"] = { online = true, surname = "Pitas" }, ["Ñoño-Otro"] = { online = true, surname = "Pérez" },
                  ["Off-Realm"] = { online = false, surname = "Zz" }, ["Ann-Realm"] = { online = true, surname = "Essency" } }
+-- 2.0: these part-1 checks are the realm mode (ns.ID_MODE = "realm": the identity is the 1.2.2 key "Name-Realm" and the
+-- 1.2.2 whisper rules stay whole, SPEC-v2.0 §6); part 1b below is the forever mode
+ns.ID_MODE = "realm"
 ns.fullName = function(n)
   if type(n) ~= "string" or n == "" then return nil end
   return (M.charName(n, "Realm"))
 end
+ns.id = ns.fullName
 ns.roster = function(n) return roster[ns.fullName(n) or ""] end
 ns.me = function() return "Ann-Realm" end
 ns.isSelf = function(s) return ns.fullName(s) == "Ann-Realm" end
@@ -248,18 +252,145 @@ test("1.2.2 Comm: the error text of the 1.2.1 («Kas CAMWOWEU4Realm6PvP» for a 
   end)
 end)
 
-test("1.2.2 SavedVariables: the 1.2.0 keys with a surname are dropped at load (trust, manifests, certificates)", function()
-  ok(type(M.sweepSurnames) == "function", "Model.sweepSurnames exists")
-  local g = { trust = { keys = { ["Kas Pitas-Realm"] = { pk = "a", s = "strong" }, ["Kas-Realm"] = { pk = "b", s = "strong" } },
-                        pend = { ["Kas Pitas-Realm"] = {} }, contested = { ["Kas Pitas-Realm"] = 1 }, suspects = { ["Kas Pitas-Realm"] = 2, ["Bob-Realm"] = 1 } },
+-- 2.0: M.migrateIdentity replaces M.sweepSurnames (tests/migration_spec.lua runs it on the 1.2.2 fixture). In forever
+-- mode every saved key in the old form goes: the 1.2.0 «Name Surname-Realm» ones and the 1.2.2 «Name-Realm» ones.
+test("2.0 SavedVariables: the 1.x keys (1.2.0 with a surname, 1.2.2 «Name-Realm») go at load in forever mode", function()
+  ok(M.sweepSurnames == nil and type(M.migrateIdentity) == "function", "Model.migrateIdentity replaces sweepSurnames")
+  local g = { trust = { keys = { ["Kas Pitas-Realm"] = { pk = "a", s = "strong" }, ["Kas-Realm"] = { pk = "b", s = "strong" },
+                                 ["Bob Pitas"] = { pk = "c", s = "strong" } },
+                        pend = { ["Kas Pitas-Realm"] = {} }, contested = { ["Kas Pitas-Realm"] = 1 }, suspects = { ["Kas Pitas-Realm"] = 2, ["Bob Pitas"] = 1 } },
               sig = { man = { ["Kas Pitas-Realm"] = { n = 1 }, ["Kas-Realm"] = { n = 2 } } },
               cert = { crt = { ["Kas Pitas-Realm"] = { n = 1 }, ["Kas-Realm"] = { n = 3 } } } }
-  eq(M.sweepSurnames(g), 6, "six entries dropped")
-  ok(g.trust.keys["Kas-Realm"] and not g.trust.keys["Kas Pitas-Realm"], "trust keys")
-  ok(next(g.trust.pend) == nil and next(g.trust.contested) == nil and g.trust.suspects["Bob-Realm"] == 1, "pend / contested / suspects")
-  ok(g.sig.man["Kas-Realm"] and not g.sig.man["Kas Pitas-Realm"], "manifests")
-  ok(g.cert.crt["Kas-Realm"] and not g.cert.crt["Kas Pitas-Realm"], "certificates")
-  eq(M.sweepSurnames(g), 0, "idempotent"); eq(M.sweepSurnames({}), 0, "empty partition")
+  local root = { guilds = { G = g } }
+  local ctx = { mode = "forever", me = "Ann Essency", oldMe = "Ann-Realm", now = 1, id = function() return nil end }
+  local r = M.migrateIdentity(root, g, ctx)
+  eq(r.swept, 9, "nine entries dropped")
+  ok(g.trust.keys["Bob Pitas"] and next(g.trust.keys, next(g.trust.keys)) == nil, "only the 2.0 key stays")
+  ok(next(g.trust.pend) == nil and next(g.trust.contested) == nil and g.trust.suspects["Bob Pitas"] == 1, "pend / contested / suspects")
+  ok(next(g.sig.man) == nil and next(g.cert.crt) == nil, "manifests and certificates")
+  local again = M.migrateIdentity(root, g, ctx)
+  eq(again.swept, 0, "idempotent")
+  eq(M.migrateIdentity({}, {}, { mode = "realm", me = "Ann-Realm" }).swept, 0, "realm mode: nothing")
+end)
+
+-------------------------------------------------------------------------------
+-- part 1b: the 2.0 in WoW Forever (ns.ID_MODE = "forever", SPEC-v2.0 §6). The identity is «Name Surname» and it IS the
+-- whisper target: never a «-Realm», no other variant (the first "not found" marks the character), MatchNotFound exact
+-- or the identity with a «-...» the server added (never by the first name: two «Kas» exist), ForMe exact.
+local fsent, fhandled, ffilters = {}, {}, {}
+local fframe = { scripts = {} }
+function fframe:RegisterEvent() end
+function fframe:SetScript(k, fn) self.scripts[k] = fn end
+local function finstall()
+  CreateFrame = function() return fframe end
+  GetTime = function() return clock end
+  C_Timer = nil
+  ERR_CHAT_PLAYER_NOT_FOUND_S = "No hay ningún jugador con el nombre %s."
+  ChatFrame_AddMessageEventFilter = function(ev, fn) ffilters[ev] = fn end
+  C_ChatInfo = { RegisterAddonMessagePrefix = function() return true end,
+                 SendAddonMessage = function(_, msg, ch, to) fsent[#fsent + 1] = { msg = msg, ch = ch, to = to }; return 0 end }
+end
+local froster = { ["Kas Pitas"] = { online = true }, ["Kas Mora"] = { online = true }, ["Ann Essency"] = { online = true },
+                  ["Off Line"] = { online = false } }
+local fns = { Serialize = NS.Serialize, Chunk = NS.Chunk, Queue = NS.Queue, Model = M, ID_MODE = "forever" }
+-- ns.id of the contract for these names: «N A» and «N A-Realm» -> «N A»; a bare first name only when it is unique
+fns.id = function(n)
+  if type(n) ~= "string" or n == "" then return nil end
+  local sp, dash = n:find(" ", 1, true), n:find("-", 1, true)
+  if sp then return (dash and dash > sp) and n:sub(1, dash - 1) or n end
+  local first, hit = dash and n:sub(1, dash - 1) or n, nil
+  for id in pairs(froster) do if id:sub(1, #first + 1) == first .. " " then if hit then return nil end hit = id end end
+  return hit
+end
+fns.roster = function(n) local id = fns.id(n); return id and froster[id] or nil end
+fns.me = function() return "Ann Essency" end
+fns.isSelf = function(s) return fns.id(s) == "Ann Essency" end
+fns.whisperTarget = function(n, alt) local id = fns.id(n); if alt or not (id and froster[id]) then return nil end return id end
+finstall()
+local okF, errF = pcall(loadmod, "Comm.lua", fns)
+local FComm = fns.Comm
+if okF and FComm then FComm.Init(function(tag, payload, sender, channel) fhandled[#fhandled + 1] = { tag, payload, sender, channel } end) end
+restore()
+local function fwithin(fn)
+  finstall()
+  local okW, err = pcall(fn)
+  restore()
+  if not okW then error(err, 0) end
+end
+local function fpump(sec) for _ = 1, (sec or 1) * 5 do clock = clock + 0.2; FComm.queue:pump(clock) end end
+local function fsys(name) return ffilters.CHAT_MSG_SYSTEM and ffilters.CHAT_MSG_SYSTEM({}, "CHAT_MSG_SYSTEM", ERR_CHAT_PLAYER_NOT_FOUND_S:format(name)) end
+local function dashed() local n = 0; for _, s in ipairs(fsent) do if s.ch == "WHISPER" and tostring(s.to):find("-", 1, true) then n = n + 1 end end return n end
+
+test("2.0 forever Comm: the whisper target is the identity «Kas Pitas» from any form of it, never with «-»", function()
+  ok(okF and FComm, "Comm.lua loads in forever mode: " .. tostring(errF))
+  fwithin(function()
+    fsent = {}
+    FComm.Send("X", { a = 1 }, "WHISPER", "Kas Pitas"); fpump(2)
+    eq(fsent[#fsent].to, "Kas Pitas"); eq(fsent[#fsent].ch, "WHISPER")
+    FComm.Send("X", { a = 2 }, "WHISPER", "Kas Pitas-CAMWOWEU4Realm6PvP"); fpump(2)
+    eq(fsent[#fsent].to, "Kas Pitas", "the roster form gives the same target")
+    FComm.Send("X", { a = 3 }, "WHISPER", "Kas Mora"); fpump(2)
+    eq(fsent[#fsent].to, "Kas Mora", "the other Kas is another target")
+    local n = #fsent
+    FComm.Send("X", { a = 4 }, "WHISPER", "Kas"); fpump(2)
+    ok(#fsent == n or fsent[#fsent].ch == "GUILD", "a bare «Kas» (two in the roster) is never whispered")
+    eq(dashed(), 0, "no whisper target with «-»")
+  end)
+end)
+
+test("2.0 forever Comm: the first not found marks (no other variant); the message goes over GUILD «W» to the identity", function()
+  fwithin(function()
+    fsent = {}; clock = clock + 20000; FComm.wstate = {}
+    FComm.Send("X", { b = 1 }, "WHISPER", "Kas Pitas"); fpump(1)
+    eq(fsent[#fsent].to, "Kas Pitas")
+    ok(fsys("Kas Pitas") == true, "the not found is hidden")
+    fpump(2)
+    local w = fsent[#fsent]
+    eq(w.ch, "GUILD", "no other variant: straight to GUILD")
+    local d = decode(w)
+    ok(d and d.t == "W" and d.p.to == "Kas Pitas" and d.p.t == "X" and d.p.p.b == 1, "a W envelope to «Kas Pitas»")
+    ok(FComm.Unreachable("Kas Pitas"), "marked after one failure")
+    local whispers = 0
+    for _, s in ipairs(fsent) do if s.ch == "WHISPER" then whispers = whispers + 1 end end
+    eq(whispers, 1, "one whisper only (no «Kas Pitas-Realm» retry)")
+    ok(FComm.WhisperDiag():find("alt=0 marked=1", 1, true), FComm.WhisperDiag())
+    -- the other Kas is not marked: his whispers still go
+    FComm.Send("X", { b = 2 }, "WHISPER", "Kas Mora"); fpump(2)
+    eq(fsent[#fsent].to, "Kas Mora"); eq(fsent[#fsent].ch, "WHISPER")
+    eq(dashed(), 0, "no whisper target with «-»")
+    FComm.wstate = {}
+  end)
+end)
+
+test("2.0 forever Comm: MatchNotFound is exact (any case) or the identity with «-...»; never by the first name", function()
+  fwithin(function()
+    local t = clock
+    FComm.wsent = { ["Kas Pitas"] = { k = "Kas Pitas", t = t } }
+    eq(#FComm.MatchNotFound("Kas Pitas", t), 1, "exact")
+    eq(#FComm.MatchNotFound("kas pitas", t), 1, "any case")
+    eq(#FComm.MatchNotFound("Kas Pitas-CAMWOWEU4Realm6PvP", t), 1, "the server added the realm")
+    eq(#FComm.MatchNotFound("Kas Mora", t), 0, "the other Kas: not ours")
+    eq(#FComm.MatchNotFound("Kas", t), 0, "the first name alone: not ours")
+    eq(#FComm.MatchNotFound("Kas CAMWOWEU4Realm6PvP", t), 0, "the 1.2.1 text: not ours")
+    eq(#FComm.MatchNotFound("Kas Pitas", t + FComm.WHISPER_WINDOW + 1), 0, "too late")
+    FComm.wsent = {}
+  end)
+end)
+
+test("2.0 forever Comm: a «W» envelope is mine only for my exact identity", function()
+  fwithin(function()
+    local function receive(to)
+      local body = NS.Serialize.escape(NS.Serialize.encode({ v = FComm.PROTO, t = "W", p = { to = to, t = "Q", p = { z = to } } }))
+      for _, part in ipairs(NS.Chunk.split(body, "f" .. tostring(#fhandled % 9))) do
+        fframe.scripts.OnEvent(fframe, "CHAT_MSG_ADDON", FComm.PREFIX, part, "GUILD", "Kas Pitas")
+      end
+    end
+    local n = #fhandled
+    receive("Ann Essency"); eq(#fhandled, n + 1, "mine"); eq(fhandled[#fhandled][4], "WHISPER", "as a whisper")
+    receive("Ann Mora"); eq(#fhandled, n + 1, "another Ann: not mine")
+    receive("Kas Pitas"); eq(#fhandled, n + 1, "someone else: not mine")
+    receive("Ann Otro-Realm"); eq(#fhandled, n + 1, "no realm guess in forever mode")
+  end)
 end)
 
 -------------------------------------------------------------------------------

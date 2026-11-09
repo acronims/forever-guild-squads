@@ -157,7 +157,13 @@ end
 -- part has really left (claims are timed from that moment). skip (optional, AF4) is asked when the message reaches
 -- the head of the queue, before its first part leaves: true drops the whole message (onSent does not run).
 -- 1.2.2 -------------------------------------------------------------------------------------------------------
-local function keyOf(name) return (ns.fullName and ns.fullName(name)) or name end
+-- 2.0: the identity (ns.id, SPEC-v2.0 §2): «Name Surname» in WoW Forever, "Name-Realm" in realm mode. In forever mode
+-- the whisper target IS the identity (§6): no other variant, the first "not found" marks the character.
+local function keyOf(name)
+  if ns.id then return ns.id(name) end
+  return name                       -- without the identity layer (this file loaded alone): the name as it came
+end
+local function forever() return ns.ID_MODE == "forever" end
 -- true while a character is marked (both variants failed, UNREACHABLE_FOR s) or a probe whisper waits for its answer
 function Comm.Unreachable(key, t)
   local w = Comm.wstate[key]
@@ -172,6 +178,7 @@ function Comm.Unreachable(key, t)
 end
 local function variant(key)
   if Comm.Unreachable(key) then return "gone" end
+  if forever() then return "main" end
   local w = Comm.wstate[key]
   return (w and w.alt) and "alt" or "main"
 end
@@ -202,6 +209,7 @@ local function resendRecent(key, t)
 end
 -- the server did not find `target` (one of our whisper targets): first failure -> the other variant once; the other
 -- variant (or the probe after a mark) failing -> marked for UNREACHABLE_FOR s. Stale errors only get hidden.
+-- 2.0 forever mode: there is no other variant, the first failure marks.
 function Comm.Failed(target, t)
   local e = Comm.wsent[target]
   if not (e and e.k) then return end
@@ -213,6 +221,8 @@ function Comm.Failed(target, t)
     w.fail, w.n, w.alt, w.probe = t, (w.n or 0) + 1, nil, nil
   elseif w.fail and t - w.fail < Comm.UNREACHABLE_FOR then
     return
+  elseif forever() then
+    w.fail, w.n, w.alt, w.probe = t, (w.n or 0) + 1, nil, nil
   elseif not e.alt and not w.alt then
     w.alt = true
   elseif e.alt and w.alt then
@@ -229,10 +239,24 @@ end
 -- our whisper targets of the last WHISPER_WINDOW s that a "not found" name refers to. The server shows the name its
 -- own way (the 1.2.1 whispered «Kas-CAMWOWEU4Realm6PvP» and got «Kas CAMWOWEU4Realm6PvP»): exact first, then the
 -- same first name with our realm in the text, then the same first name.
+-- 2.0 forever mode (SPEC-v2.0 §6): exact (any case) or the same identity with a "-..." the server added; never by the
+-- first name alone («Kas Mora» not found is never «Kas Pitas»).
 function Comm.MatchNotFound(name, t)
   local exact, strong, loose = {}, {}, {}
   if type(name) ~= "string" or name == "" then return exact end
   t = t or now()
+  if forever() then
+    local lname = string.lower(name)
+    local dash = string.find(name, "-", 1, true)
+    local lbase = dash and string.lower(string.sub(name, 1, dash - 1)) or lname
+    for target, e in pairs(Comm.wsent) do
+      if t - e.t <= Comm.WHISPER_WINDOW then
+        local lt = string.lower(target)
+        if lt == lname or lt == lbase then exact[#exact + 1] = target end
+      end
+    end
+    return exact
+  end
   local lname, bare = string.lower(name), bareLower(name)
   for target, e in pairs(Comm.wsent) do
     if t - e.t <= Comm.WHISPER_WINDOW then
@@ -285,12 +309,13 @@ function Comm.SystemFilter(_, _, msg)
   return false
 end
 -- a "W" envelope is mine: my key, or my first name on a realm under which nobody is in my roster (the sender read a
--- bare sender and guessed the realm)
+-- bare sender and guessed the realm). 2.0 forever mode: my identity exactly (nothing to guess: no realm in it)
 function Comm.ForMe(to)
   if type(to) ~= "string" or not ns.me then return false end
   local me, key = ns.me(), keyOf(to)
   if not (me and key) then return false end
   if key == me then return true end
+  if forever() then return false end
   if string.match(key, "^([^-]+)") ~= string.match(me, "^([^-]+)") then return false end
   return not (ns.roster and ns.roster(key))
 end
