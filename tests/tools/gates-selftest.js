@@ -1,6 +1,6 @@
 // Self-test for tests/gates.js:
 //   API       a call used as a condition / operand is NOT a guard (fixture appended to UI/Widgets.lua);
-//   IDENTITY  (2.0, AC9) a unit name API read outside the identity files fails unless its line says `-- id-ok`
+//   IDENTITY  (2.0, AC9) a unit name API read outside the identity code fails unless its line says `-- id-ok`
 //             (fixture put at the top of the file: Hall.lua ends with `return H`).
 // Copies the addon to a temp dir per case, adds one fixture and runs the gate on it.
 // Usage: NODE_PATH=/tmp/gsq-node/node_modules node tests/tools/gates-selftest.js
@@ -11,7 +11,7 @@ const { spawnSync } = require('child_process');
 const root = path.resolve(__dirname, '..', '..');
 const gates = path.join(root, 'tests', 'gates.js');
 const API = (name) => 'API unguarded call not in 16001 list: ' + name;
-const ID = (name, file) => `IDENTITY ${name} outside Core/Identity.lua and GuildSquads.lua without "-- id-ok": ${file}:1 `;
+const ID = (name, file) => `IDENTITY ${name} outside the identity code without "-- id-ok": ${file}:1 `;
 const cases = [
   // [file, lua, where ('append' | 'top'), expected exit code, line the gate must print (expected exit 1) or must not print]
   ['UI/Widgets.lua', 'if GsqFakeApiA() then end', 'append', 1, API('GsqFakeApiA')],
@@ -25,7 +25,9 @@ const cases = [
   ['UI/Panels.lua', 'local _gsqD = _G.UnitNameUnmodified', 'top', 1, ID('UnitNameUnmodified', 'UI/Panels.lua')],
   ['Raids.lua', 'local _gsqE = ns and ns.apiFn and ns.apiFn("UnitName")', 'top', 1, ID('UnitName', 'Raids.lua')],
   ['Hall.lua', 'local _gsqF = UnitName("player") -- id-ok: selftest', 'top', 0, ID('UnitName', 'Hall.lua')],
-  ['GuildSquads.lua', 'local _gsqG = UnitName("player")', 'top', 0, ID('UnitName', 'GuildSquads.lua')],
+  // GuildSquads.lua: only its identity functions (unitName, ns.idFromUnit, ns.me) may read the unit name
+  ['GuildSquads.lua', 'local _gsqG = UnitName("player")', 'top', 1, ID('UnitName', 'GuildSquads.lua')],
+  ['Core/Identity.lua', 'local _gsqH = UnitName', 'top', 0, ID('UnitName', 'Core/Identity.lua')],
 ];
 let failed = 0;
 for (const [file, lua, where, want, line] of cases) {
