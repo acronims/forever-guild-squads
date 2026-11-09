@@ -115,11 +115,23 @@ function ns.NotInGuildText()
   return L.ERR_notInRoster:format(tostring(me), n)
 end
 -- /gsq diag line
+-- 1.2.1: plus the realms of the roster keys, most common first (connected realms: senders and authors must carry
+-- the same realm as these keys, see the diag line `peers ... notInRoster=`)
 function ns.RosterDiag()
-  local n, s = 0, 0
-  for _, r in pairs(rosterCache) do n = n + 1; if r.surname then s = s + 1 end end
+  local n, s, realms = 0, 0, {}
+  for key, r in pairs(rosterCache) do
+    n = n + 1; if r.surname then s = s + 1 end
+    local rl = key:match("%-(.*)$") or "?"
+    realms[rl] = (realms[rl] or 0) + 1
+  end
+  local list = {}
+  for rl, c in pairs(realms) do list[#list + 1] = { rl, c } end
+  table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
+  local parts = {}
+  for i = 1, math.min(#list, 4) do parts[i] = list[i][1] .. ":" .. list[i][2] end
   local me = ns.me()
-  return ("[roster] me=%s found=%s entries=%d surnames=%d"):format(tostring(me), (me and rosterCache[me]) and "yes" or "no", n, s)
+  return ("[roster] me=%s found=%s entries=%d surnames=%d online=%d realms=%s"):format(tostring(me),
+    (me and rosterCache[me]) and "yes" or "no", n, s, onlineN, table.concat(parts, ","))
 end
 
 local function requestRoster()

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.1 — 2026-11-09 — Sincroniza con pocos jugadores en la 1.2 / Syncs with few players on 1.2
+
+### ES
+
+- **Arreglado: con pocos jugadores en la 1.2 dentro de una guild grande no se sincronizaba casi nada.** Cada nodo decidía si contestar a un hello con la cuenta de **miembros de la guild conectados** (8 / conectados) y, con más de 8 conectados, mandaba solo 2 de 8 partes de lo que te falta. En una guild de 317 con ~60 conectados y 3 en la 1.2, cada uno contestaba ~1 de cada 8 hellos y con una cuarta parte de la diferencia: ni perfiles, ni manifiestos, ni firmas verificadas (`/gsq diag`: `sample=0`, `sig verified=0`). Ahora cuenta **los jugadores con la 1.2** que ha oído en los últimos 20 minutos y siguen conectados (más tú): con 3, todos contestan siempre y con todo lo que falta. Lo mismo para las páginas del Salón de la fama. En el simulador (S19: 300 miembros, 60 conectados, 3 en la 1.2 y 5 en la 1.1), los 3 tienen lo mismo y todo verificado a los 30 s del último login; con la 1.2.0, nada a los 10 min. Igual con reinos conectados (personaje y guild en reinos distintos).
+- `/gsq diag`: línea nueva `peers` con los jugadores 1.2 que cuentan (`n=`), los remitentes oídos (`heard=`), cuántos de ellos no aparecen en tu roster (`notInRoster=`, con el primer nombre: si no es 0, hay un desajuste de nombres de reino), los hellos oídos y contestados, y los susurros descartados (`badChannel=`).
+
+### EN
+
+- **Fixed: with few players on 1.2 in a big guild almost nothing synced.** Each node decided whether to answer a hello from the number of **guild members online** (8 / online) and, with more than 8 online, sent only 2 of 8 parts of what you were missing. In a 317-member guild with ~60 online and 3 on 1.2, each one answered ~1 hello in 8 and with a quarter of the difference: no profiles, no manifests, no verified signatures (`/gsq diag`: `sample=0`, `sig verified=0`). Now it counts **the players on 1.2** it heard in the last 20 minutes who are still online (plus you): with 3, all of them always answer, with everything you lack. The same for the Hall of Fame pages. In the simulator (S19: 300 members, 60 online, 3 on 1.2 and 5 on 1.1), the 3 hold the same data, all verified, 30 s after the last login; with 1.2.0, nothing after 10 min. The same with connected realms (character and guild on different realms).
+- `/gsq diag`: new `peers` line with the 1.2 players counted (`n=`), the senders heard (`heard=`), how many of them are not in your roster (`notInRoster=`, with the first name: anything but 0 means a realm-name mismatch), the hellos heard and answered, and the dropped whispers (`badChannel=`).
+
 ## 1.2.0 — 2026-11-08 — Todo en P2P, sin repetidor central / Everything P2P, no central relay
 
 La 1.1.0 no llegó a publicarse. De ella, la 1.2 conserva el reenvío P2P, el contador real y el desmentido del autor; el quórum de 2, los capitanes como nodo, el reenvío de oficiales y la lista negra los sustituyen las firmas (abajo). / 1.1.0 was never published. 1.2 keeps its P2P relay, real counter and author denials; the quorum of 2, captains as nodes, officer relays and the blacklist are replaced by signatures (below).

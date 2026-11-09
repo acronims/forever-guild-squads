@@ -467,9 +467,10 @@ function H.OnHello(rh, sender)
       end
     end
   end
-  local online = ns.onlineCount and ns.onlineCount() or 1
+  -- 1.2.1: only the 1.2 clients online answer (ns.peerCount, Sync.lua), not every member online
+  local peers = ns.peerCount and ns.peerCount() or 1
   local officer = relayerTrusted(ns.me())
-  if not officer and math.random() > math.min(1, 4 / math.max(1, online)) then return end
+  if not officer and math.random() > math.min(1, 4 / math.max(1, peers)) then return end
   local me = ns.me()
   ns.After(3 + math.random() * 8, function()
     -- with a backlog already waiting (a whole raid logging in at once) this page is skipped:

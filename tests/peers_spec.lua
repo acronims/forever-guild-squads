@@ -120,7 +120,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.1: 60 online but 3 peers -> the Hall an
   local S, H = ns.Sync, ns.HallGlue
   -- Ann a plain member first (officers always send the page); the coalesced roster read needs the real ns.After
   c.roster[1][3] = 4; c.fire("GUILD_ROSTER_UPDATE"); c.tick(2) --[[coalesced roster]]
-  local wasOfficer = H.Debug and ns.Permissions.isOfficer(ns.roster, ns.me(), ns.Model.settingsOf(ns.state))
+  local wasOfficer = ns.Permissions.isOfficer(ns.roster, ns.me(), ns.Model.settingsOf(ns.state))
   local oldOnline, origRand, origAfter, origEnabled = ns.onlineCount, math.random, ns.After, H.Enabled
   ns.onlineCount = function() return 60 end
   math.random = function(x, y) if x == nil then return 0.5 end return origRand(x, y) end
@@ -138,4 +138,17 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.1: 60 online but 3 peers -> the Hall an
   ns.onlineCount, math.random, ns.After, H.Enabled = oldOnline, origRand, origAfter, origEnabled
   c.roster[1][3] = 0; c.fire("GUILD_ROSTER_UPDATE"); c.tick(2) --[[coalesced roster]]
   if not okAll then error(err, 0) end
+end }
+
+-- /gsq diag (1.2.1): the peers counted, the senders heard and those the roster does not know (a realm-name mismatch
+-- between CHAT_MSG_ADDON and the roster shows as notInRoster > 0, with the first name), and the realms of the roster
+SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "1.2.1: /gsq diag has the peers line (n, heard, notInRoster) and the roster realms", function(c)
+  local ns = c.ns
+  at(GetTime() + 500000, function()
+    ns.Sync.OnMessage("X", {}, "Bob-Realm", "GUILD")
+    local out = ns.DiagGlue.Report()
+    ok(type(out) == "string" and out:find("peers n=2 heard=%d+ notInRoster=%d+"), "peers line: " .. tostring(out):sub(1, 80))
+    ok(out:find("notInRoster=%d+ %(Zed%-Realm%)") or out:find("notInRoster=%d+ %([%w%-]+%)"), "the first sender missing from the roster is named")
+    ok(out:find("[roster] me=Ann-Realm found=yes entries=3 surnames=0 online=3 realms=Realm:3", 1, true), "roster realms")
+  end)
 end }

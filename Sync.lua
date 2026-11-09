@@ -41,7 +41,8 @@ Sync.CATCHUP_WINDOW = 3600
 -- most CATCHUP_ALL records gets all of it, not 2 of 8 cubes (only newcomers send cu; members keep the sample, AC5)
 Sync.CATCHUP_ALL = 30
 local bigReply = {}           -- requester -> { last = GetTime() of the last catch-up reply, w = window start, n = count }
-Sync.SAMPLE_MIN_ONLINE = 8    -- v1.2 (AC1): the sample only with more online than this (p < 1); else MAX_REPLY + cursor
+Sync.SAMPLE_MIN_ONLINE = 8    -- v1.2 (AC1): the sample only with more peers than this (p < 1); else MAX_REPLY + cursor
+                              -- 1.2.1: peers = ns.peerCount() (1.2 clients online), never the guild members online
 -- v1.2: fine bucket hashes (h2) of the big kinds in a 1.2 hello; a 1.2 replier diffs on them, so it does not resend
 -- a whole coarse bucket (~1/16 of the guild) the requester already holds (S8: members relay P2P now)
 Sync.FINE_NB = 64
@@ -60,6 +61,35 @@ local seenAfter = {}          -- id -> version string seen on the wire (reply su
 local corrections = {}        -- id -> true when a correction is already scheduled
 local cursor = {}             -- requester -> last reply key sent (pagination)
 local heard = {}              -- sender -> GetTime() of the last addon message (addon detection)
+-- 1.2.1 (BRO's guild, 9-nov: 317 members, ~60 online, 2-3 on 1.2; diag sample=0, sig verified=0): who answers a hello
+-- is a client of this protocol, not any member online. ns.peerCount() = me + the distinct senders of PROTO 2 messages
+-- (Comm hands only those to Sync.OnMessage) heard in the last PEER_FRESH s that the roster still shows online. It
+-- drives the reply draw (8 / n), the cube sample (n > SAMPLE_MIN_ONLINE) and the Hall pages (4 / n); 1.2.0 used
+-- ns.onlineCount(), the guild members online, so 3 peers among 60 online answered 13 % of the hellos with 2 of 8
+-- cubes. PEER_FRESH covers one anti-entropy period (a quiet peer hellos every 600-1200 s); a peer heard less
+-- recently only makes the count lower, i.e. more replies, never fewer.
+Sync.PEER_FRESH = 1200
+function Sync.PeerCount()
+  local t, me, n = GetTime and GetTime() or 0, ns.me and ns.me(), 1
+  for name, at in pairs(heard) do
+    if name ~= me and t >= at and t - at <= Sync.PEER_FRESH then
+      local r = ns.roster and ns.roster(name)
+      if r and r.online then n = n + 1 end
+    end
+  end
+  return n
+end
+ns.peerCount = Sync.PeerCount
+-- /gsq diag: senders heard this session and how many of them the roster does not know (a realm-name mismatch
+-- between CHAT_MSG_ADDON and the roster would show here), with the first such name
+function Sync.PeerDiag()
+  local n, unknown, sample = 0, 0, nil
+  for name in pairs(heard) do
+    n = n + 1
+    if not (ns.roster and ns.roster(name)) then unknown = unknown + 1; sample = sample or name end
+  end
+  return Sync.PeerCount(), n, unknown, sample
+end
 Sync.stats = { hellos = 0, replied = 0, bad = 0, relayRefused = 0, future = 0, errors = 0, quarantined = 0, pending = 0, mine = 0,
   sampled = 0, suppressed = 0 }  -- v1.2 point 8: records sent in sampled replies to 1.2 hellos / not sent (heard since the hello)
 
@@ -921,8 +951,8 @@ function Sync.ReplyFor(payload, sender, startedAt, onlyAuthor, p2pOff, officer)
   if #all == 0 then return {} end
   -- v1.2 requester (nonce): a random sample of 2 of 8 cubes, at most MAX_SAMPLE records, no cursor
   local nonce = proto >= 2 and tonumber(payload.nonce) or nil
-  local online = ns.onlineCount and ns.onlineCount() or 1
-  if nonce and online > Sync.SAMPLE_MIN_ONLINE then
+  local peers = ns.peerCount and ns.peerCount() or 1     -- 1.2.1: the 1.2 clients that answer, not the guild online
+  if nonce and peers > Sync.SAMPLE_MIN_ONLINE then
     -- v1.2 (AC3 intento 3): records in a bucket where the requester holds pending copies (ph) are the ones it
     -- needs a second / third copy of: twice the cubes for them, and they go first (the tail of S8g is pending)
     local cubes = pickCubes()
@@ -1021,8 +1051,8 @@ local function onHello(payload, sender)
   Sync.OnCertRef(payload.cr, from)
   -- only a fraction of the guild answers, after random jitter, to avoid a reply storm. Officers always answer a
   -- 1.0 / 1.1 requester (their relays are the trusted ones there); a 1.2 requester gets them as one more node.
-  local online = ns.onlineCount and ns.onlineCount() or 1
-  local p = math.min(1, 8 / math.max(1, online))
+  local peers = ns.peerCount and ns.peerCount() or 1     -- 1.2.1: the 1.2 clients that answer, not the guild online
+  local p = math.min(1, 8 / math.max(1, peers))
   local officer = isOfficerMe()
   Sync.stats.hellos = Sync.stats.hellos + 1
   -- v1.2 (D2): officers keep answering every 1.0 / 1.1 requester; a 1.2 requester gets them as one more node

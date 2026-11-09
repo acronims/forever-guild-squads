@@ -1331,6 +1331,8 @@ function s19run(seed, connected, check) {
     for (const c of cs) st[c.name] = state(c);
     if (tConv !== null && cs.every((c) => good(st[c.name]))) { tAll = sim.t - tLast; break; }
   }
+  // the 1.1 hellos come every 2-4 min: keep running until each one was heard (and the model stays converged)
+  while (sim.t - tLast < 300) { sim.run(10); oldHellos(); }
   for (const c of cs) st[c.name] = state(c);
   check(`S19${tag}: roster of 300 with 60 online (3 on 1.2, 5 on 1.1, 52 without the addon)`, roster.length === 300 && rosterOnline === 60,
     `${roster.length} members, ${rosterOnline} online at the last login`);
@@ -1338,6 +1340,7 @@ function s19run(seed, connected, check) {
   check(`S19${tag}: the 3 clients on 1.2 hold the same model <= 600 s after the last login`, tConv !== null, tConv === null ? 'not converged after 600 s' : tConv + ' s');
   check(`S19${tag}: every profile + presence + the squad of the 3 verified on the 3 (vvvvvvv), and each one holds the manifests of the other 2, <= 600 s`,
     tAll !== null, (tAll === null ? 'not after 600 s ' : tAll + ' s ') + JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].hold + ' man=' + st[c.name].man]))));
+  check(`S19${tag}: still the same model at the end (${Math.round(sim.t - tLast)} s after the last login)`, sim.converged(), '');
   check(`S19${tag}: ns.peerCount() = 3 on each 1.2 client`, cs.every((c) => st[c.name].peers === '3'), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].peers]))));
   check(`S19${tag}: the 5 old clients are counted as old peers (OldPeerCount = 5) on each`, cs.every((c) => st[c.name].old === 5), JSON.stringify(Object.fromEntries(cs.map((c) => [c.name, st[c.name].old]))));
   return { sim, metrics: { tConv, tAll, rosterOnline, squadId, st, t: Math.round(sim.t), ...sim.stats } };

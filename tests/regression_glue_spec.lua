@@ -112,8 +112,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello reply to a 1.2 requester = 2 of
   end
   h.profile = {}
   local nonce = 123457
-  local oldOnline = ns.onlineCount
-  ns.onlineCount = function() return 40 end        -- sampling only with more than SAMPLE_MIN_ONLINE online
+  local oldOnline = ns.peerCount
+  ns.peerCount = function() return 40 end        -- sampling only with more than SAMPLE_MIN_ONLINE peers (1.2.1: ns.peerCount)
   local okAll, err = pcall(function()
     local seen, union = {}, 0
     for _ = 1, 100 do
@@ -134,7 +134,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: hello reply to a 1.2 requester = 2 of
     for _, r in ipairs(old) do local cb = S.CubeOf(r.id, nonce); if not oc[cb] then oc[cb] = true; noc = noc + 1 end end
     ok(noc <= S.CUBES_PICK, "a p2 = 1 hello gets the 1.2 sample (" .. noc .. " cubes), not the 1.1 pages")
   end)
-  ns.onlineCount = oldOnline
+  ns.peerCount = oldOnline
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
 end }
@@ -157,8 +157,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: pending buckets (ph) of a 1.2 request
   local pb = M.bucketOf(added[1], M.NBUCKETS)
   local ph = { profile = {} }
   for i = 1, M.NBUCKETS do ph.profile[i] = (i == pb) and "abcdef" or "0" end
-  local oldOnline = ns.onlineCount
-  ns.onlineCount = function() return 40 end
+  local oldOnline = ns.peerCount
+  ns.peerCount = function() return 40 end
   local okAll, err = pcall(function()
     local wide = 0
     for n = 1, 100 do
@@ -184,7 +184,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: pending buckets (ph) of a 1.2 request
     end
     ok(wide > 50, wide .. " of 100 replies sample pending buckets from more than CUBES_PICK cubes")
   end)
-  ns.onlineCount = oldOnline
+  ns.peerCount = oldOnline
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
 end }
@@ -205,8 +205,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: with <= SAMPLE_MIN_ONLINE online a 1.
     added[#added + 1] = id
   end
   h.profile = {}
-  local oldOnline = ns.onlineCount
-  ns.onlineCount = function() return 4 end
+  local oldOnline = ns.peerCount
+  ns.peerCount = function() return 4 end
   local okAll, err = pcall(function()
     ok(S.SAMPLE_MIN_ONLINE and S.SAMPLE_MIN_ONLINE >= 8, "SAMPLE_MIN_ONLINE defined (>= 8, where p < 1)")
     local seen, union = {}, 0
@@ -219,7 +219,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: with <= SAMPLE_MIN_ONLINE online a 1.
     end
     eq(union, 200, "4 paginated replies cover every record")
   end)
-  ns.onlineCount = oldOnline
+  ns.peerCount = oldOnline
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
 end }
@@ -364,8 +364,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) gets
     added[#added + 1] = id
   end
   h.profile = {}
-  local oldOnline = ns.onlineCount
-  ns.onlineCount = function() return 40 end
+  local oldOnline = ns.peerCount
+  ns.peerCount = function() return 40 end
   local okAll, err = pcall(function()
     ok(type(S.MAX_SAMPLE_CATCHUP) == "number" and S.MAX_SAMPLE_CATCHUP > S.MAX_SAMPLE, "Sync.MAX_SAMPLE_CATCHUP > MAX_SAMPLE")
     local big = S.ReplyFor({ h = h, p2 = 2, nonce = 99, cu = 1 }, "New-Realm", nil, nil)
@@ -406,7 +406,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) gets
     local other = S.ReplyFor({ h = h, p2 = 2, nonce = 101 }, "Zed-Realm", nil, nil)
     ok(#other <= S.MAX_SAMPLE, "no cu: the normal sample")
   end)
-  ns.onlineCount = oldOnline
+  ns.peerCount = oldOnline
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
 end }
@@ -429,8 +429,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) with
   local held = 0
   for _ in pairs(ns.state.profiles) do held = held + 1 end
   h.profile = {}
-  local oldOnline = ns.onlineCount
-  ns.onlineCount = function() return 40 end
+  local oldOnline = ns.peerCount
+  ns.peerCount = function() return 40 end
   local okAll, err = pcall(function()
     ok(type(S.CATCHUP_ALL) == "number" and S.CATCHUP_ALL >= 16 and S.CATCHUP_ALL <= S.MAX_SAMPLE, "Sync.CATCHUP_ALL in [16, MAX_SAMPLE]")
     if held <= S.CATCHUP_ALL then
@@ -446,7 +446,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: a catching-up requester (cu = 1) with
     end
     ok(cut, "no cu: still the 2-of-8-cube sample")
   end)
-  ns.onlineCount = oldOnline
+  ns.peerCount = oldOnline
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
 end }
@@ -467,8 +467,8 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: the catch-up reply to a cu = 1 hello 
     added[#added + 1] = id
   end
   h.profile = {}
-  local oldOnline, origSend, origRand = ns.onlineCount, Comm.Send, math.random
-  ns.onlineCount = function() return 40 end     -- the sampled path (more online than SAMPLE_MIN_ONLINE)
+  local oldOnline, origSend, origRand = ns.peerCount, Comm.Send, math.random
+  ns.peerCount = function() return 40 end     -- the sampled path (more peers than SAMPLE_MIN_ONLINE, 1.2.1)
   math.random = function(x, y) if x == nil then return 0 end return origRand(x, y) end   -- this one replies
   local sent = {}
   Comm.Send = function(tag, msg, ch, to, onSent, urgent)
@@ -498,7 +498,7 @@ SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "v1.2: the catch-up reply to a cu = 1 hello 
     eq(u, 0, "a hello without cu is queued as usual")
     ok(q > 0, "and it does get a reply")
   end)
-  Comm.Send, ns.onlineCount, math.random = origSend, oldOnline, origRand
+  Comm.Send, ns.peerCount, math.random = origSend, oldOnline, origRand
   for _, id in ipairs(added) do ns.state.profiles[id] = nil end
   if not okAll then error(err, 0) end
 end }

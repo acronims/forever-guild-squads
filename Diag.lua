@@ -88,6 +88,12 @@ function G.Report()
     local seals = (ns.Sig and ns.sigDB) and (ns.Sig.counts(ns.sigDB).verified or 0) or 0
     extra[#extra + 1] = ("p2 proto=%d sample=%d suppressed=%d auth-pend=%d seals=%d"):format(X and X.PROTO or 0,
       y.sampled or 0, y.suppressed or 0, pend, seals)
+    -- 1.2.1: the 1.2 peers counted for the reply draw, the senders heard, and those the roster does not know
+    if ns.Sync.PeerDiag then
+      local pc, hn, unk, sample = ns.Sync.PeerDiag()
+      extra[#extra + 1] = ("peers n=%d heard=%d notInRoster=%d%s replied=%d hellos=%d badChannel=%d"):format(pc, hn, unk,
+        sample and (" (" .. tostring(sample) .. ")") or "", y.replied or 0, y.hellos or 0, ns.Comm and ns.Comm.stats.badChannel or 0)
+    end
   end
   if ns.Trust and ns.trustDB then -- v1.2 annex F: keys learned (strong in person / weak with quorum), alerts
     local db = ns.trustDB
