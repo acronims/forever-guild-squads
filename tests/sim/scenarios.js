@@ -1103,9 +1103,9 @@ function S17(seed) {
   check('every 1.2 client online through the logins counts the 4 old members (Comm.OldPeerCount)', news.filter((n) => n !== 'Mb1').every((n) => Number(cs[n].val('NS.Comm.OldPeerCount()')[0]) === 4), cnt.join(','));
   const chat = (c) => c.val('(function() local o = {} for _, e in ipairs(SIM_LOCAL or {}) do if type(e) == "table" and e.s then o[#o + 1] = e.s end end return table.concat(o, "\\n") end)()')[0];
   const mb1 = chat(cs.Mb1);
-  const lines = news.map((n) => [n, (chat(cs[n]).match(/old version|versión antigua/g) || []).length]);
+  const lines = news.map((n) => [n, (chat(cs[n]).match(/old version|versión antigua|anterior a la 2\.0|older than 2\.0/g) || []).length]);
   check('every 1.2 client writes the local old-version line exactly once', lines.every((x) => x[1] === 1), lines.map((x) => x.join(':')).join(','));
-  check('the reloaded 1.2 client (Mb1) also writes it, with the old members it heard', /\b[1-4]\b[^\n]*(old version|versión antigua)/.test(mb1), mb1.replace(/\n/g, ' / '));
+  check('the reloaded 1.2 client (Mb1) also writes it, with the old members it heard', /\b[1-4]\b[^\n]*(old version|versión antigua|anterior a la 2\.0|older than 2\.0)/.test(mb1), mb1.replace(/\n/g, ' / '));
   const oldOld = [];
   for (const o of olds) for (const p of olds) if (o !== p && own(cs[o], cs[p]) !== 'soy ' + p) oldOld.push(`${o}<-${p}`);
   errorsCheck(sim, check);
