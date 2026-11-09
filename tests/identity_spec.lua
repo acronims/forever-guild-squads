@@ -165,6 +165,8 @@ end
 local LUA = { "assert", "error", "ipairs", "pairs", "next", "pcall", "xpcall", "select", "setmetatable",
               "getmetatable", "rawget", "rawset", "rawequal", "tonumber", "tostring", "type", "string", "table",
               "math", "os", "coroutine" }
+-- getters with a number (as zload_spec); any other Get* gives nil (no font string, no anchor)
+local NUMERIC = { GetStringWidth = 60, GetWidth = 100, GetHeight = 20, GetFrameLevel = 3, GetEffectiveScale = 1, GetNumPoints = 1 }
 local function client(opts)
   local env = {}
   for _, k in ipairs(LUA) do env[k] = _G[k] end
@@ -174,7 +176,7 @@ local function client(opts)
   env.strsplit = function(sep, s) local out = {} for p in (s .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do out[#out + 1] = p end return table.unpack(out) end
   env.strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
   env.date, env.time = os.date, os.time
-  local printed, scripts = {}, {}
+  local printed, scripts, texts = {}, {}, {}
   env.print = function(...) local t = {} for i = 1, select("#", ...) do t[#t + 1] = tostring((select(i, ...))) end printed[#printed + 1] = table.concat(t, " ") end
   local stub
   stub = function()
@@ -183,11 +185,13 @@ local function client(opts)
         return function(self, ev, fn) scripts[#scripts + 1] = { self, ev, fn }; rawset(self, "_" .. ev, fn) end
       end
       if k == "GetScript" then return function(self, ev) return rawget(self, "_" .. ev) end end
-      if k == "GetText" then return function() return "" end end
+      if k == "GetText" then return function(self) return rawget(self, "_text") or "" end end
+      if k == "SetText" then return function(self, t) rawset(self, "_text", t); texts[#texts + 1] = tostring(t) end end
       if k == "IsShown" or k == "GetChecked" or k == "IsMouseOver" then return function() return false end end
       if k == "IsEnabled" then return function() return true end end
       if k == "GetCenter" then return function() return 500, 400 end end
-      if type(k) == "string" and (k:match("^Get") ) then return function() return 10 end end
+      if NUMERIC[k] then return function() return NUMERIC[k] end end
+      if type(k) == "string" and (k:match("^Get") ) then return function() return nil end end
       if type(k) ~= "string" or not k:match("^[A-Z]") then return nil end
       local f = function() return stub() end
       rawset(t, k, f)
@@ -269,7 +273,7 @@ local function client(opts)
     ok(okD, "/gsq diag: " .. tostring(errD))
     return shown or ""
   end
-  return ns, env, fire, diag, printed
+  return ns, env, fire, diag, printed, texts
 end
 local function row(name, online, rank) return { name, "Member", rank or 4, 20, "Warrior", "Durotar", "", "", online ~= false, 0, "WARRIOR" } end
 local function foreverRoster()
@@ -277,11 +281,11 @@ local function foreverRoster()
            row("Cid Uno-RealmA", false), row("Gm-" .. MY) }   -- the last one has no surname (never an identity in forever)
 end
 local function boot(opts)
-  local ns, env, fire, diag, printed = client(opts)
+  local ns, env, fire, diag, printed, texts = client(opts)
   fire("ADDON_LOADED", "GuildSquads")
   fire("PLAYER_LOGIN")
   fire("GUILD_ROSTER_UPDATE")
-  return ns, env, fire, diag, printed
+  return ns, env, fire, diag, printed, texts
 end
 
 test("AC1 ns.*: forever (RegionalUniqueNamesEnabled), me «Kas Pitas», two Kas in the roster", function()
@@ -378,4 +382,30 @@ test("AC1 ns.*: realm mode keeps the 1.2.2 (surname in the roster, UnitName bare
   local out = diag()
   ok(out:find("id mode=realm me=Fire-ClassicBetaPvE surname=yes", 1, true), out)
   ok(out:find("[roster] me=Fire-ClassicBetaPvE found=yes entries=3 surnames=2", 1, true), out)
+end)
+
+-- AC3 (unit part): on each of the two «Kas» the list shows the other one with his surname, and never a name cut to
+-- «Kas» or carrying «-Realm» (finder, players: the profiles of the members without a squad)
+test("AC3 UI: the finder list of Kas Pitas shows «Kas Mora», the one of Kas Mora shows «Kas Pitas»", function()
+  local function finderTexts(meSurname, other)
+    local ns, _, _, _, _, texts = boot({ roster = foreverRoster(), regional = function() return true end, surname = meSurname })
+    eq(ns.me(), "Kas " .. meSurname)
+    ns.state.profiles[other] = { k = "profile", id = other, a = other, ts = 1, sq = 1, d = { role = "HEALER" } }
+    -- a captain with room: the finder opens on the players (the members without a squad)
+    local okS, whyS = ns.Actions.CreateSquad({ name = "Squad " .. meSurname, tags = {} })
+    ok(okS, "create squad: " .. tostring(whyS))
+    local before = #texts
+    ns.UI.Open("finder")
+    ns.UI.Select("finder", true)
+    local out = {}
+    for i = before + 1, #texts do out[#out + 1] = texts[i] end
+    return table.concat(out, "\n")
+  end
+  local onPitas, onMora = finderTexts("Pitas", "Kas Mora"), finderTexts("Mora", "Kas Pitas")
+  ok(onPitas:find("Kas Mora", 1, true), "Kas Pitas's list shows «Kas Mora»: " .. onPitas:sub(1, 300))
+  ok(onMora:find("Kas Pitas", 1, true), "Kas Mora's list shows «Kas Pitas»: " .. onMora:sub(1, 300))
+  for _, t in ipairs({ onPitas, onMora }) do
+    ok(not t:find("Kas%-"), "no «Kas-…» in the list")
+    ok(not t:find("|r Kas|r", 1, true) and not t:find("Kas  |cff", 1, true), "no bare «Kas»")
+  end
 end)
