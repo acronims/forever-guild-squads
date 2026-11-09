@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.2 — 2026-11-09 — Susurros al nombre con apellido / Whispers to the name with the surname
+
+### ES
+
+- **Arreglado: el chat se llenaba de «No hay ningún jugador con el nombre Kas CAMWOWEU4Realm6PvP.»** En WoW Forever un susurro solo llega al **nombre completo con apellido** («Kas Pitas»; probado por BRO en el juego). La 1.2.1 susurraba a «Kas-Reino», sin apellido, y el servidor no lo encontraba nunca: ni certificados, ni copias, ni registros por susurro. Ahora el destino sale del roster: «Nombre Apellido» en tu reino y «Nombre Apellido-Reino» en otro. La identidad (autor, firmas, certificados) sigue siendo «Nombre-Reino», sin apellido: los datos firmados no cambian.
+- **Los avisos del servidor por nuestros susurros ya no salen en el chat.** Si el servidor no encuentra a alguien a quien el addon acaba de susurrar, la línea se oculta, se prueba una vez la otra forma del nombre (con o sin reino) y, si tampoco va, el addon deja de susurrarle 10 minutos y le manda lo suyo por el canal de la guild con su nombre dentro (solo él lo procesa). A quien no está en el roster nunca se le susurra; a quien está desconectado no se le manda nada.
+- **Salón de la fama: fuera la pestaña «Otros».** Las carreras de «Puntos de Legado» no funcionan así en WoW Forever y salen del catálogo; «Squad con los 5 titulares al 60» y las carreras de profesión y reputación pasan a la pestaña «Nivel». Los datos guardados de esas carreras se quedan como estaban, pero no puntúan ni se muestran: no se pierde nada más.
+- Al cargar se borran las claves, manifiestos y certificados que la 1.2.0 guardó con apellido («Nombre Apellido-Reino»): ya no casaban con nadie e inflaban `keys strong=` del diag.
+- `/gsq diag`: línea nueva `whisper` con los avisos ocultados (`notFound=`), quién va con la otra forma del nombre (`alt=`), quién está marcado (`marked=`), los mensajes por la guild con destinatario (`routed=`), los descartados por desconexión (`dropped=`) y las claves de la 1.2.0 borradas (`swept=`).
+
+### EN
+
+- **Fixed: the chat filled with "No hay ningún jugador con el nombre Kas CAMWOWEU4Realm6PvP."** In WoW Forever a whisper only reaches the **full name with the surname** ("Kas Pitas"; tested by BRO in the game). 1.2.1 whispered "Kas-Realm", without the surname, and the server never found it: no certificates, copies or records by whisper. The target now comes from the roster: "Name Surname" on your realm and "Name Surname-Realm" on another one. The identity (author, signatures, certificates) stays "Name-Realm", without the surname: signed data does not change.
+- **The server's notices about our whispers no longer reach the chat.** When the server does not find someone the addon just whispered, the line is hidden, the other form of the name (with or without the realm) is tried once and, if that fails too, the addon stops whispering him for 10 minutes and sends his messages over the guild channel with his name inside (only he handles them). Nobody missing from the roster is ever whispered; nothing is sent to someone offline.
+- **Hall of fame: the "Others" tab is gone.** "Legacy points" races do not work that way in WoW Forever and leave the catalog; "Squad with the 5 starters at 60" and the profession and reputation races move to the "Level" tab. Saved data of those races stays as it was but is neither scored nor shown: nothing else is lost.
+- At load, the keys, manifests and certificates that 1.2.0 saved with the surname ("Name Surname-Realm") are dropped: they never matched anyone and inflated the diag's `keys strong=`.
+- `/gsq diag`: new `whisper` line with the hidden notices (`notFound=`), who gets the other form of the name (`alt=`), who is marked (`marked=`), the guild-channel messages with a recipient (`routed=`), the ones dropped because the target is offline (`dropped=`) and the 1.2.0 keys dropped (`swept=`).
+
 ## 1.2.1 — 2026-11-09 — Sincroniza con pocos jugadores en la 1.2 / Syncs with few players on 1.2
 
 ### ES
