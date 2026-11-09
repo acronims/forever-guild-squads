@@ -1060,6 +1060,20 @@ function S14(seed) {
 // anything from an old one; every 1.2 client counts the 4 old members (Comm.OldPeerCount) and, once synced, writes
 // the local old-version line; 0 Lua errors. Measured only: the old clients still sync among themselves.
 const REF11 = process.env.GSQ_REF11 || '636e545';
+// the local old-version line is L.OLD_PEERS of the build under test (GSQ_ROOT or this checkout), read from its
+// Locales so the check follows the real text («Guild Squads: %d miembros usan una versión anterior a la 2.0 …» /
+// «… use a version older than 2.0 …» in the 2.0; «… una versión antigua …» / «… an old version …» in the 1.2).
+// The count %d is the captured group of each alternative.
+function oldPeersRe(flags) {
+  const fs = require('fs'), path = require('path');
+  const root = process.env.GSQ_ROOT || path.join(__dirname, '..', '..');
+  const texts = ['esES', 'enUS'].map((loc) => {
+    const m = fs.readFileSync(path.join(root, 'Locales', loc + '.lua'), 'utf8').match(/^L\.OLD_PEERS\s*=\s*"([^"\n]*)"/m);
+    if (!m) throw new Error('S17: L.OLD_PEERS not found in Locales/' + loc + '.lua');
+    return m[1].split('%d').map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('(\\d+)');
+  });
+  return new RegExp(texts.map((t) => '(?:' + t + ')').join('|'), flags);
+}
 function S17(seed) {
   const sim = new Sim({ seed });
   const { check, checks, pass } = checker();
@@ -1103,9 +1117,10 @@ function S17(seed) {
   check('every 1.2 client online through the logins counts the 4 old members (Comm.OldPeerCount)', news.filter((n) => n !== 'Mb1').every((n) => Number(cs[n].val('NS.Comm.OldPeerCount()')[0]) === 4), cnt.join(','));
   const chat = (c) => c.val('(function() local o = {} for _, e in ipairs(SIM_LOCAL or {}) do if type(e) == "table" and e.s then o[#o + 1] = e.s end end return table.concat(o, "\\n") end)()')[0];
   const mb1 = chat(cs.Mb1);
-  const lines = news.map((n) => [n, (chat(cs[n]).match(/old version|versión antigua|anterior a la 2\.0|older than 2\.0/g) || []).length]);
-  check('every 1.2 client writes the local old-version line exactly once', lines.every((x) => x[1] === 1), lines.map((x) => x.join(':')).join(','));
-  check('the reloaded 1.2 client (Mb1) also writes it, with the old members it heard', /\b[1-4]\b[^\n]*(old version|versión antigua|anterior a la 2\.0|older than 2\.0)/.test(mb1), mb1.replace(/\n/g, ' / '));
+  const lines = news.map((n) => [n, (chat(cs[n]).match(oldPeersRe('g')) || []).length]);
+  check('every 1.2 client writes the local old-version line (L.OLD_PEERS) exactly once', lines.every((x) => x[1] === 1), lines.map((x) => x.join(':')).join(','));
+  const mb1n = (mb1.match(oldPeersRe('')) || []).slice(1).filter((x) => x !== undefined).map(Number);
+  check('the reloaded 1.2 client (Mb1) also writes it, with the old members it heard (1-4)', mb1n.length === 1 && mb1n[0] >= 1 && mb1n[0] <= 4, mb1.replace(/\n/g, ' / '));
   const oldOld = [];
   for (const o of olds) for (const p of olds) if (o !== p && own(cs[o], cs[p]) !== 'soy ' + p) oldOld.push(`${o}<-${p}`);
   errorsCheck(sim, check);
