@@ -70,7 +70,7 @@ después de guardar un perfil completo (rol y al menos un objetivo).
    - `A.RequestJoin(id)` (aceptar una invitación y también pedir unirse, son la misma acción) comprueba primero
      `M.profileComplete` del perfil propio guardado. Si no lo está: no escribe nada, devuelve
      `false, "profileIncomplete"`, recuerda el squad (solo en la sesión) y abre Mi perfil con el aviso «Rellena tu
-     rol y al menos un objetivo y pulsa Guardar para unirte a «X».». El error dice «para unirte a un squad
+     rol principal y al menos un objetivo y pulsa «Guardar perfil» para unirte a «X».». El error dice «para unirte a un squad
      necesitas un perfil con rol y al menos un objetivo».
    - Al **Guardar** (o «Guardar y salir») un perfil completo con un squad recordado que sigue existiendo y me sigue
      listando o está abierto, ese mismo guardado lleva `squad = id` y `reqAt`: **un solo registro**, y la

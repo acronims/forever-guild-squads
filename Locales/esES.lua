@@ -466,7 +466,7 @@ L.UNVERIFIED = "sin verificar"
 -- 2.0.1: miembros con el addon y sin el perfil rellenado, y el perfil que hace falta para unirse
 L.NO_PROFILE = "Sin perfil todavía"
 L.NO_PROFILE_TIP = "Tiene Guild Squads pero no ha rellenado su perfil. Puedes invitarle a tu squad: para unirse tendrá que rellenarlo."
-L.JOIN_AFTER_PROFILE = "Rellena tu rol principal y al menos un objetivo y pulsa Guardar para unirte a «%s»."
+L.JOIN_AFTER_PROFILE = "Rellena tu rol principal y al menos un objetivo y pulsa «Guardar perfil» para unirte a «%s»."
 L.ERR_profileIncomplete = "para unirte a un squad necesitas un perfil con rol principal y al menos un objetivo"
 L.UNVERIFIED_TIP = "Llegado por %s, sin firma verificada. Se verifica cuando %s se conecte o cuando 2 jugadores que has oído en persona certifiquen esa clave"
 L.UNVERIFIED_TIP_DISPUTED = "Clave disputada: jugadores que has oído en persona dan claves distintas para %s. No se aplica nada nuevo suyo hasta que se conecte (/gsq diag)"
