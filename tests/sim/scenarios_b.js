@@ -146,4 +146,59 @@ function S17v2(seed) {
   return { pass: pass(), checks, metrics: { ref: REF122, oldPeers: cnt, ...sim.stats } };
 }
 
-module.exports = { S23, S17v2 };
+// S24 (2.0.1, docs/SPEC-v2.0.1-sin-perfil.md AC2/AC6-AC9 end to end, real signatures): 4 clients on WoW Forever.
+// Gm and Mb3 fill their profiles, Mb1 and Mb2 never touch theirs (only the automatic one of the login). The Gm's
+// Buscador lists Mb1 and Mb2 as «No profile yet» and Mb3 as a profile; the Gm invites Mb1 and Mb2. Mb1 accepts with
+// the automatic profile: nothing is signed (his db.seq does not move) and nobody counts him; then he saves a filled
+// profile and that save joins: within 120 s the 4 clients count him a member. Mb2 never acts: after 240 s nobody
+// counts him and his profile never pointed at the squad; the Gm's Buscador still lists him «No profile yet».
+function S24(seed) {
+  const sim = new Sim({ seed, forever: true });
+  const { check, checks, pass } = checker();
+  for (const [n, r] of [['Gm', 0], ['Mb1', 5], ['Mb2', 5], ['Mb3', 5]]) sim.addMember(n, r);
+  const cs = sim.roster.map((r) => sim.client(r.name, {}));
+  const [gm, mb1, mb2, mb3] = cs;
+  for (const c of cs) { c.login(); sim.run(2 + sim.rand() * 3); }
+  sim.run(60);
+  gm.run('return A.SaveSettings({ squadsEnabled = true, bench = 2, minCreateRank = 9, officerRanks = { 1 }, banned = {} })');
+  sim.run(20);
+  check('Gm and Mb3 fill their profiles', gm.run('return A.SaveProfile({ role = "TANK", goals = { "raid" } })')[0] === true &&
+    mb3.run('return A.SaveProfile({ role = "HEALER", goals = { "dungeons" } })')[0] === true);
+  check('Gm creates a squad', gm.run('return A.CreateSquad({ name = "Los Lobos", icon = 1, color = 1, border = 1, tags = {}, open = false })')[0] === true);
+  sim.run(90);
+  const sid = s(gm, 'A.MySquadId()');
+  const list = () => s(gm, `(function() local fd = NS.UI.FinderState(); fd.mode = "players"; NS.UI.Open("finder"); NS.UI.Select("finder")
+      local t = {} for _, it in ipairs(fd.grid.items) do t[#t + 1] = it.player.name .. (it.player.noProfile and "*" or "") .. (it.player.unverified and "?" or "") end
+      return table.concat(t, ",") end)()`);
+  const l0 = list();
+  check('the Gm\'s Buscador: Mb3 with a profile, then Mb1 and Mb2 «No profile yet»', l0 === 'Mb3 Apmb3,Mb1 Apmb1*,Mb2 Apmb2*', l0);
+  check('Gm invites Mb1 and Mb2', gm.run('return A.AddMember(A.MySquadId(), "Mb1 Apmb1")')[0] === true &&
+    gm.run('return A.AddMember(A.MySquadId(), "Mb2 Apmb2")')[0] === true);
+  sim.run(90);
+  check('Mb1 and Mb2 see the invitation', s(mb1, `table.concat(NS.Model.invites(NS.state, NS.me()), ",")`) === sid &&
+    s(mb2, `table.concat(NS.Model.invites(NS.state, NS.me()), ",")`) === sid, sid);
+  const seq0 = num(mb1, 'GuildSquadsDB.seq or 0');
+  const r1 = mb1.run(`local ok, why = A.RequestJoin(${luaStr(sid)}); return tostring(ok) .. "|" .. tostring(why)`)[0];
+  check('Mb1 accepts with the automatic profile: refused with profileIncomplete, Mi perfil open', r1 === 'false|profileIncomplete' && s(mb1, 'NS.UI.Current()') === 'profile',
+    r1 + ' tab=' + s(mb1, 'NS.UI.Current()'));
+  check('Mb1 signed nothing (db.seq unchanged)', num(mb1, 'GuildSquadsDB.seq or 0') === seq0, seq0 + ' -> ' + num(mb1, 'GuildSquadsDB.seq or 0'));
+  sim.run(60);
+  const member = (c, who) => s(c, `tostring(NS.Model.isMember(NS.state, ${luaStr(sid)}, ${luaStr(who)}))`);
+  check('nobody counts Mb1 before his profile', cs.every((c) => member(c, 'Mb1 Apmb1') === 'false'), cs.map((c) => member(c, 'Mb1 Apmb1')).join(','));
+  const t0 = sim.t;
+  check('Mb1 saves a filled profile from Mi perfil (that save joins)', mb1.run('return A.SaveProfileDraft({ role = "DAMAGER", goals = { "raid" } })')[0] === true);
+  check('Mb1 signed exactly one record for it', num(mb1, 'GuildSquadsDB.seq or 0') === seq0 + 1, num(mb1, 'GuildSquadsDB.seq or 0') - seq0);
+  let tJoin = null;
+  for (let k = 0; k < 24 && tJoin === null; k++) { sim.run(5); if (cs.every((c) => member(c, 'Mb1 Apmb1') === 'true')) tJoin = Math.round(sim.t - t0); }
+  check('the 4 clients count Mb1 a member, <= 120 s', tJoin !== null, tJoin === null ? cs.map((c) => member(c, 'Mb1 Apmb1')).join(',') : tJoin + ' s');
+  check('Mb1\'s profile is complete on the 4', cs.every((c) => s(c, 'tostring(NS.Model.profileComplete(NS.state.profiles["Mb1 Apmb1"].d))') === 'true'));
+  sim.run(120);
+  check('Mb2 never acted: nobody counts him, his profile never points at the squad', cs.every((c) => member(c, 'Mb2 Apmb2') === 'false' &&
+    s(c, 'tostring(NS.state.profiles["Mb2 Apmb2"] and NS.state.profiles["Mb2 Apmb2"].d.squad)') !== sid), cs.map((c) => member(c, 'Mb2 Apmb2')).join(','));
+  const l1 = list();
+  check('the Gm\'s Buscador now: Mb3 and Mb2 «No profile yet» (Mb1 is in the squad)', l1 === 'Mb3 Apmb3,Mb2 Apmb2*', l1);
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { tJoin, t: Math.round(sim.t), ...sim.stats } };
+}
+
+module.exports = { S23, S17v2, S24 };

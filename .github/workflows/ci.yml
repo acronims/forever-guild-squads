@@ -59,6 +59,8 @@ jobs:
           # migration (tests/fixtures/sv-1.2.2.lua, no git history needed). S16d = review D A1: no ghost under another
           # spelling of the GM / an officer
           - "S16d S20 S21 S22 S23 --seed 7303"
+          # 2.0.1 (SPEC-v2.0.1-sin-perfil): «No profile yet» in the Buscador, the profile gate to join a squad
+          - "S24 --seed 7303"
           # the 1.2.x world (RegionalUniqueNamesEnabled absent): the realm mode keeps working
           - "S19 --seed 7303 --realm"
     steps:
