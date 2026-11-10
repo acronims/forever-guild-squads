@@ -373,7 +373,7 @@ test("2.0.1 AC7/AC8: accepting with an incomplete profile opens Mi perfil; the s
   eq(#M.invites(ns.state, "Kas Pitas"), 0, "invitation gone")
   eq(A.JoinAfterProfile(), nil, "forgotten")
   local fb = false
-  for k = n0 + 1, #rec.texts do if rec.texts[k] == L.FB_JOINED:format("Los Lobos") then fb = true end end
+  for k = n0 + 1, #rec.texts do if rec.texts[k]:find(L.FB_JOINED:format("Los Lobos"), 1, true) then fb = true end end
   ok(fb, "joined feedback")
   undo()
 end)

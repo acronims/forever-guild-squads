@@ -365,6 +365,14 @@ function M.requests(state, squadId)
   return out
 end
 
+-- 2.0.1: a filled profile = a main role and at least one goal (the "!" of Mi perfil). The profile every client
+-- publishes by itself at login (role DAMAGER by default, no goals) is not filled: the Buscador shows it as
+-- «No profile yet» and joining a squad needs a filled one (docs/SPEC-v2.0.1-sin-perfil.md)
+function M.profileComplete(d)
+  if type(d) ~= "table" or type(d.role) ~= "string" or d.role == "" then return false end
+  return type(d.goals) == "table" and next(d.goals) ~= nil
+end
+
 -- squads listing the character while its profile does not point there = invitations
 function M.invites(state, name)
   local out = {}

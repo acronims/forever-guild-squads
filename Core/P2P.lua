@@ -533,6 +533,14 @@ function X.adoption(state, members, now, extra)
   table.sort(out.list, function(a, b) return a.name < b.name end)
   return out
 end
+-- 2.0.1: `name` has a verified presence of the last adoptDays days (the same window as the X/Y counter). Only
+-- state.presence counts: a relayed presence without a verified signature waits among the pending copies.
+function X.hasPresence(state, name, now)
+  local p = state and state.presence and state.presence[name]
+  if type(p) ~= "table" or type(p.ts) ~= "number" or type(now) ~= "number" then return false end
+  local days = tonumber(M.settingsOf(state).adoptDays) or X.ADOPT_DAYS
+  return now - p.ts <= days * 86400
+end
 function X.counterText(a, L)
   L = L or {}
   local fmt = L.ADOPTION or "Guild Squads: %d/%d members (%d days)"

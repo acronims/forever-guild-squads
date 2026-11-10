@@ -637,10 +637,7 @@ function A.MySquadId() return M.squadOf(ns.state, ns.me()) end
 function A.ProfileIncomplete()
   local me = ns.me and ns.me()
   local r = me and ns.state and ns.state.profiles and ns.state.profiles[me]
-  local d = type(r) == "table" and r.d
-  if type(d) ~= "table" then return true end
-  if type(d.role) ~= "string" or d.role == "" then return true end
-  return type(d.goals) ~= "table" or next(d.goals) == nil
+  return not M.profileComplete(type(r) == "table" and r.d or nil)
 end
 
 -- every action confirms what happened (chat + status bar of the window)
@@ -741,12 +738,49 @@ function A.MoveToBench(id, name)
   return ok, why
 end
 
-function A.RequestJoin(id) -- also = accept invitation
+-- 2.0.1: joining (accepting an invitation or asking to join) needs a filled profile (M.profileComplete). Without
+-- one nothing is signed: the squad is remembered for this session and Mi perfil opens; the save of a filled profile
+-- carries the squad (A.SaveProfileDraft), so the acceptance is one record signed by me. Only my own actions reach
+-- here: a squad record that lists me only makes the invitation (docs/SPEC-v2.0.1-sin-perfil.md).
+local joinAfter
+local function joinable(id)
+  local r = id and ns.state.squads[id]
+  return r and not r.d.disbanded and r.d.captain ~= ns.me()
+end
+function A.JoinAfterProfile()
+  if joinAfter and not joinable(joinAfter) then joinAfter = nil end
+  return joinAfter
+end
+local function joinFields(id)
   local r = ns.state.squads[id]
   local me = ns.me()
   local invited = r and (P.contains(r.d.members or {}, me) or P.contains(r.d.bench or {}, me))
-  local ok, why = A.SaveProfile({ squad = id, reqAt = serverTime() }, true)
-  feedback(ok, (invited and L.FB_JOINED or L.FB_REQ_SENT):format(squadName(id)))
+  return { squad = id, reqAt = serverTime() }, (invited and L.FB_JOINED or L.FB_REQ_SENT):format(squadName(id))
+end
+function A.RequestJoin(id) -- also = accept invitation
+  if A.ProfileIncomplete() then
+    joinAfter = id
+    if ns.UI and ns.UI.OpenProfileForJoin then pcall(ns.UI.OpenProfileForJoin, id) end
+    return false, "profileIncomplete"
+  end
+  joinAfter = nil
+  local fields, text = joinFields(id)
+  local ok, why = A.SaveProfile(fields, true)
+  feedback(ok, text)
+  return ok, why
+end
+-- the save of Mi perfil: when a join waits for the profile and the saved one is filled, the same record joins
+function A.SaveProfileDraft(d)
+  local id = A.JoinAfterProfile()
+  local full = A.MyProfile()
+  for k, v in pairs(d) do full[k] = v end
+  if not (id and M.profileComplete(full)) then return A.SaveProfile(d) end
+  local fields, text = joinFields(id)
+  for k, v in pairs(d) do fields[k] = v end
+  fields.squad = id
+  local ok, why = A.SaveProfile(fields)
+  if ok then joinAfter = nil end
+  feedback(ok, text)
   return ok, why
 end
 

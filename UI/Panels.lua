@@ -712,6 +712,7 @@ local function fillResult(c, item)
     if item.reasons[i] then r:SetReason(item.reasons[i]); r:Show() else r:Hide() end
   end
   c.fit:SetFit(item.score, item.reasons)
+  if item.player and item.player.noProfile then c.fit:Hide() else c.fit:Show() end   -- 2.0.1: nothing to score without a profile
   if item.player then
     local i = item.player
     c.logo:Hide(); c.class:Show(); c.dot:Show()
@@ -720,6 +721,9 @@ local function fillResult(c, item)
     if i.unverified then
       -- arrived by relay without a verified signature: grey, never counted, until the author's manifest verifies
       c.name:SetText("|cff888888" .. ns.shortName(i.name) .. "  " .. L.LV_SHORT:format(tostring(i.level or "?")) .. "  (" .. L.UNVERIFIED .. ")|r")
+    elseif i.noProfile then
+      -- 2.0.1: has the addon (own verified profile or presence) but no filled profile: name as usual, grey mark
+      c.name:SetText(nameColored(i.name, i.class) .. "  |cffaaaaaa" .. L.LV_SHORT:format(tostring(i.level or "?")) .. "|r  |cff888888(" .. L.NO_PROFILE .. ")|r")
     else
       c.name:SetText(nameColored(i.name, i.class) .. "  |cffaaaaaa" .. L.LV_SHORT:format(tostring(i.level or "?")) .. "|r")
     end
@@ -728,6 +732,8 @@ local function fillResult(c, item)
     twoChips(c, i.goals)
     if i.unverified then
       W.Tooltip(c, L.UNVERIFIED, ns.UnverifiedTip(i.name, i.unverified.from))
+    elseif i.noProfile then
+      W.Tooltip(c, L.NO_PROFILE, L.NO_PROFILE_TIP)
     else
       W.Tooltip(c, memberTooltip(i.name))
     end
@@ -848,14 +854,33 @@ end, function(f, bar)
   else
     local myId = A.MySquadId()
     local target = myId and squadCtx(myId) or { avail = me.avail, level = me.level, goals = me.goals }
-    for name in pairs(ns.state.profiles) do
+    -- 2.0.1: who has the addon but no filled profile («No profile yet»). Only what the member signed and we verified
+    -- (state.profiles / state.presence), only canonical identities of the guild roster. The role, goal and time
+    -- filters need a profile: with one of them on they are hidden; class, level and online come from the roster.
+    local profileFilter = next(fd.role) ~= nil or next(fd.goal) ~= nil or filters.availWith ~= nil
+    local nf = { class = filters.class, minLevel = filters.minLevel, maxLevel = filters.maxLevel, onlineOnly = filters.onlineOnly }
+    local noProf = {}
+    local function addNoProfile(name)
+      if noProf[name] then return end
+      noProf[name] = true
+      local r = ns.roster(name) or {}
+      local i = { name = name, class = r.class, level = r.level, online = r.online, zone = r.zone, goals = {}, seen = r.seen, noProfile = true }
+      total = total + 1
+      if not profileFilter and X.passes(i, nf) then items[#items + 1] = { player = i, score = 0, reasons = {} } end
+    end
+    local function canon(name) return type(name) == "string" and ns.id(name) == name and ns.roster(name) ~= nil end
+    for name, p in pairs(ns.state.profiles) do
       local r = ns.roster(name)
       if r and name ~= ns.me() and not M.squadOf(ns.state, name) then
-        total = total + 1
-        local i = infoOf(name)
-        if X.passes(i, filters) then
-          local score, reasons = X.score(i, target)
-          items[#items + 1] = { player = i, score = score, reasons = reasons }
+        if not M.profileComplete(p.d) then
+          if canon(name) then addNoProfile(name) end
+        else
+          total = total + 1
+          local i = infoOf(name)
+          if X.passes(i, filters) then
+            local score, reasons = X.score(i, target)
+            items[#items + 1] = { player = i, score = score, reasons = reasons }
+          end
         end
       end
     end
@@ -877,8 +902,18 @@ end, function(f, bar)
         end
       end
     end
+    -- a verified presence without any profile (verified or pending) is also «No profile yet»
+    local nowP = (GetServerTime and GetServerTime()) or 0
+    for name in pairs(ns.state.presence or {}) do
+      if canon(name) and name ~= ns.me() and not ns.state.profiles[name] and not seenU[name] and not M.squadOf(ns.state, name)
+         and not (P2 and P2.unverified(ns.state, "profile", name)) and P2 and P2.hasPresence(ns.state, name, nowP) then
+        addNoProfile(name)
+      end
+    end
+    -- complete verified profiles, then the unverified ones, then those without a profile
+    local function band(p) return p.noProfile and 2 or p.unverified and 1 or 0 end
     table.sort(items, function(a, b)
-      if (a.player.unverified and 1 or 0) ~= (b.player.unverified and 1 or 0) then return not a.player.unverified end
+      if band(a.player) ~= band(b.player) then return band(a.player) < band(b.player) end
       if a.score ~= b.score then return a.score > b.score end
       if (a.player.online and 1 or 0) ~= (b.player.online and 1 or 0) then return a.player.online and true or false end
       return a.player.name < b.player.name
@@ -920,6 +955,11 @@ end, nil, { icon = ICONS .. "INV_Misc_Key_03" })
 
 -------------------------------------------------------------------------------
 -- Mi perfil
+-- 2.0.1: A.RequestJoin without a filled profile opens Mi perfil (its refresh shows the waiting join)
+function UI.OpenProfileForJoin()
+  UI.Open("profile")
+  if UI.Current() ~= "profile" then UI.Select("profile") end
+end
 local prof = { roles = {}, slots = {}, goals = {} }
 UI.profileState = prof -- exposed for the smoke tests
 function UI.ProfileState() return prof end
@@ -973,6 +1013,8 @@ UI.Register("profile", L.TAB_PROFILE, function(f, bar)
   if prof.squad.SetMaxLines then pcall(prof.squad.SetMaxLines, prof.squad, 1) end
   prof.squad:SetHeight(14)
   prof.squadLink = W.Link(left, L.TAB_MYSQUAD, function() UI.Select("mysquad") end); prof.squadLink:SetPoint("TOPLEFT", 10, -268)
+  -- 2.0.1: a join waiting for a filled profile (A.RequestJoin) says so, in gold
+  prof.join = W.Label(left, ""); prof.join:SetPoint("TOPLEFT", 10, -294); prof.join:SetWidth(180); prof.join:SetTextColor(1, 0.82, 0)
   local rt = W.Label(f, L.MAIN_ROLE .. " · " .. L.ROLE_CYCLE, "GameFontNormal"); rt:SetPoint("TOPLEFT", 224, -10)
   for i, r in ipairs(ROLES) do
     local b = CreateFrame("Button", nil, f); b:SetSize(60, 60); b:SetPoint("TOPLEFT", 228 + (i - 1) * 110, -32)
@@ -1015,7 +1057,8 @@ UI.Register("profile", L.TAB_PROFILE, function(f, bar)
   prof.achT = W.Label(f, L.MY_ACH, "GameFontNormal"); prof.achT:SetPoint("TOPLEFT", 224, -318)
   prof.save = W.Primary(bar, L.SAVE, function()
     local d = profDraft()
-    if A.SaveProfile(d) then ns.print(L.SAVED) end
+    if A.SaveProfileDraft(d) then ns.print(L.SAVED) end
+    if not A.JoinAfterProfile() then prof.join:SetText("") end
     profUpdate()
     if ns.UpdateBadge then pcall(ns.UpdateBadge) end
   end)
@@ -1031,6 +1074,8 @@ end, function()
   prof.zone:SetText((GetRealZoneText and GetRealZoneText()) or "")
   local sid = A.MySquadId()
   prof.squad:SetText(L.SQUAD_LABEL .. ": " .. (sid and ns.state.squads[sid].d.name or L.NONE))
+  local jid = A.JoinAfterProfile and A.JoinAfterProfile()
+  prof.join:SetText(jid and L.JOIN_AFTER_PROFILE:format(M.displayName(ns.state, jid) or ns.state.squads[jid].d.name) or "")
   if not keepEdits then
     prof.role, prof.role2 = d.role, d.role2
     local a = d.avail or "00000000"
@@ -1059,7 +1104,7 @@ end,
     W.Confirm(L.PROFILE_UNSAVED, function() prof.editing = false; UI.Select(nextKey, true) end, L.DISCARD, L.KEEP_EDITING,
       L.SAVE_AND_EXIT, function()
         local d = profDraft()
-        if not A.SaveProfile(d) then return end
+        if not A.SaveProfileDraft(d) then return end
         ns.print(L.SAVED)
         prof.editing = false
         if ns.UpdateBadge then pcall(ns.UpdateBadge) end

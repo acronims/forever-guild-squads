@@ -79,7 +79,7 @@ después de guardar un perfil completo (rol y al menos un objetivo).
    - Nada que llegue por la red puede escribir la aceptación: el único camino que pone `squad` en mi perfil son
      mis acciones (`A.RequestJoin`, `A.CreateSquad`, guardar Mi perfil con un squad recordado por una acción mía).
      Un registro `squad` que me lista, aunque llegue mil veces, solo crea la invitación.
-6. **Locales ES/EN completos** y **CHANGELOG 2.0.1 ES/EN**. `ns.VERSION` / `.toc` a 2.0.1.
+6. **Locales ES/EN completos** y **CHANGELOG 2.0.1 ES/EN** (la versión sale de la etiqueta al empaquetar).
 
 **Fuera de alcance**
 
@@ -129,7 +129,7 @@ después de guardar un perfil completo (rol y al menos un objetivo).
   compara la forma serializada con la de la 2.0.0).
 - [ ] AC13 Suite completa verde (`node tests/run.js`), gates (`node tests/gates.js`),
   `npx -y wow-secret-lint@1.10.2 .` limpio, escenarios S2, S11, S20 y S21 PASS, y CI de la rama en verde.
-- [ ] AC14 CHANGELOG 2.0.1 ES/EN, versión 2.0.1 en `.toc` y `ns.VERSION`.
+- [ ] AC14 CHANGELOG 2.0.1 ES/EN. La versión la pone el empaquetador desde la etiqueta (`## Version: @project-version@`): no se toca código; sin etiqueta, porque no se publica.
 
 **Aislamiento**
 Worktree `wt/c-201`, rama `feat/2.0.1-noprofile` desde be11d89. No se toca `feat/2.0` ni `main`; nada se publica

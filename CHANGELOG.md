@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.0.1 — 2026-11-10 — «Sin perfil todavía» en el Buscador / «No profile yet» in the Buscador
+
+### ES
+
+- **El Buscador enseña a quien tiene Guild Squads aunque no haya rellenado su perfil**, con «(Sin perfil todavía)» junto al nombre y el tooltip «Tiene Guild Squads pero no ha rellenado su perfil». Hasta ahora salían como «Daño» sin objetivos, igual que un perfil rellenado: el addon publica solo un perfil al entrar y su rol por defecto es Daño. «Rellenado» es lo mismo que pide el «!» de Mi perfil: rol principal y al menos un objetivo. También sale quien tiene el addon (cuenta en el «X/Y miembros») y todavía no ha enviado ningún perfil.
+- Salen al final de la lista, después de los perfiles sin verificar, sin iconos de rol, sin objetivos y sin la puntuación de encaje. Con un filtro de rol, de objetivo o de horario no salen (no se sabe si encajan). Los filtros de clase, nivel y conectado sí se les aplican, porque esos datos vienen de la lista de la guild.
+- Solo cuenta lo que ha firmado el propio miembro y está verificado. Un perfil o una presencia que llega sin firma verificada, de alguien que no está en la guild o con el nombre mal escrito no saca a nadie.
+- **Puedes invitarles a tu squad** como a cualquiera (clic derecho o «Invitar al squad»). **Para unirse hace falta un perfil rellenado:** al pulsar Aceptar, o al pedir unirse a un squad, sin rol o sin objetivos no se envía nada y se abre Mi perfil con el aviso «Rellena tu rol principal y al menos un objetivo y pulsa Guardar para unirte a «X»». Al guardar un perfil rellenado, ese mismo guardado te une al squad. Lo comprueba tu cliente antes de firmar: nada que llegue de la guild puede unirte a un squad.
+- Sin cambios en el protocolo (sigue el 3): la 2.0.0 y la 2.0.1 se sincronizan entre ellas. Quien sigue en la 2.0.0 ve a esos miembros como «Daño» y puede aceptar sin perfil.
+- **Límites conocidos:**
+  - Si alguien no quiere marcar ningún objetivo, sale como «Sin perfil todavía» y no puede unirse a un squad hasta marcar uno.
+  - El aviso de unirte se recuerda solo hasta salir del juego o hacer `/reload`. La invitación sigue en Mi squad y basta con volver a pulsar Aceptar.
+  - Sin probar en el juego: cómo se ve «(Sin perfil todavía)» junto a un nombre largo. Se corta a la vista, como el resto de nombres.
+
+### EN
+
+- **The Buscador shows who has Guild Squads even without a filled profile**, with "(No profile yet)" next to the name and the tooltip "Has Guild Squads but has not filled in a profile". Until now they showed as "Damage" without goals, the same as a filled profile: the addon publishes a profile by itself at login and its default role is Damage. "Filled" is what the "!" on Mi perfil asks for: a main role and at least one goal. Also listed: who has the addon (counted in "X/Y members") and has not sent any profile yet.
+- They come at the end of the list, after the unverified profiles, without role icons, goals or the fit score. With a role, goal or time filter on they are hidden (nobody knows whether they fit). The class, level and online filters do apply, because that data comes from the guild roster.
+- Only what the member signed and is verified counts. A profile or a presence that arrives without a verified signature, from someone outside the guild or with a misspelled name lists nobody.
+- **You can invite them to your squad** like anyone else (right click or "Invite to squad"). **Joining needs a filled profile:** pressing Accept, or asking to join a squad, without a role or goals sends nothing and opens Mi perfil with the notice "Fill in your main role and at least one goal and press Save to join «X»". Saving a filled profile joins the squad in that same save. Your client checks it before signing: nothing that arrives from the guild can make you join a squad.
+- No protocol change (still 3): 2.0.0 and 2.0.1 sync with each other. Whoever stays on 2.0.0 sees those members as "Damage" and can accept without a profile.
+- **Known limits:**
+  - Someone who does not want to pick any goal shows as "No profile yet" and cannot join a squad until they pick one.
+  - The join notice is remembered only until you log out or `/reload`. The invitation stays in Mi squad: press Accept again.
+  - Not tried in the game: how "(No profile yet)" looks next to a long name. It is cut on screen, like every other name.
+
 ## 2.0.0 — 2026-11-09 — Cada personaje es «Nombre Apellido» / Every character is «Name Surname»
 
 ### ES
