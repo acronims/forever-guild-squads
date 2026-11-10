@@ -476,7 +476,7 @@ L.UNVERIFIED = "unverified"
 -- 2.0.1: members who have the addon without a filled profile, and the profile needed to join
 L.NO_PROFILE = "No profile yet"
 L.NO_PROFILE_TIP = "Has Guild Squads but has not filled in a profile. You can invite them to your squad: to join they will have to fill it in."
-L.JOIN_AFTER_PROFILE = "Fill in your main role and at least one goal and press "Save profile" to join «%s»."
+L.JOIN_AFTER_PROFILE = "Fill in your main role and at least one goal and press «Save profile» to join «%s»."
 L.ERR_profileIncomplete = "to join a squad you need a profile with a main role and at least one goal"
 L.UNVERIFIED_TIP = "Arrived via %s, without a verified signature. It is verified when %s logs in, or when 2 players you heard in person certify that key"
 L.UNVERIFIED_TIP_DISPUTED = "Disputed key: players you heard in person list different keys for %s. Nothing new from it is applied until it logs in (/gsq diag)"
