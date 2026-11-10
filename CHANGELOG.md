@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.1 — 2026-11-10 — «Sin perfil todavía» en el Buscador / «No profile yet» in the Buscador
+## 2.0.1 — 2026-11-10 — «Sin perfil todavía» en el Buscador / «No profile yet» in the Finder
 
 ### ES
 
@@ -16,7 +16,7 @@
 
 ### EN
 
-- **The Buscador shows who has Guild Squads even without a filled profile**, with "(No profile yet)" next to the name and the tooltip "Has Guild Squads but has not filled in a profile". Until now they showed as "Damage" without goals, the same as a filled profile: the addon publishes a profile by itself at login and its default role is Damage. "Filled" is what the "!" on My profile asks for: a main role and at least one goal. Also listed: who has the addon (counted in "X/Y members") and has not sent any profile yet.
+- **The Finder shows who has Guild Squads even without a filled profile**, with "(No profile yet)" next to the name and the tooltip "Has Guild Squads but has not filled in a profile". Until now they showed as "Damage" without goals, the same as a filled profile: the addon publishes a profile by itself at login and its default role is Damage. "Filled" is what the "!" on My profile asks for: a main role and at least one goal. Also listed: who has the addon (counted in "X/Y members") and has not sent any profile yet.
 - They come at the end of the list, after the unverified profiles, without role icons, goals or the fit score. With a role, goal or time filter on they are hidden (nobody knows whether they fit). The class, level and online filters do apply, because that data comes from the guild roster.
 - Only what the member signed and is verified counts. A profile or a presence that arrives without a verified signature, from someone outside the guild or with a misspelled name lists nobody.
 - **You can invite them to your squad** like anyone else (right click or "Invite to squad"). **Joining needs a filled profile:** pressing Accept, or asking to join a squad, without a role or goals sends nothing and opens My profile with the notice "Fill in your main role and at least one goal and press "Save profile" to join «X»". Saving a filled profile joins the squad in that same save. Your client checks it before signing: nothing that arrives from the guild can make you join a squad.
