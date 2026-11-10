@@ -20,7 +20,7 @@ Guía del GM, los oficiales y los líderes de banda: [GM-GUIDE.md](GM-GUIDE.md).
 
 **Squads.** Todos los squads de la guild con su escudo, lema, etiquetas y plazas. Los inactivos (nadie conectado en N días) salen atenuados y al final. Desde aquí pides entrar.
 
-**Buscador.** Dos listas: *Squads con plaza* y *Jugadores sin squad*. Filtra por rol, clase, nivel, horas en común, objetivo y conectados. Cada sugerencia dice por qué encaja.
+**Buscador.** Dos listas: *Squads con plaza* y *Jugadores sin squad*. Filtra por rol, clase, nivel, horas en común, objetivo y conectados. Cada sugerencia dice por qué encaja. Quien tiene el addon pero no ha rellenado su perfil (rol principal y al menos un objetivo) sale al final como «Sin perfil todavía»: puedes invitarle, y para unirse tendrá que rellenarlo. Con un filtro de rol, objetivo u horas no sale.
 
 **Mi perfil.** Tus datos y **Mis logros** (cuadrícula con fecha o progreso). Una insignia otorgada por el GM dice *Otorgado por el GM: motivo* en el tooltip; un logro que el GM desactivó y ya tenías queda al final, en *Legado*. Mientras tu perfil no se haya guardado nunca o le falte el rol o el objetivo principal, la pestaña lleva una marca **"!"**; desaparece al completarlo. Si sales con cambios sin guardar, te avisa con tres opciones: **Guardar y salir** (guarda y cambia de pestaña; si el guardado se rechaza, te quedas), **Descartar** o **Seguir editando**.
 
@@ -83,7 +83,7 @@ Guía del GM, los oficiales y los líderes de banda: [GM-GUIDE.md](GM-GUIDE.md).
 
 **Mi jefe no puntuó.** ¿Había otro miembro del squad con el addon en el grupo? ¿Ya lo matasteis hoy? ¿La competición está activa y la categoría tiene peso > 0? Durante el combate el addon no envía nada: se envía al terminar.
 
-**No puedo entrar en el squad.** Hace falta que el capitán te acepte **y** que tu perfil apunte a ese squad. Un personaje solo puede estar en un squad.
+**No puedo entrar en el squad.** Hace falta que el capitán te acepte **y** que tu perfil apunte a ese squad. Un personaje solo puede estar en un squad. Desde la 2.0.1 también hace falta un perfil rellenado: si no lo tienes, al aceptar se abre Mi perfil y te unes al guardarlo.
 
 **El botón está gris.** Pasa el ratón: el tooltip dice por qué (no eres capitán, el squad está lleno, primero elige una tarjeta...).
 

@@ -20,7 +20,7 @@ Guide for guild masters, officers and raid leaders: [GM-GUIDE.md](GM-GUIDE.md).
 
 **Squads.** Every squad in the guild with its crest, motto, tags and free slots. Inactive squads (nobody online for N days) are dimmed and listed last. Ask to join from here.
 
-**Finder.** Two lists: *Squads with room* and *Players without squad*. Filter by role, class, level, shared hours, goal and online. Each suggestion says why it fits.
+**Finder.** Two lists: *Squads with room* and *Players without squad*. Filter by role, class, level, shared hours, goal and online. Each suggestion says why it fits. Whoever has the addon but has not filled in a profile (a main role and at least one goal) comes last as "No profile yet": you can invite them, and to join they will have to fill it in. With a role, goal or hours filter they are hidden.
 
 **My profile.** Your data and **My achievements** (grid with date or progress). A badge granted by the GM shows *Granted by the GM: reason* in its tooltip; an achievement the GM disabled stays at the end under *Legacy* if you had already earned it. While your profile has never been saved, or has no role or no main goal, the tab shows a **"!"** marker; it goes away once complete. If you leave with unsaved changes, it warns you with three choices: **Save and exit** (saves, then switches tab; if the save is refused, you stay), **Discard** or **Keep editing**.
 
@@ -83,7 +83,7 @@ Guide for guild masters, officers and raid leaders: [GM-GUIDE.md](GM-GUIDE.md).
 
 **My boss did not score.** Was another squad member with the addon in the group? Did you already kill it today? Is the competition on and the category weight above 0? The addon sends nothing during combat: it sends after the encounter.
 
-**I can't join the squad.** The captain has to accept you **and** your profile has to point to that squad. A character can be in one squad only.
+**I can't join the squad.** The captain has to accept you **and** your profile has to point to that squad. A character can be in one squad only. Since 2.0.1 a filled profile is needed too: without one, accepting opens My profile and you join when you save it.
 
 **The button is grey.** Hover it: the tooltip says why (you are not the captain, the squad is full, select a card first...).
 
