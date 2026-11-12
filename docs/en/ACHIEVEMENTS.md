@@ -22,7 +22,7 @@ Everything is counted **inside the guild**. Sizes: **Top 100** for the general l
 | `lvl.class.<CLASS>.<H>` | First of each **class** to reach level H | Top 10 | 9 classes × 6 milestones |
 | `lvl.race.<RACE>.<H>` | First of each **race** to reach level H | Top 10 | Forever races × 6 milestones |
 
-- Classes and races come from `UnitClass`/`UnitRace` and from the guild roster (`classFile`); a race that is not in the known list needs at least 2 distinct reporters before its race opens.
+- Classes come from `UnitClass` and from the guild roster (`classFile`). The race comes only from `UnitRace` of the player himself: the guild roster has no race, so a member without the addon is in the level and class races but never in a race race. A race of the client's own race table (`C_CreatureInfo.GetRaceInfo`, e.g. Skyborne) opens with the player's own report like the known list (2.0.1); any other token needs at least 2 distinct reporters. The Race filter lists the races found in the members' profiles before anyone reaches a level.
 - **Detection:** the player's own client (`PLAYER_LEVEL_UP`) **and** any member with the addon who sees a guildmate level up in the guild roster (`GUILD_ROSTER_UPDATE`). That way characters **without the addon count too**, timestamped when the change was seen.
 - **Which time counts:** *exact* when the player reports it and the roster confirms it; *approx.* when ≥ 2 roster observers see it within 10 minutes (or one GM/officer does). Exact tie: alphabetical order of the full name.
 - **Not retroactive:** only what happens while at least one guild member runs the addon counts.

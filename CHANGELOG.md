@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.1 — 2026-11-10 — «Sin perfil todavía» en el Buscador / «No profile yet» in the Finder
+## 2.0.1 — sin publicar — «Sin perfil todavía» en el Buscador y carreras por raza / «No profile yet» in the Finder and race races
 
 ### ES
 
@@ -8,6 +8,10 @@
 - Salen al final de la lista, después de los perfiles sin verificar, sin iconos de rol, sin objetivos y sin la puntuación de encaje. Con un filtro de rol, de objetivo o de horario no salen (no se sabe si encajan). Los filtros de clase, nivel y conectado sí se les aplican, porque esos datos vienen de la lista de la guild.
 - Solo cuenta lo que ha firmado el propio miembro y está verificado. Un perfil o una presencia que llega sin firma verificada, de alguien que no está en la guild o con el nombre mal escrito no saca a nadie.
 - **Puedes invitarles a tu squad** como a cualquiera (clic derecho o «Invitar al squad»). **Para unirse hace falta un perfil rellenado:** al pulsar Aceptar, o al pedir unirse a un squad, sin rol o sin objetivos no se envía nada y se abre Mi perfil con el aviso «Rellena tu rol principal y al menos un objetivo y pulsa «Guardar perfil» para unirte a «X»». Al guardar un perfil rellenado, ese mismo guardado te une al squad. Lo comprueba tu cliente antes de firmar: nada que llegue de la guild puede unirte a un squad.
+- **Arreglado: las carreras por raza de Skyborne.** La raza nueva de WoW Forever no estaba en la lista de razas del addon, así que su Top 10 no se abría hasta que un segundo Skyborne llegaba al mismo nivel. Ahora vale cualquier raza que el propio cliente conoce (`C_CreatureInfo.GetRaceInfo`) y sale con el nombre que le da el cliente.
+- **El filtro «Raza» del Salón de la fama ya no sale vacío:** lista las carreras de las razas de los perfiles de la guild (10 a 60), como «Clase», aunque nadie haya llegado aún a un nivel.
+- Al crear un logro de nivel, el GM ve primero las razas de su guild (Skyborne incluida).
+- Límite que sigue: un miembro sin el addon no entra en las carreras de raza (la lista de la guild no trae la raza). Sí en las de nivel y clase.
 - Sin cambios en el protocolo (sigue el 3): la 2.0.0 y la 2.0.1 se sincronizan entre ellas. Quien sigue en la 2.0.0 ve a esos miembros como «Daño» y puede aceptar sin perfil.
 - **Límites conocidos:**
   - Si alguien no quiere marcar ningún objetivo, sale como «Sin perfil todavía» y no puede unirse a un squad hasta marcar uno.
@@ -20,6 +24,10 @@
 - They come at the end of the list, after the unverified profiles, without role icons, goals or the fit score. With a role, goal or time filter on they are hidden (nobody knows whether they fit). The class, level and online filters do apply, because that data comes from the guild roster.
 - Only what the member signed and is verified counts. A profile or a presence that arrives without a verified signature, from someone outside the guild or with a misspelled name lists nobody.
 - **You can invite them to your squad** like anyone else (right click or "Invite to squad"). **Joining needs a filled profile:** pressing Accept, or asking to join a squad, without a role or goals sends nothing and opens My profile with the notice "Fill in your main role and at least one goal and press "Save profile" to join «X»". Saving a filled profile joins the squad in that same save. Your client checks it before signing: nothing that arrives from the guild can make you join a squad.
+- **Fixed: Skyborne race races.** WoW Forever's new race was not in the addon's race list, so its Top 10 did not open until a second Skyborne reached the same level. Any race the client itself knows (`C_CreatureInfo.GetRaceInfo`) now counts, shown with the client's name.
+- **The Hall of Fame "Race" filter is no longer empty:** it lists the races of the guild's profiles (10 to 60), like "Class", before anyone reaches a level.
+- When creating a level achievement, the GM sees the guild's races first (Skyborne included).
+- Known limit: a member without the addon is not in the race races (the guild roster has no race). He is in the level and class races.
 - No protocol change (still 3): 2.0.0 and 2.0.1 sync with each other. Whoever stays on 2.0.0 sees those members as "Damage" and can accept without a profile.
 - **Known limits:**
   - Someone who does not want to pick any goal shows as "No profile yet" and cannot join a squad until they pick one.

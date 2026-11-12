@@ -107,7 +107,15 @@ local function paramItems(spec, nextStep)
     local classes = {}
     for _, r in pairs(ns.rosterList and ns.rosterList() or {}) do if type(r.class) == "string" then classes[r.class] = true end end
     for _, c in ipairs(sortedKeys(classes)) do add(L.CAT_P_CLASS:format(UI.ClassName and UI.ClassName(c) or c), "class:" .. c) end
-    for _, rc in ipairs(sortedKeys(R.RACE_OK)) do
+    -- 2.0.1: the guild's own races first (Skyborne has no entry in R.RACE_OK), then the known list
+    local h, rlist, rseen = ns.HallGlue, {}, {}
+    local ok2 = h and h.RaceTable and (h.RaceTable()) or {}
+    for _, rc in ipairs(h and h.RacesSeen and h.RacesSeen() or {}) do
+      local ru = R.slug(rc):upper()
+      if (R.RACE_OK[ru] or ok2[ru]) and not rseen[ru] then rseen[ru] = true; rlist[#rlist + 1] = ru end
+    end
+    for _, ru in ipairs(sortedKeys(R.RACE_OK)) do if not rseen[ru] then rseen[ru] = true; rlist[#rlist + 1] = ru end end
+    for _, rc in ipairs(rlist) do
       if #items < 30 then add(L.CAT_P_RACE:format(UI.RaceName(rc)), "race:" .. rc) end
     end
   elseif spec.metric == "boss" then

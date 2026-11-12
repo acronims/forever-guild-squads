@@ -54,6 +54,29 @@ local function classesSeen()
   table.sort(out)
   return out
 end
+-- 2.0.1: races of the guild = the race token in the members' own profiles (the roster has no race)
+local function racesSeen()
+  local seen, out = {}, {}
+  local profiles = ns.state and ns.state.profiles or {}
+  for name in pairs(ns.rosterList and ns.rosterList() or {}) do
+    local p = profiles[name]
+    local rc = p and type(p.d) == "table" and p.d.race
+    if type(rc) == "string" and rc ~= "" and not seen[rc] then seen[rc] = true; out[#out + 1] = rc end
+  end
+  table.sort(out)
+  return out
+end
+-- the client's race table (C_CreatureInfo.GetRaceInfo): read once, kept when it gave rows
+local raceOk, raceNames
+function H.RaceTable()
+  if not raceOk or not next(raceOk) then
+    local get = C_CreatureInfo and C_CreatureInfo.GetRaceInfo
+    raceOk, raceNames = R.knownRaces(get), R.raceLabels(get)
+  end
+  return raceOk, raceNames
+end
+H.RacesSeen = racesSeen
+function H.RaceLabel(token) local _, names = H.RaceTable(); return names[tostring(token or ""):upper()] end
 function H.SeasonId()
   local cfg = Pr.seasonCfg(settings())
   return tostring(#(cfg.past or {}) + 1)
@@ -88,7 +111,7 @@ function H.Ctx()
            trusted = function(n) return P.isOfficer(ns.roster, n, settings()) end,
            inGuild = function(n) return ns.roster(n) ~= nil end,
            squads = squadsMap, annul = R.annulMap(ns.state.annuls), nodata = H.NoData(), season = H.SeasonId(),
-           classes = classesSeen(), syncing = ns.Sync and ns.Sync.Syncing and ns.Sync.Syncing() or false }
+           classes = classesSeen(), races = racesSeen(), raceOk = (H.RaceTable()), syncing = ns.Sync and ns.Sync.Syncing and ns.Sync.Syncing() or false }
 end
 
 local function markDirty() dirty = true; if ns.UI and ns.UI.Dirty then ns.UI.Dirty() end end

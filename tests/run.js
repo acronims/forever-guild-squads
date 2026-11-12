@@ -50,6 +50,7 @@ const ORDER = [
   'counters_spec.lua',
   'observations_spec.lua',
   'races_spec.lua',
+  'race_races_spec.lua',
   'sync_spec.lua',
   'peers_spec.lua',
   'robustness_spec.lua',

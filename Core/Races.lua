@@ -95,6 +95,31 @@ local function slug(s)
   return s ~= "" and s or "?"
 end
 R.slug = slug
+
+-- 2.0.1: the races of THIS client (C_CreatureInfo.GetRaceInfo, ids 1..R.RACE_ID_MAX, with gaps). WoW Forever adds
+-- races whose token is not in R.RACE_OK (Skyborne, two variants); a race token the client itself knows is real, so its
+-- race opens with the player's own report like a whitelisted one. get = the API (nil / erroring -> empty set).
+R.RACE_ID_MAX = 200
+local function raceRows(get, fn)
+  if type(get) ~= "function" then return end
+  for id = 1, R.RACE_ID_MAX do
+    local okI, info = pcall(get, id)
+    if okI and type(info) == "table" and type(info.clientFileString) == "string" and info.clientFileString ~= "" then
+      fn(slug(info.clientFileString):upper(), info)
+    end
+  end
+end
+function R.knownRaces(get)
+  local out = {}
+  raceRows(get, function(tok) out[tok] = true end)
+  return out
+end
+function R.raceLabels(get)
+  local out = {}
+  raceRows(get, function(tok, info) if type(info.raceName) == "string" and info.raceName ~= "" then out[tok] = info.raceName end end)
+  return out
+end
+local function raceWhite(ru, ctx) return R.RACE_OK[ru] or (ctx.raceOk and ctx.raceOk[ru]) or false end
 local function isInt(v) return type(v) == "number" and v == floor(v) end
 
 function R.sanitize(ev)
@@ -584,7 +609,8 @@ end
 -- compute
 -- ctx = { now, isFinal(instKey, bossSlug, bossName) -> bool, bossesOf(instKey) -> {slugs}, trusted(name) -> bool,
 --         inGuild(name) -> bool, squads() -> { sid = {titulares} }, annul = { [race] = { [key] = {reason,by,ts} } },
---         nodata = { prof = true, rep = true }, season = "1", classes = {CLASS...} }
+--         nodata = { prof = true, rep = true }, season = "1", classes = {CLASS...},
+--         races = {raceFile...} (2.0.1, listed rows), raceOk = { [RACE] = true } (2.0.1, R.knownRaces of the client) }
 local function instOf(ev)
   local e = Content and Content.match(ev.inst, ev.it, ev.iid)
   local kind = (ev.it == "raid" or (e and e.kind == "raid")) and "raid" or "dungeon"
@@ -688,7 +714,7 @@ function R.compute(store, ctx)
         for _, ev in ipairs(l) do if ev.race and rc and slug(ev.race):upper() == slug(rc):upper() then reps[ev.by] = true end end
         local cu, ru = cls and slug(cls):upper(), rc and slug(rc):upper()
         if cu and R.CLASS_OK[cu] then cand("lvl.class." .. cu .. "." .. lv, c()) end
-        if ru then dyn("lvl.race." .. ru .. "." .. lv, c(), reps, R.RACE_OK[ru]) end
+        if ru then dyn("lvl.race." .. ru .. "." .. lv, c(), reps, raceWhite(ru, ctx)) end
       end
       for _, cu in ipairs(cus.level[lv] or {}) do   -- custom level races (same witness rule)
         if Cat.levelMatch(cu, cls, rc) then cand(cu.id, c()) end
@@ -697,6 +723,12 @@ function R.compute(store, ctx)
   end
   for _, h in ipairs(R.LEVELS) do race("lvl.all." .. h) end
   for _, cls in ipairs(ctx.classes or {}) do for _, h in ipairs(R.LEVELS) do race("lvl.class." .. cls .. "." .. h) end end
+  -- 2.0.1: like the classes, the races of the guild (members' profiles) are listed before anyone reaches a level;
+  -- only real races (whitelist or this client's race table)
+  for _, rc in ipairs(ctx.races or {}) do
+    local ru = type(rc) == "string" and slug(rc):upper()
+    if ru and raceWhite(ru, ctx) then for _, h in ipairs(R.LEVELS) do race("lvl.race." .. ru .. "." .. h) end end
+  end
 
   -- PvE kills
   local valid, pending = witnessed(byType.kill, now)
