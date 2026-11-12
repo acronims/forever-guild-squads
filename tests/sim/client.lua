@@ -88,7 +88,12 @@ function SIM_squadAction(r1, r2)
     local p = ns.state.profiles[me]
     if p and p.d.squad and p.d.squad ~= "" and ns.state.squads[p.d.squad] and r1 < 0.7 then return "waiting" end
     local ids = liveSquads()
-    if #ids > 0 then local id = ids[1 + math.floor(r2 * #ids)]; A.RequestJoin(id); return "request " .. id end
+    -- 2.0.1: joining needs a filled profile (SPEC-v2.0.1-sin-perfil); a player who asks fills it first, once
+    if #ids > 0 then
+      local id = ids[1 + math.floor(r2 * #ids)]
+      if A.ProfileIncomplete() then A.SaveProfile({ role = "DAMAGER", goals = { "dungeons" } }) end
+      A.RequestJoin(id); return "request " .. id
+    end
     return "none"
   end
 end

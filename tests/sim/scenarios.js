@@ -163,7 +163,11 @@ function twoSquads(sim, cs, a, b) {
   sim.run(20);
   const sidA = cs[a[0]].val('A.MySquadId()')[0], sidB = cs[b[0]].val('A.MySquadId()')[0];
   for (const [sid, list] of [[sidA, a], [sidB, b]]) {
-    for (const i of list.slice(1)) { cs[i].run(`return A.RequestJoin(${luaStr(sid)})`); sim.run(1); }
+    // 2.0.1: joining needs a filled profile (SPEC-v2.0.1-sin-perfil): each member fills it first
+    for (const i of list.slice(1)) {
+      cs[i].run('if A.ProfileIncomplete() then A.SaveProfile({ role = "DAMAGER", goals = { "dungeons" } }) end');
+      cs[i].run(`return A.RequestJoin(${luaStr(sid)})`); sim.run(1);
+    }
   }
   sim.run(20);
   for (const [sid, list] of [[sidA, a], [sidB, b]]) {

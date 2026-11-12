@@ -149,3 +149,7 @@ captura).
   a pulsar Aceptar.
 - Sin medir en el juego: el ancho del texto «(Sin perfil todavía)» junto a un nombre largo (se corta a la vista
   como el resto, `oneLine`).
+- Cambio de comportamiento a propósito que toca al simulador: en S1, S3, S4 y S5 los clientes pedían unirse con el perfil
+  automático. Con la puerta se les rechazaba y los squads no se llenaban (CI rojo en 144ae68, grupo S1 S3 S4 S5). Ahora
+  rellenan el perfil antes de pedir (`tests/sim/client.lua` `SIM_squadAction` y `twoSquads` de `scenarios.js`), como
+  haría un jugador.
