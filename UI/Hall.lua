@@ -27,7 +27,10 @@ end
 UI.ClassName = className
 local function raceName(token)
   token = tostring(token or "")
-  return rawget(L, "RACE_" .. token:upper()) or (token:sub(1, 1) .. token:sub(2):lower())
+  -- 2.0.2: a race without a locale string (Skyborne) takes the client's own name (C_CreatureInfo.GetRaceInfo)
+  local h = H()
+  local client = h and h.RaceLabel and h.RaceLabel(token)
+  return rawget(L, "RACE_" .. token:upper()) or client or (token:sub(1, 1) .. token:sub(2):lower())
 end
 UI.RaceName = raceName
 local function instName(key)

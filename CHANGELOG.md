@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.2 — sin publicar — Carreras por raza / Race races
+
+### ES
+
+- **Arreglado: las carreras por raza de Skyborne.** La raza nueva de WoW Forever no estaba en la lista de razas del addon, así que su Top 10 no se abría hasta que un segundo Skyborne llegaba al mismo nivel. Ahora vale cualquier raza que el propio cliente conoce (`C_CreatureInfo.GetRaceInfo`) y sale con el nombre que le da el cliente.
+- **El filtro «Raza» del Salón de la fama ya no sale vacío:** lista las carreras de las razas de los perfiles de la guild (10 a 60), como «Clase», aunque nadie haya llegado aún a un nivel.
+- Al crear un logro de nivel, el GM ve primero las razas de su guild (Skyborne incluida).
+- Límite que sigue: un miembro sin el addon no entra en las carreras de raza (la lista de la guild no trae la raza). Sí en las de nivel y clase.
+
+### EN
+
+- **Fixed: Skyborne race races.** WoW Forever's new race was not in the addon's race list, so its Top 10 did not open until a second Skyborne reached the same level. Any race the client itself knows (`C_CreatureInfo.GetRaceInfo`) now counts, shown with the client's name.
+- **The Hall of Fame "Race" filter is no longer empty:** it lists the races of the guild's profiles (10 to 60), like "Class", before anyone reaches a level.
+- When creating a level achievement, the GM sees the guild's races first (Skyborne included).
+- Known limit: a member without the addon is not in the race races (the guild roster has no race). He is in the level and class races.
+
 ## 2.0.0 — 2026-11-09 — Cada personaje es «Nombre Apellido» / Every character is «Name Surname»
 
 ### ES

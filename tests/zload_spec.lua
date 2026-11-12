@@ -642,6 +642,23 @@ test("smoke: hall of fame, detection, annulment, export, celebrations, settings,
   local mine
   for _, ev in pairs(H.Store().obs) do if ev.t == "lv" and ev.who == "Ann-Realm" and ev.lv == 30 then mine = ev end end
   ok(mine and mine.src == "self" and mine.cls == "WARRIOR" and mine.race == "Human", "self level report")
+  -- 2.0.2 race races: the guild's races are listed (Ann's own profile says Human); a race of the client's race table
+  -- (Skyborne: token not in R.RACE_OK) opens with Ann's report + one roster witness, named as the client names it
+  ok(H.Race("lvl.race.HUMAN.60"), "Raza filter: Human rows listed from the profiles")
+  local oldRace, oldCI = UnitRace, C_CreatureInfo
+  C_CreatureInfo = { GetRaceInfo = function(id)
+    if id == 1 then return { raceName = "Human", clientFileString = "Human", raceID = 1 } end
+    if id == 91 then return { raceName = "Skyborne (High Order)", clientFileString = "SkyborneHighOrder", raceID = 91 } end
+  end }
+  UnitRace = function() return "Skyborne", "SkyborneHighOrder", 91 end
+  H.OnLevelUp(40)
+  local sky
+  for _, ev in pairs(H.Store().obs) do if ev.t == "lv" and ev.who == "Ann-Realm" and ev.lv == 40 then sky = ev end end
+  ns.HallGlue.OnObs({ o = { { t = "lv", who = "Ann-Realm", by = "Bob-Realm", ts = sky.ts + 30, src = "roster", lv = 40 } } }, "Bob-Realm", false)
+  local skyR = H.Race("lvl.race.SKYBORNEHIGHORDER.40")
+  ok(skyR and skyR.entries[1] and skyR.entries[1].key == "Ann-Realm", "Skyborne race opens with one reporter")
+  eq(ns.UI.RaceTitle("lvl.race.SKYBORNEHIGHORDER.40"):find("Skyborne (High Order)", 1, true) ~= nil, true, "client race name")
+  UnitRace, C_CreatureInfo = oldRace, oldCI
   -- kills captured by the ranking smoke taught the catalog
   ok(#ns.Content.bossList() >= 1, "boss catalog learned from ENCOUNTER_END")
   -- open the tab: every filter, a detail
