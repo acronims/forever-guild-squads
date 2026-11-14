@@ -64,3 +64,29 @@ test("race races: the Raza filter lists the open races of the guild's races befo
   local list = R.list(races, "race")
   ok(#list >= 12, "Raza filter not empty: " .. #list)
 end)
+
+-- review 2.0.1 H3/H5: the race table must not depend on Skyborne's id, and two rows with one name stay apart
+test("race races: ids over 200 are read (the scan goes on while rows keep coming), and it always ends", function()
+  local info = { [1] = { raceName = "Humano", clientFileString = "Human" },
+                 [201] = { raceName = "Skyborne", clientFileString = "Skyborne" },
+                 [290] = { raceName = "Skyborne", clientFileString = "SkyborneB" } }
+  local k = R.knownRaces(function(id) return info[id] end)
+  ok(k.HUMAN and k.SKYBORNE and k.SKYBORNEB, "ids 201 and 290 read")
+  local s = store({ lv("Sky-R", "Sky-R", T0, 10, "self", "MAGE", "Skyborne"), lv("Sky-R", "Bob-R", T0 + 5, 10, "roster") })
+  ok(R.compute(s, { now = T0 + 99, raceOk = k })["lvl.race.SKYBORNE.10"], "Skyborne at id 201 opens")
+  local calls = 0
+  R.knownRaces(function() calls = calls + 1; return { clientFileString = "Same" } end)
+  ok(calls <= R.RACE_ID_MAX, "an API that answers every id stops at the cap: " .. calls)
+  calls = 0
+  R.knownRaces(function() calls = calls + 1 end)
+  ok(calls <= 400, "an empty table is not scanned to the cap: " .. calls)
+end)
+
+test("race races: two tokens with the same client name get two different labels", function()
+  local info = { [91] = { raceName = "Skyborne", clientFileString = "SkyborneA" }, [92] = { raceName = "Skyborne", clientFileString = "SkyborneB" },
+                 [1] = { raceName = "Humano", clientFileString = "Human" } }
+  local lab = R.raceLabels(function(id) return info[id] end)
+  ok(lab.SKYBORNEA and lab.SKYBORNEB and lab.SKYBORNEA ~= lab.SKYBORNEB, "distinct: " .. tostring(lab.SKYBORNEA) .. " / " .. tostring(lab.SKYBORNEB))
+  ok(lab.SKYBORNEA:find("Skyborne", 1, true) == 1, "still starts with the client's name")
+  eq(lab.HUMAN, "Humano", "a unique name is left alone")
+end)
