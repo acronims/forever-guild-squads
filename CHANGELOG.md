@@ -11,10 +11,12 @@
 - **Arreglado: las carreras por raza de Skyborne.** La raza nueva de WoW Forever no estaba en la lista de razas del addon, así que su Top 10 no se abría hasta que un segundo Skyborne llegaba al mismo nivel. Ahora vale cualquier raza que el propio cliente conoce (`C_CreatureInfo.GetRaceInfo`) y sale con el nombre que le da el cliente.
 - **El filtro «Raza» del Salón de la fama ya no sale vacío:** lista las carreras de las razas de los perfiles de la guild (10 a 60), como «Clase», aunque nadie haya llegado aún a un nivel.
 - Al crear un logro de nivel, el GM ve primero las razas de su guild (Skyborne incluida).
+- La unión pendiente se olvida si mientras tanto creas o entras en un squad, si el squad deja de invitarte y no está abierto, o si rechazas la invitación. Bajo el aviso de Mi perfil hay un enlace «Cancelar».
+- La raza propia siempre cuenta para su carrera, aunque el cliente no la liste, y `/gsq diag` dice cuántas razas dio el cliente y si la tuya está.
 - Límite que sigue: un miembro sin el addon no entra en las carreras de raza (la lista de la guild no trae la raza). Sí en las de nivel y clase.
 - Sin cambios en el protocolo (sigue el 3): la 2.0.0 y la 2.0.1 se sincronizan entre ellas. Quien sigue en la 2.0.0 ve a esos miembros como «Daño» y puede aceptar sin perfil.
 - **Límites conocidos:**
-  - Si alguien no quiere marcar ningún objetivo, sale como «Sin perfil todavía» y no puede unirse a un squad hasta marcar uno.
+  - Si alguien no marca ningún objetivo, no puede unirse a un squad hasta marcar uno. En el Buscador solo sale como «Sin perfil todavía» quien no ha tocado nada (el perfil automático); si eligió rol u horario sale con su rol.
   - El aviso de unirte se recuerda solo hasta salir del juego o hacer `/reload`. La invitación sigue en Mi squad y basta con volver a pulsar Aceptar.
   - Sin probar en el juego: cómo se ve «(Sin perfil todavía)» junto a un nombre largo. Se corta a la vista, como el resto de nombres.
 
@@ -27,10 +29,12 @@
 - **Fixed: Skyborne race races.** WoW Forever's new race was not in the addon's race list, so its Top 10 did not open until a second Skyborne reached the same level. Any race the client itself knows (`C_CreatureInfo.GetRaceInfo`) now counts, shown with the client's name.
 - **The Hall of Fame "Race" filter is no longer empty:** it lists the races of the guild's profiles (10 to 60), like "Class", before anyone reaches a level.
 - When creating a level achievement, the GM sees the guild's races first (Skyborne included).
+- The waiting join is forgotten if meanwhile you create or join a squad, if the squad no longer invites you and is not open, or if you decline the invitation. Under the notice on My profile there is a "Cancel" link.
+- Your own race always counts for its race, even if the client does not list it, and `/gsq diag` says how many races the client gave and whether yours is there.
 - Known limit: a member without the addon is not in the race races (the guild roster has no race). He is in the level and class races.
 - No protocol change (still 3): 2.0.0 and 2.0.1 sync with each other. Whoever stays on 2.0.0 sees those members as "Damage" and can accept without a profile.
 - **Known limits:**
-  - Someone who does not want to pick any goal shows as "No profile yet" and cannot join a squad until they pick one.
+  - Someone who picks no goal cannot join a squad until they pick one. The Finder shows "No profile yet" only for whoever changed nothing (the automatic profile); with a role or a schedule chosen they show with their role.
   - The join notice is remembered only until you log out or `/reload`. The invitation stays in My squad: press Accept again.
   - Not tried in the game: how "(No profile yet)" looks next to a long name. It is cut on screen, like every other name.
 
