@@ -592,3 +592,17 @@ test("2.0.1 review H6: a member who chose a role and a schedule but no goal show
   ok(names(fd):find("Dan Ash*", 1, true), "automatic profile: " .. names(fd))
   ok(not ns.Model.profileComplete({ role = "TANK", role2 = "HEALER", avail = "11111111", goals = {} }), "the join gate is unchanged: still incomplete")
 end)
+
+test("2.0.1 review H8: opening Mi perfil for a waiting join asks the current tab once (one unsaved-changes prompt)", function()
+  local ns = boot201({ roster = roster201() })
+  local sid = invitedBy(ns, true)
+  ns.state.squads[sid].d.members = { "Kas Mora" }
+  ns.UI.Open("squads"); ns.UI.Select("squads")
+  rawset(ns.UI.Window(), "IsShown", function() return true end)   -- the window is open (the stub says hidden)
+  local p = ns.UI.panels.squads
+  local old, calls = p.opts.beforeLeave, 0
+  p.opts.beforeLeave = function() calls = calls + 1; return true end   -- «unsaved changes»: the prompt holds the tab
+  eq(select(2, ns.Actions.RequestJoin(sid)), "profileIncomplete")
+  eq(calls, 1, "one prompt, not two")
+  p.opts.beforeLeave = old
+end)
