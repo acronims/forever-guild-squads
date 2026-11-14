@@ -96,15 +96,20 @@ local function slug(s)
 end
 R.slug = slug
 
--- 2.0.1: the races of THIS client (C_CreatureInfo.GetRaceInfo, ids 1..R.RACE_ID_MAX, with gaps). WoW Forever adds
--- races whose token is not in R.RACE_OK (Skyborne, two variants); a race token the client itself knows is real, so its
--- race opens with the player's own report like a whitelisted one. get = the API (nil / erroring -> empty set).
-R.RACE_ID_MAX = 200
+-- 2.0.1: the races of THIS client (C_CreatureInfo.GetRaceInfo, ids from 1, with gaps). WoW Forever adds races whose
+-- token is not in R.RACE_OK (Skyborne, two variants); a race token the client itself knows is real, so its race opens
+-- with the player's own report like a whitelisted one. get = the API (nil / erroring -> empty set).
+-- Review H3: the id of Skyborne is unknown, so the scan does not stop at a fixed id: it reads at least
+-- R.RACE_ID_SCAN ids and goes on while a row came in the last R.RACE_ID_GAP ids, up to R.RACE_ID_MAX (always ends).
+R.RACE_ID_SCAN, R.RACE_ID_GAP, R.RACE_ID_MAX = 1000, 200, 5000
 local function raceRows(get, fn)
   if type(get) ~= "function" then return end
+  local last = 0
   for id = 1, R.RACE_ID_MAX do
+    if id > R.RACE_ID_SCAN and id - last > R.RACE_ID_GAP then break end
     local okI, info = pcall(get, id)
     if okI and type(info) == "table" and type(info.clientFileString) == "string" and info.clientFileString ~= "" then
+      last = id
       fn(slug(info.clientFileString):upper(), info)
     end
   end
@@ -114,9 +119,19 @@ function R.knownRaces(get)
   raceRows(get, function(tok) out[tok] = true end)
   return out
 end
+-- review H5: two tokens with the same client name (two Skyborne variants) get the token after the name, so the
+-- Salón and the GM's list never show two identical rows
 function R.raceLabels(get)
-  local out = {}
-  raceRows(get, function(tok, info) if type(info.raceName) == "string" and info.raceName ~= "" then out[tok] = info.raceName end end)
+  local out, file, uses = {}, {}, {}
+  raceRows(get, function(tok, info)
+    if type(info.raceName) == "string" and info.raceName ~= "" and not out[tok] then
+      out[tok], file[tok] = info.raceName, info.clientFileString
+      uses[info.raceName] = (uses[info.raceName] or 0) + 1
+    end
+  end)
+  for tok, name in pairs(out) do
+    if uses[name] > 1 then out[tok] = name .. " (" .. file[tok] .. ")" end
+  end
   return out
 end
 local function raceWhite(ru, ctx) return R.RACE_OK[ru] or (ctx.raceOk and ctx.raceOk[ru]) or false end

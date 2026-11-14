@@ -554,16 +554,18 @@ test("2.0.1 H2: declining the invitation, or «Cancel» next to the gold hint, f
 end)
 
 test("2.0.1 review H3: my own race (UnitRace) is in the race table even when the client's table has no rows; /gsq diag says so", function()
-  local ns, env = boot201({ roster = roster201() })
+  local ns, env, rec = boot201({ roster = roster201() })
   local H = ns.HallGlue
   env.C_CreatureInfo = nil
   ok((H.RaceTable()).ORC, "my race (Orc) known without the API")
   env.UnitRace = function() return "Skyborne", "Skyborne" end
+  rec.advance(11)   -- an empty table is read again after 10 s
   ok((H.RaceTable()).SKYBORNE, "a Skyborne player's own token is known")
   eq(H.RaceLabel("Skyborne"), "Skyborne", "and labelled with UnitRace's name")
   local dbg = H.Debug()
   ok(dbg:find("raceTable=0", 1, true) and dbg:find("myRace=SKYBORNE:no", 1, true), "diag: " .. dbg)
   env.C_CreatureInfo = { GetRaceInfo = function(id) if id == 230 then return { raceName = "Skyborne", clientFileString = "Skyborne" } end end }
+  rec.advance(11)
   ok((H.RaceTable()).SKYBORNE)
   dbg = H.Debug()
   ok(dbg:find("raceTable=1", 1, true) and dbg:find("myRace=SKYBORNE:yes", 1, true), "diag with the API: " .. dbg)

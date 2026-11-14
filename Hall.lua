@@ -66,15 +66,31 @@ local function racesSeen()
   table.sort(out)
   return out
 end
--- the client's race table (C_CreatureInfo.GetRaceInfo): read once, kept when it gave rows
-local raceOk, raceNames
+-- the client's race table (C_CreatureInfo.GetRaceInfo): read once, kept when it gave rows (read again while it gave
+-- none). Review H3: my own race (UnitRace) is always in it, whatever the table says: a Skyborne's own report opens
+-- its race on its own client even if the API misses the row. /gsq diag shows the rows and whether mine is there.
+local raceOk, raceNames, raceRowsN, myRace, raceReadAt, raceGet
 function H.RaceTable()
-  if not raceOk or not next(raceOk) then
-    local get = C_CreatureInfo and C_CreatureInfo.GetRaceInfo
+  local t = GetTime and GetTime() or 0
+  local get = C_CreatureInfo and C_CreatureInfo.GetRaceInfo
+  -- an empty table is read again when the API appears, else at most every 10 s (a scan is up to R.RACE_ID_SCAN calls)
+  if not raceRowsN or (raceRowsN == 0 and (get ~= raceGet or t - (raceReadAt or 0) >= 10 or t < (raceReadAt or 0))) then
+    raceReadAt, raceGet = t, get
     raceOk, raceNames = R.knownRaces(get), R.raceLabels(get)
+    raceRowsN = 0
+    for _ in pairs(raceOk) do raceRowsN = raceRowsN + 1 end
+    myRace = nil
+    local okU, name, tok = pcall(function() return UnitRace("player") end)
+    if okU and type(tok) == "string" and tok ~= "" then
+      local ru = R.slug(tok):upper()
+      myRace = ru .. ":" .. (raceOk[ru] and "yes" or "no")
+      raceOk[ru] = true
+      if type(name) == "string" and name ~= "" and not raceNames[ru] then raceNames[ru] = name end
+    end
   end
   return raceOk, raceNames
 end
+local function raceDebug() H.RaceTable(); return ("raceTable=%d myRace=%s"):format(raceRowsN or 0, tostring(myRace or "?")) end
 H.RacesSeen = racesSeen
 function H.RaceLabel(token) local _, names = H.RaceTable(); return names[tostring(token or ""):upper()] end
 function H.SeasonId()
@@ -887,8 +903,8 @@ function H.Debug()
   for _ in pairs(store.obs) do n = n + 1 end
   local c = 0
   for _ in pairs(store.closed) do c = c + 1 end
-  return ("hall obs=%d closed=%d chatErr=%s pvpRank=%s"):format(n, c, tostring(H.chatError),
-    H.PvPRankSupported() and "ok" or "unsupported")
+  return ("hall obs=%d closed=%d chatErr=%s pvpRank=%s %s"):format(n, c, tostring(H.chatError),
+    H.PvPRankSupported() and "ok" or "unsupported", raceDebug())
 end
 
 -------------------------------------------------------------------------------

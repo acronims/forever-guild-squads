@@ -79,7 +79,7 @@ test("race races: ids over 200 are read (the scan goes on while rows keep coming
   ok(calls <= R.RACE_ID_MAX, "an API that answers every id stops at the cap: " .. calls)
   calls = 0
   R.knownRaces(function() calls = calls + 1 end)
-  ok(calls <= 400, "an empty table is not scanned to the cap: " .. calls)
+  ok(calls <= R.RACE_ID_SCAN, "an empty table is not scanned to the cap: " .. calls)
 end)
 
 test("race races: two tokens with the same client name get two different labels", function()
