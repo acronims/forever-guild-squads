@@ -153,3 +153,17 @@ captura).
   automático. Con la puerta se les rechazaba y los squads no se llenaban (CI rojo en 144ae68, grupo S1 S3 S4 S5). Ahora
   rellenan el perfil antes de pedir (`tests/sim/client.lua` `SIM_squadAction` y `twoSquads` de `scenarios.js`), como
   haría un jugador.
+
+**Enmiendas tras la revisión a ciegas (14-nov-2026, `wt/agents/review-2.0.1.md`)**
+
+- §5, unión recordada (H1/H2): solo se completa si sigue siendo una unión que podría hacer ahora: **no tengo squad**
+  (creado o unido entre aceptar y guardar: el «ya tienes squad» de la 2.0.0), el squad existe, no está disuelto, no
+  soy su capitán, y me sigue listando sin que la haya rechazado **o** está abierto y no espera aprobación. Si no, se
+  olvida. Bajo el aviso dorado de Mi perfil hay un enlace «Cancelar» (`A.CancelJoinAfterProfile`).
+- §2/§3, quién es «sin perfil» en el Buscador (H6): solo el **perfil automático** (DAMAGER o sin rol, sin rol
+  secundario, sin horario y sin objetivos). Quien eligió rol u horario pero ningún objetivo sale como tarjeta normal
+  y lo ven los filtros de rol. La puerta de §5 no cambia: para unirse sigue haciendo falta un objetivo.
+- Razas (H3/H5, parte 2.0.2 de esta versión): la tabla de razas del cliente se lee sin tope fijo de id (al menos
+  1000 ids y sigue mientras salgan filas, máximo 5000); la raza propia de `UnitRace` siempre cuenta como conocida;
+  dos tokens con el mismo nombre del cliente se etiquetan «Nombre (token)»; `/gsq diag` muestra
+  `raceTable=N myRace=TOKEN:yes|no`.
