@@ -869,10 +869,16 @@ end, function(f, bar)
       if not profileFilter and X.passes(i, nf) then items[#items + 1] = { player = i, score = 0, reasons = {} } end
     end
     local function canon(name) return type(name) == "string" and ns.id(name) == name and ns.roster(name) ~= nil end
+    -- review H6: «No profile yet» is the automatic profile (DAMAGER or no role, nothing else chosen). A member who
+    -- chose a role or a schedule but no goal shows as a normal card (role filters see him); joining still asks for a goal
+    local function auto(d)
+      return type(d) ~= "table" or ((d.role == nil or d.role == "" or d.role == "DAMAGER") and not d.role2
+        and not (type(d.avail) == "string" and d.avail:find("1", 1, true)) and not (type(d.goals) == "table" and next(d.goals)))
+    end
     for name, p in pairs(ns.state.profiles) do
       local r = ns.roster(name)
       if r and name ~= ns.me() and not M.squadOf(ns.state, name) then
-        if not M.profileComplete(p.d) then
+        if not M.profileComplete(p.d) and auto(p.d) then
           if canon(name) then addNoProfile(name) end
         else
           total = total + 1
