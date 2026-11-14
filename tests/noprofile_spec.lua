@@ -465,3 +465,90 @@ test("2.0.1 AC12: protocol 3 and the record schemas of 2.0.0, unchanged", functi
   eq(shape(ns.P2P.SCHEMA_PRESENCE), "day=n,ver=s:16", "presence schema")
   ok(S ~= nil or true)
 end)
+
+-------------------------------------------------------------------------------
+-- 2.0.1 review (wt/agents/review-2.0.1.md H1/H2): the remembered join must still be a join I could make now
+local function fillAndSave(A) return A.SaveProfileDraft({ role = "TANK", goals = { "raid" }, avail = "00000000" }) end
+local function textSeen(rec, from, s) for k = from + 1, #rec.texts do if rec.texts[k]:find(s, 1, true) then return true end end return false end
+
+test("2.0.1 H1: a remembered join is dropped when I create my own squad; the later save keeps me in mine", function()
+  local ns, _, rec = boot201({ roster = roster201() })
+  local M, A, L = ns.Model, ns.Actions, ns.L
+  local sid = invitedBy(ns)
+  ns.UI.Open("mysquad")
+  eq(select(2, A.RequestJoin(sid)), "profileIncomplete")
+  eq(A.JoinAfterProfile(), sid, "remembered")
+  ok(A.CreateSquad({ name = "Mi Squad", icon = 1, color = 1, border = 1, motto = "", tags = {}, open = true }), "created")
+  local mine = A.MySquadId()
+  ok(mine and mine ~= sid, "captain of my own squad")
+  eq(A.JoinAfterProfile(), nil, "the waiting join is gone once I have a squad")
+  local n0 = #rec.texts
+  ok(fillAndSave(A), "profile saved")
+  eq(ns.state.profiles["Kas Pitas"].d.squad, mine, "my signed profile still points at my squad")
+  eq(ns.state.squads[mine].d.captain, "Kas Pitas")
+  eq(M.isMember(ns.state, sid, "Kas Pitas"), false, "not a member of Los Lobos")
+  eq(M.isMember(ns.state, mine, "Kas Pitas"), true, "member of mine")
+  ok(not textSeen(rec, n0, L.FB_JOINED:format("Los Lobos")), "no joined feedback")
+end)
+
+test("2.0.1 H2: an invitation withdrawn (closed squad) while waiting: the save signs no squad and says nothing", function()
+  local ns, _, rec = boot201({ roster = roster201() })
+  local M, A, L = ns.Model, ns.Actions, ns.L
+  local sid = invitedBy(ns, false)
+  ns.UI.Open("mysquad")
+  eq(select(2, A.RequestJoin(sid)), "profileIncomplete")
+  ns.state.squads[sid].d.members = { "Kas Mora" }   -- the captain took me off the list
+  eq(A.JoinAfterProfile(), nil, "no longer joinable")
+  local n0 = #rec.texts
+  ok(fillAndSave(A))
+  ok(ns.state.profiles["Kas Pitas"].d.squad ~= sid, "no squad in the save")
+  eq(#M.requests(ns.state, sid), 0, "no request to a closed squad")
+  ok(not textSeen(rec, n0, L.FB_REQ_SENT:format("Los Lobos")), "no «Request sent»")
+end)
+
+test("2.0.1 H2: a request waiting for the profile follows the squad: closed or unapproved drops it, open keeps it", function()
+  for _, case in ipairs({ { "closed", function(d) d.open = false end, false }, { "unapproved", function(d) d.approved = false end, false },
+                          { "disbanded", function(d) d.disbanded = true end, false }, { "still open", function() end, true } }) do
+    local ns = boot201({ roster = roster201() })
+    local M, A = ns.Model, ns.Actions
+    local sid = invitedBy(ns, true)
+    ns.state.squads[sid].d.members = { "Kas Mora" }   -- not invited: an open squad I ask to join
+    ns.UI.Open("squads")
+    eq(select(2, A.RequestJoin(sid)), "profileIncomplete", case[1])
+    case[2](ns.state.squads[sid].d)
+    eq(A.JoinAfterProfile(), case[3] and sid or nil, case[1] .. ": remembered?")
+    ok(fillAndSave(A))
+    eq(ns.state.profiles["Kas Pitas"].d.squad == sid, case[3], case[1] .. ": squad in the save?")
+    eq(#M.requests(ns.state, sid), case[3] and 1 or 0, case[1] .. ": requests")
+  end
+end)
+
+test("2.0.1 H2: declining the invitation, or «Cancel» next to the gold hint, forgets the waiting join", function()
+  local ns, _, rec = boot201({ roster = roster201() })
+  local M, A, L = ns.Model, ns.Actions, ns.L
+  local sid = invitedBy(ns)
+  ns.UI.Open("mysquad")
+  eq(select(2, A.RequestJoin(sid)), "profileIncomplete")
+  ok(A.Reject(sid, "Kas Pitas", "inv"), "declined")
+  eq(A.JoinAfterProfile(), nil, "a declined invitation is not joined later")
+  -- a second squad, accepted then cancelled from Mi perfil
+  local ns2 = boot201({ roster = roster201() })
+  local A2, M2 = ns2.Actions, ns2.Model
+  local sid2 = invitedBy(ns2)
+  ns2.UI.Open("mysquad")
+  eq(select(2, A2.RequestJoin(sid2)), "profileIncomplete")
+  eq(ns2.UI.Current(), "profile")
+  local prof = ns2.UI.ProfileState()
+  ok(prof.joinCancel, "a cancel link next to the hint")
+  eq(rawget(prof.joinCancel.text, "_text"), ns2.L.CANCEL, "labelled «Cancel»")
+  rawget(prof.joinCancel, "_OnClick")(prof.joinCancel)
+  eq(A2.JoinAfterProfile(), nil, "forgotten")
+  eq(rawget(prof.join, "_text"), "", "hint cleared")
+  prof.role = "TANK"; prof.goals[1].on = true
+  rawget(prof.save, "_OnClick")(prof.save)
+  ok(M2.profileComplete(ns2.state.profiles["Kas Pitas"].d), "profile saved")
+  eq(M2.isMember(ns2.state, sid2, "Kas Pitas"), false, "the save does not join")
+  eq(#M2.invites(ns2.state, "Kas Pitas"), 1, "the invitation is still there to accept")
+  ok(A2.CancelJoinAfterProfile ~= nil)
+  local _ = rec; _ = M; _ = L
+end)
