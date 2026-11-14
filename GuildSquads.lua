@@ -742,15 +742,24 @@ end
 -- one nothing is signed: the squad is remembered for this session and Mi perfil opens; the save of a filled profile
 -- carries the squad (A.SaveProfileDraft), so the acceptance is one record signed by me. Only my own actions reach
 -- here: a squad record that lists me only makes the invitation (docs/SPEC-v2.0.1-sin-perfil.md).
+-- The remembered join is a join I could still make now (spec §5): no squad of mine (created or joined meanwhile, the
+-- «already in a squad» of 2.0.0), the squad exists and is not disbanded, I am not its captain, and it still invites
+-- me (lists me, not declined) or is open and not waiting for approval. Otherwise it is forgotten. «Cancel» next to
+-- the gold hint of Mi perfil forgets it too (A.CancelJoinAfterProfile).
 local joinAfter
 local function joinable(id)
   local r = id and ns.state.squads[id]
-  return r and not r.d.disbanded and r.d.captain ~= ns.me()
+  local me = ns.me()
+  if not r or r.d.disbanded or r.d.captain == me or A.MySquadId() then return false end
+  local listed = P.contains(r.d.members or {}, me) or P.contains(r.d.bench or {}, me)
+  if listed and not M.isRejected(ns.state, id, me, "inv") then return true end
+  return (r.d.open and r.d.approved ~= false) and true or false
 end
 function A.JoinAfterProfile()
   if joinAfter and not joinable(joinAfter) then joinAfter = nil end
   return joinAfter
 end
+function A.CancelJoinAfterProfile() joinAfter = nil end
 local function joinFields(id)
   local r = ns.state.squads[id]
   local me = ns.me()

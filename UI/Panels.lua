@@ -1015,6 +1015,11 @@ UI.Register("profile", L.TAB_PROFILE, function(f, bar)
   prof.squadLink = W.Link(left, L.TAB_MYSQUAD, function() UI.Select("mysquad") end); prof.squadLink:SetPoint("TOPLEFT", 10, -268)
   -- 2.0.1: a join waiting for a filled profile (A.RequestJoin) says so, in gold
   prof.join = W.Label(left, ""); prof.join:SetPoint("TOPLEFT", 10, -294); prof.join:SetWidth(180); prof.join:SetTextColor(1, 0.82, 0)
+  -- review H2: the waiting join can be cancelled (it would otherwise fire on the next save of the session)
+  prof.joinCancel = W.Link(left, L.CANCEL, function()
+    A.CancelJoinAfterProfile(); prof.join:SetText(""); prof.joinCancel:Hide()
+  end)
+  prof.joinCancel:SetPoint("TOPLEFT", prof.join, "BOTTOMLEFT", 0, -4); prof.joinCancel:Hide()
   local rt = W.Label(f, L.MAIN_ROLE .. " · " .. L.ROLE_CYCLE, "GameFontNormal"); rt:SetPoint("TOPLEFT", 224, -10)
   for i, r in ipairs(ROLES) do
     local b = CreateFrame("Button", nil, f); b:SetSize(60, 60); b:SetPoint("TOPLEFT", 228 + (i - 1) * 110, -32)
@@ -1058,7 +1063,7 @@ UI.Register("profile", L.TAB_PROFILE, function(f, bar)
   prof.save = W.Primary(bar, L.SAVE, function()
     local d = profDraft()
     if A.SaveProfileDraft(d) then ns.print(L.SAVED) end
-    if not A.JoinAfterProfile() then prof.join:SetText("") end
+    if not A.JoinAfterProfile() then prof.join:SetText(""); prof.joinCancel:Hide() end
     profUpdate()
     if ns.UpdateBadge then pcall(ns.UpdateBadge) end
   end)
@@ -1076,6 +1081,7 @@ end, function()
   prof.squad:SetText(L.SQUAD_LABEL .. ": " .. (sid and ns.state.squads[sid].d.name or L.NONE))
   local jid = A.JoinAfterProfile and A.JoinAfterProfile()
   prof.join:SetText(jid and L.JOIN_AFTER_PROFILE:format(M.displayName(ns.state, jid) or ns.state.squads[jid].d.name) or "")
+  prof.joinCancel:SetShown(jid and true or false)
   if not keepEdits then
     prof.role, prof.role2 = d.role, d.role2
     local a = d.avail or "00000000"
