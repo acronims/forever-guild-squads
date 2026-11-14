@@ -570,3 +570,25 @@ test("2.0.1 review H3: my own race (UnitRace) is in the race table even when the
   dbg = H.Debug()
   ok(dbg:find("raceTable=1", 1, true) and dbg:find("myRace=SKYBORNE:yes", 1, true), "diag with the API: " .. dbg)
 end)
+
+test("2.0.1 review H6: a member who chose a role and a schedule but no goal shows as such and passes the role filter", function()
+  local ns = boot201({ roster = roster201() })
+  seed(ns)
+  local now = GetServerTime()
+  ns.state.profiles["Dan Ash"] = rec201("profile", "Dan Ash", now - 50, { role = "TANK", role2 = "HEALER", avail = "11111111", goals = {} })
+  local fd = finder(ns)
+  fd.minL:SetText(""); fd.maxL:SetText("")
+  ns.UI.Select("finder")
+  local all = names(fd)
+  ok(all:find("Dan Ash", 1, true) and not all:find("Dan Ash*", 1, true), "not «No profile yet»: " .. all)
+  ok(all:find("Eva Elm*", 1, true), "the presence-only member still is: " .. all)
+  fd.role = { TANK = true }
+  ns.UI.Select("finder", true)
+  ok(names(fd):find("Dan Ash", 1, true), "the Tank filter shows him: " .. names(fd))
+  -- the automatic profile (DAMAGER, nothing else) is still «No profile yet»
+  ns.state.profiles["Dan Ash"] = rec201("profile", "Dan Ash", now - 50, { role = "DAMAGER", avail = "00000000", goals = {} })
+  fd.role = {}
+  ns.UI.Select("finder", true)
+  ok(names(fd):find("Dan Ash*", 1, true), "automatic profile: " .. names(fd))
+  ok(not ns.Model.profileComplete({ role = "TANK", role2 = "HEALER", avail = "11111111", goals = {} }), "the join gate is unchanged: still incomplete")
+end)
