@@ -962,9 +962,9 @@ end, nil, { icon = ICONS .. "INV_Misc_Key_03" })
 -------------------------------------------------------------------------------
 -- Mi perfil
 -- 2.0.1: A.RequestJoin without a filled profile opens Mi perfil (its refresh shows the waiting join)
+-- (UI.Open already selects the tab; a second Select asked the current tab's unsaved-changes prompt twice, review H8)
 function UI.OpenProfileForJoin()
   UI.Open("profile")
-  if UI.Current() ~= "profile" then UI.Select("profile") end
 end
 local prof = { roles = {}, slots = {}, goals = {} }
 UI.profileState = prof -- exposed for the smoke tests

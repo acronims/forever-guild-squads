@@ -774,7 +774,7 @@ function A.RequestJoin(id) -- also = accept invitation
   end
   joinAfter = nil
   local fields, text = joinFields(id)
-  local ok, why = A.SaveProfile(fields, true)
+  local ok, why = A.SaveProfile(fields)
   feedback(ok, text)
   return ok, why
 end
