@@ -1057,7 +1057,8 @@ function ns.MigrateIdentity(root, g, dry)
   local now = (ns.serverTime and ns.serverTime()) or (GetServerTime and GetServerTime()) or 0
   local Pg, Rc, Ro, Ca, X = ns.Progress, ns.Races, ns.Roster, ns.Catalog, ns.P2P
   local ctx = { mode = "forever", id = ns.id, me = me, oldMe = oldMe, now = now, dry = dry and true or nil,
-                eventId = Pg and Pg.eventId, obsId = Rc and Rc.obsId, rsvpId = Ro and Ro.rsvpId, grantId = Ca and Ca.grantId }
+                eventId = Pg and Pg.eventId, obsId = Rc and Rc.obsId, rsvpId = Ro and Ro.rsvpId, grantId = Ca and Ca.grantId,
+                remapClosed = Rc and Rc.remapClosed }
   if X and X.ledgerNote then   -- my re-signed versions go to the ledger (a relayed copy of them is never repudiated)
     ctx.note = function(rec)
       g.mine = type(g.mine) == "table" and g.mine or {}

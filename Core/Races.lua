@@ -1155,11 +1155,37 @@ function R.unpackClosed(text)
   end
   return { rows = rows }
 end
+-- 2.1 (SPEC-v2.1 AC2): the names of a closed race in the 1.x form («Name-Realm», with «-») moved to the identity:
+-- the key of a character race (a squad id «Name:ct» is opaque), chars and sup. map(name) -> identity | nil; a name
+-- without one stays as it was (a closed Top never loses a row). Returns how many names changed.
+local function oldForm(n) return type(n) == "string" and string.find(n, "-", 1, true) ~= nil end
+function R.remapClosed(c, map)
+  if type(c) ~= "table" or type(c.rows) ~= "table" or type(map) ~= "function" then return 0 end
+  local n = 0
+  local function one(v)
+    if not oldForm(v) then return v end
+    local okM, m = pcall(map, v)
+    if okM and type(m) == "string" and m ~= "" and not oldForm(m) then n = n + 1; return m end
+    return v
+  end
+  for _, row in ipairs(c.rows) do
+    if type(row) == "table" then
+      if type(row.key) == "string" and not string.find(row.key, ":", 1, true) then row.key = one(row.key) end
+      for _, f in ipairs({ "chars", "sup" }) do
+        if type(row[f]) == "table" then for i, v in ipairs(row[f]) do row[f][i] = one(v) end end
+      end
+    end
+  end
+  return n
+end
 -- a closed race received from a peer is only taken when we have none (closed = immutable)
 -- `size` is the effective one (the GM's achdef when valid, R.def); defs optional (default: the catalog in use)
-function R.importClosed(store, id, text, at, defs)
+-- map (optional, 2.1 AC2, WoW Forever): a 2.0.0 peer still sends the 1.x names of an old closed race; they are
+-- moved to the identity like the migration does, so every 2.1 holds the same text (same bucket hash)
+function R.importClosed(store, id, text, at, defs, map)
   if type(id) ~= "string" or store.closed[id] then return false end
   local c = R.unpackClosed(text)
+  if c and map then R.remapClosed(c, map) end
   -- a closed Top must be complete (exactly `size` rows) with non-decreasing dates
   if not c or #c.rows ~= R.def(id, defs).size then return false end
   for i = 2, #c.rows do if c.rows[i].ts < c.rows[i - 1].ts then return false end end

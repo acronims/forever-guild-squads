@@ -479,10 +479,20 @@ function H.OnObs(payload, sender, relayed, sentAt)
     end
   end
   if type(payload.c) == "string" and type(payload.x) == "string" and relayed and officer
-     and R.importClosed(store, payload.c, payload.x, t) then any = true end
+     and R.importClosed(store, payload.c, payload.x, t, nil, H.closedMap()) then any = true end
   if any then markDirty() end
 end
 
+-- 2.1 (SPEC-v2.1 AC2): WoW Forever only (in realm mode «Name-Realm» is the identity): an old name of a closed race
+-- that a 2.0.0 officer still sends goes to its identity, the same way the migration moved ours
+function H.closedMap()
+  if ns.ID_MODE ~= "forever" or type(ns.id) ~= "function" then return nil end
+  return function(n)
+    local v = ns.id(n)
+    if type(v) == "string" and v ~= "" and not string.find(v, "-", 1, true) then return v end
+    return nil
+  end
+end
 function H.HelloHashes()
   if not rdb then return nil end
   return R.bucketHashes(store)
