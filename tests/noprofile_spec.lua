@@ -641,3 +641,63 @@ test("2.1 AC8: in esES the waiting join shows the Spanish hint with the squad na
   eq(rawget(prof.join, "_text"), "Rellena tu rol principal y al menos un objetivo y pulsa «Guardar perfil» para unirte a «Los Lobos».", "hint in Spanish")
   eq(rawget(prof.joinCancel.text, "_text"), "Cancelar", "«Cancelar»")
 end)
+
+-------------------------------------------------------------------------------
+-- 2.1 (SPEC-v2.1 AC9, review 2.0.1 H8 and «Huecos de tests» 2): the GM's level achievement offers every race. The menu
+-- had a cap of 30 items for «any» + the classes + the races: with 13 classes and 19 races the last ones were dropped
+local CLASSES13 = { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID", "DEATHKNIGHT", "MONK", "DEMONHUNTER", "EVOKER" }
+local RACES12 = { "SkyborneHighOrder", "SkyborneWindshaper", "Human", "Orc", "Dwarf", "Tauren", "Troll", "Gnome", "NightElf", "Scourge", "BloodElf", "Goblin" }
+test("2.1 AC9: the level achievement of the GM offers all the races (guild ones first, Skyborne ×2), none repeated", function()
+  local roster = { { "Kas Pitas-" .. REALM, "GM", 0, 30, "Warrior", "Durotar", "", "", true, 0, "WARRIOR" } }
+  for i, cls in ipairs(CLASSES13) do roster[#roster + 1] = { "M" .. i .. " Ap" .. i .. "-" .. REALM, "Member", 4, 30, cls, "Durotar", "", "", true, 0, cls } end
+  local ns = boot201({ roster = roster })
+  for i, rc in ipairs(RACES12) do
+    local n = "M" .. i .. " Ap" .. i
+    ns.state.profiles[n] = rec201("profile", n, 1795000000, { role = "TANK", goals = { "raid" }, race = rc })
+  end
+  local H = ns.HallGlue
+  local keepT = H.RaceTable
+  H.RaceTable = function()
+    local okT, names = {}, {}
+    for _, rc in ipairs(RACES12) do okT[rc:upper()] = true end
+    names.SKYBORNEHIGHORDER, names.SKYBORNEWINDSHAPER = "Altonato (Alta Orden)", "Altonato (Ventolera)"
+    return okT, names
+  end
+  local W, menus = ns.W, {}
+  local keepM = W.Menu
+  W.Menu = function(_, items) menus[#menus + 1] = items end
+  ok(ns.UI.CatalogWizard({}), "wizard opened (GM)")
+  for _, it in ipairs(menus[1]) do if it.text == ns.L.CAT_M_level then it.func() end end
+  local level = menus[#menus]
+  ok(level and level ~= menus[1], "the level menu")
+  local L = ns.L
+  local racePat = "^" .. L.CAT_P_RACE:gsub("%%s", "\1"):gsub("%p", "%%%0"):gsub("\1", "(.+)") .. "$"
+  local classPat = "^" .. L.CAT_P_CLASS:gsub("%%s", "\1"):gsub("%p", "%%%0"):gsub("\1", "(.+)") .. "$"
+  local races, classes, nmenus = {}, 0, #menus
+  local function scan(list)
+    for _, it in ipairs(list) do
+      local r = type(it.text) == "string" and it.text:match(racePat)
+      if r then races[#races + 1] = r
+      elseif type(it.text) == "string" and it.text:match(classPat) then classes = classes + 1 end
+    end
+  end
+  scan(level)
+  -- a submenu opener (anything that is not a title, «any», a class or a race) is followed one level down
+  for _, it in ipairs(level) do
+    local t = it.text or ""
+    if not it.title and t ~= L.CAT_P_ANY and not t:match(racePat) and not t:match(classPat) and it.func then
+      it.func()
+      if #menus > nmenus then scan(menus[#menus]); nmenus = #menus end
+    end
+  end
+  W.Menu, H.RaceTable = keepM, keepT
+  eq(classes, 13, "13 classes")
+  local seen, dup = {}, {}
+  for _, r in ipairs(races) do if seen[r] then dup[#dup + 1] = r end seen[r] = true end
+  eq(#dup, 0, "no race twice: " .. table.concat(dup, ","))
+  eq(#races, 19, "17 of R.RACE_OK + the 2 Skyborne: " .. table.concat(races, ","))
+  ok(seen["Altonato (Alta Orden)"] and seen["Altonato (Ventolera)"], "both Skyborne by their client name")
+  local firstOther
+  for i, r in ipairs(races) do if r == "Pandaren" or r == "Worgen" or r == "Draenei" then firstOther = firstOther or i end end
+  ok(firstOther and firstOther > 12, "the 12 races of the guild come first (first other at " .. tostring(firstOther) .. ")")
+end)
