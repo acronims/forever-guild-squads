@@ -201,4 +201,84 @@ function S24(seed) {
   return { pass: pass(), checks, metrics: { tJoin, t: Math.round(sim.t), ...sim.stats } };
 }
 
-module.exports = { S23, S17v2, S24 };
+// S25 (2.1, docs/SPEC-v2.1.md AC7): a guild half on the published 2.0.0 (GSQ_REF_200, default the tag v2.0.0: Gm and
+// Mb1) and half on the 2.1 (Mb2, and Mb3 who is an officer), WoW Forever, real signatures. Both talk PROTO 3: the
+// profiles, squads and the GM's settings cross in both directions; Mb1 (2.0.0) accepts an invitation to Mb2's squad
+// with the automatic profile (the 2.0.0 lets him) and the 2.1 clients count him a member; the Hall of fame converges
+// (same bucket hashes on the 4). Then review 2.0.1 H7: a closed race only the 2.1 knows (Skyborne) is put in the two
+// 2.1 clients; with a 2.1 officer it reaches the 2.0.0 and the 4 converge again; the Hall traffic (RO / RP messages)
+// after a round of reloads is measured against the same round before the closed race.
+const REF200 = process.env.GSQ_REF_200 || 'v2.0.0';
+function S25(seed) {
+  const sim = new Sim({ seed, forever: true });
+  const { check, checks, pass } = checker();
+  const v200 = sourcesAt(REF200);
+  for (const [n, r] of [['Gm', 0], ['Mb1', 5], ['Mb2', 5], ['Mb3', 1]]) sim.addMember(n, r);
+  const olds = ['Gm', 'Mb1'];
+  const cs = {};
+  for (const r of sim.roster) cs[r.name] = sim.client(r.name, olds.includes(r.name) ? { code: v200 } : {});
+  const all = Object.values(cs);
+  const { Gm: gm, Mb1: mb1, Mb2: mb2, Mb3: mb3 } = cs;
+  // Hall traffic per client: RO (live) and RP (pages of a reply to a hello), counted from the hook on (a reload
+  // makes a new Lua state: hooked again right after the login, before its timers run)
+  const hook = (c) => c.run(`local C = NS.Comm; local o = C.Send; SIM_HALLN = { RO = 0, RP = 0 }
+    C.Send = function(tag, ...) if SIM_HALLN[tag] then SIM_HALLN[tag] = SIM_HALLN[tag] + 1 end return o(tag, ...) end return true`);
+  const hallOf = (c) => num(c, '(SIM_HALLN and (SIM_HALLN.RO + SIM_HALLN.RP)) or 0');
+  for (const c of all) { c.login(); hook(c); sim.run(2 + sim.rand() * 3); }
+  sim.run(60);
+  check('GM (2.0.0) writes the settings', gm.run('return A.SaveSettings({ squadsEnabled = true, bench = 2, minCreateRank = 9, officerRanks = { 1 }, banned = {} })')[0] === true);
+  sim.run(20);
+  check('Gm, Mb2 and Mb3 fill their profiles (Mb1 never does)', gm.run('return A.SaveProfile({ role = "TANK", goals = { "raid" }, note = "gm200" })')[0] === true &&
+    mb2.run('return A.SaveProfile({ role = "HEALER", goals = { "dungeons" }, note = "mb2-21" })')[0] === true &&
+    mb3.run('return A.SaveProfile({ role = "DAMAGER", goals = { "raid" }, note = "mb3-21" })')[0] === true);
+  check('Mb2 (2.1) creates a squad', mb2.run('return A.CreateSquad({ name = "Los Lobos", icon = 1, color = 1, border = 1, tags = {}, open = false })')[0] === true);
+  check('Gm (2.0.0) creates a squad', gm.run('return A.CreateSquad({ name = "Viejos", icon = 2, color = 2, border = 1, tags = {}, open = true })')[0] === true);
+  sim.run(90);
+  const sid = s(mb2, 'A.MySquadId()'), gsid = s(gm, 'A.MySquadId()');
+  check('Mb2 invites Mb1 (2.0.0)', mb2.run('return A.AddMember(A.MySquadId(), "Mb1 Apmb1")')[0] === true);
+  sim.run(90);
+  const r1 = mb1.run(`local ok, why = A.RequestJoin(${luaStr(sid)}); return tostring(ok) .. "|" .. tostring(why)`)[0];
+  check('Mb1 (2.0.0) accepts with the automatic profile (the 2.0.0 has no profile gate)', /^true/.test(r1), r1);
+  const member = (c, sq, who) => s(c, `tostring(NS.Model.isMember(NS.state, ${luaStr(sq)}, ${luaStr(who)}))`);
+  let tJoin = null;
+  const t0 = sim.t;
+  for (let k = 0; k < 36 && tJoin === null; k++) { sim.run(5); if (all.every((c) => member(c, sid, 'Mb1 Apmb1') === 'true')) tJoin = Math.round(sim.t - t0); }
+  check('the 4 clients (2.1 included) count Mb1 a member of Mb2\'s squad, <= 180 s', tJoin !== null, tJoin === null ? all.map((c) => c.name + ':' + member(c, sid, 'Mb1 Apmb1')).join(',') : tJoin + ' s');
+  sim.run(120);
+  const notes = (c) => s(c, `(function() local o = {} for _, p in pairs(NS.state.profiles or {}) do
+    if type(p) == "table" and type(p.d) == "table" and p.d.note then o[#o + 1] = p.a .. "=" .. p.d.note end end
+    table.sort(o) return table.concat(o, "|") end)()`);
+  const want = 'Gm Apgm=gm200|Mb2 Apmb2=mb2-21|Mb3 Apmb3=mb3-21';
+  check('every client holds the 3 filled profiles, authored by «Name Surname» (both directions)', all.every((c) => notes(c) === want), all.map((c) => c.name + ':' + notes(c)).join(' ; '));
+  const squads = (c) => s(c, `(function() local o = {} for id in pairs(NS.state.squads or {}) do o[#o + 1] = id end table.sort(o) return table.concat(o, ",") end)()`);
+  const sq0 = squads(gm);
+  check('every client holds both squads (2.0.0 and 2.1 captains)', sq0.split(',').length === 2 && sq0.includes(sid) && sq0.includes(gsid) && all.every((c) => squads(c) === sq0), all.map((c) => c.name + ':' + squads(c)).join(' ; '));
+  check('the 2.1 clients see the GM settings of a 2.0.0 GM', [mb2, mb3].every((c) => s(c, 'tostring(NS.state.settings ~= nil and NS.state.settings.a == "Gm Apgm")') === 'true'));
+  const hashes = (c) => s(c, 'table.concat(NS.HallGlue.HelloHashes() or {}, ",")');
+  const round = () => {
+    for (const c of all) hook(c);
+    let n = 0;
+    for (const c of all) { n += hallOf(c); c.reload(); hook(c); sim.run(5 + sim.rand() * 5); }
+    sim.run(240);
+    for (const c of all) n += hallOf(c);
+    return n;
+  };
+  const trafficA = round();
+  const hA = all.map(hashes);
+  check('Hall: the 4 hold the same bucket hashes (2.0.0 and 2.1 converge)', hA.every((h) => h === hA[0]), all.map((c, i) => c.name + ':' + hA[i].slice(0, 40)).join(' ; '));
+  // H7: a closed Skyborne race (only the 2.1 lists the token) put in the two 2.1 clients, as if it had closed there
+  const inject = `(function() local R, H = NS.Races, NS.HallGlue; local id = "lvl.race.SKYBORNEHIGHORDER.10"
+    local rows = {} for i = 1, R.def(id).size do rows[i] = { key = "Sky" .. i .. " Apsky", ts = 1795000000 + i, chars = { "Sky" .. i .. " Apsky" }, squads = {}, sup = {}, wit = 2 } end
+    return tostring(R.importClosed(H.Store(), id, R.packClosed({ rows = rows }), 1795000000)) end)()`;
+  check('the closed Skyborne race is in Mb2 and Mb3 (2.1)', s(mb2, inject) === 'true' && s(mb3, inject) === 'true');
+  const trafficB = round();
+  const hB = all.map(hashes);
+  const held = (c) => s(c, 'tostring(NS.HallGlue.Store().closed["lvl.race.SKYBORNEHIGHORDER.10"] ~= nil)');
+  check('H7 with a 2.1 officer: the 2.0.0 take the closed race from him and the 4 converge again', all.every((c) => held(c) === 'true') && hB.every((h) => h === hB[0]),
+    all.map((c, i) => c.name + ':' + held(c) + ':' + hB[i].slice(0, 40)).join(' ; '));
+  check('H7: the Hall traffic of a reload round grows by <= 8 messages with the closed race', trafficB - trafficA <= 8, `before=${trafficA} after=${trafficB}`);
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { ref: REF200, tJoin, trafficA, trafficB, ...sim.stats } };
+}
+
+module.exports = { S23, S17v2, S24, S25 };
