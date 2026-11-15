@@ -344,6 +344,57 @@ test("2.1 AC3: on a 2.0.0 partition the pass runs once (g.idv21), is idempotent,
   eq(S.encode(root), once, "without the mark: the same bytes")
 end)
 
+-- 2.1 (SPEC-v2.1 AC4): own annulments and confirmations whose id embeds a name are signed again with the identity
+local function annulsOf(list)
+  local out = {}
+  for _, r in ipairs(list or {}) do if r.k == "annul" or r.k == "vconfirm" then out[#out + 1] = r end end
+  return out
+end
+local function checkAnnuls(g, label)
+  local an, sqA, vc
+  for _, r in ipairs(annulsOf(g.records)) do
+    if r.k == "annul" and r.d.race == "lvl.all.10" then an = r end
+    if r.k == "annul" and r.d.race == "sq.kill.1" then sqA = r end
+    if r.k == "vconfirm" then vc = r end
+  end
+  ok(an and an.a == "Kas Pitas", label .. ": my annulment of a character entry")
+  eq(an.d.key, "Nc Apnc", label .. ": annul key moved"); eq(an.id, "lvl.all.10|Nc Apnc", label .. ": annul id rebuilt")
+  ok(sqA and sqA.id == "sq.kill.1|Mb-Realm:1795000050" and sqA.d.key == "Mb-Realm:1795000050", label .. ": a squad annulment is not touched")
+  ok(vc and vc.id == "Nc Apnc|kill|1795001120|e1443" and vc.d.oid == vc.id, label .. ": vconfirm id = the moved observation id (" .. tostring(vc and vc.id) .. ")")
+  ok(g.races.obs[vc.id] ~= nil, label .. ": that observation is held under that id")
+  local am = NS.Races.annulMap(g.records)
+  ok(am["lvl.all.10"] and am["lvl.all.10"]["Nc Apnc"], label .. ": the annulment applies to «Nc Apnc» again")
+  return an, sqA, vc
+end
+test("2.1 AC4: on a 2.0.0 partition my annul / vconfirm with an old name are signed again (new id, sq + 1)", function()
+  local root = fixture200()
+  local g = root.guilds[GK]
+  local before = {}
+  for _, r in ipairs(annulsOf(g.records)) do before[r.k .. ":" .. tostring(r.d.race or "v")] = r.sq end
+  ok(before["annul:lvl.all.10"] and before["vconfirm:v"], "the fixture has them (2.0.0 re-signed them with the old name inside)")
+  main(root)
+  local an, sqA, vc = checkAnnuls(g, "2.0.0")
+  ok(an.sq > before["annul:lvl.all.10"] and an.ts == NOW, "annul: a new version (sq " .. an.sq .. ", ts now)")
+  ok(vc.sq > before["vconfirm:v"], "vconfirm: a new version")
+  eq(sqA.sq, before["annul:sq.kill.1"], "the squad annulment keeps its version")
+  local once = S.encode(root)
+  main(root)
+  eq(S.encode(root), once, "a second load changes nothing")
+end)
+test("2.1 AC4: in the 1.2.2 migration my annul / vconfirm come out of resign with the new id", function()
+  local root = fixture()
+  local g = root.guilds[GK]
+  local oid
+  for id, o in pairs(g.races.obs) do if o.t == "kill" then oid = id end end
+  g.records[#g.records + 1] = { a = "Kas-Realm", k = "annul", id = "lvl.all.10|Nc-Realm", sq = 12, ts = 1795001030,
+    d = { race = "lvl.all.10", key = "Nc-Realm", reason = "test", on = true } }
+  g.records[#g.records + 1] = { a = "Kas-Realm", k = "annul", id = "sq.kill.1|Mb-Realm:1795000050", sq = 13, ts = 1795001031,
+    d = { race = "sq.kill.1", key = "Mb-Realm:1795000050", reason = "squad", on = true } }
+  g.records[#g.records + 1] = { a = "Kas-Realm", k = "vconfirm", id = oid, sq = 14, ts = 1795001032, d = { oid = oid } }
+  main(root)
+  checkAnnuls(g, "1.2.2")
+end)
+
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)
 SMOKE_CHECKS = SMOKE_CHECKS or {}
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "2.0: the first own manifest of a migrated identity is n = 1, the next ones grow", function(c)
