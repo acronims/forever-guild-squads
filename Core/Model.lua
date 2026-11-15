@@ -882,6 +882,7 @@ function M.whisperTarget(key, surname, myRealm, alt) return ns.Identity.realmWhi
 --   Progress / Races / Roster / Catalog, note = fn(rec) (the ledger of my versions) }.
 -- Returns { swept, dropped, resign, remapped, removed, resigned, guild = step 1 ran, char = step 2 ran }.
 M.IDV = 2
+M.IDV21 = 1   -- 2.1 (SPEC-v2.1 AC1-AC3): the local data by name of a partition moved to the identity
 local function isOld(n) return type(n) == "string" and string.find(n, "-", 1, true) ~= nil end
 M.isOldName = isOld
 local function sortedKeys(t)
@@ -988,6 +989,64 @@ local function remapEntries(t, must, lists, idOf, map, r)
     end
   end
   return moved
+end
+
+-- 2.1 (SPEC-v2.1 AC1): a map keyed by names whose old keys are re-keyed; when the new key is there already, merge(cur,
+-- old) decides the value (the earliest date, the highest level). The ones without an identity go.
+local function remapKeysMerge(t, map, r, merge)
+  if type(t) ~= "table" then return end
+  for _, k in ipairs(sortedKeys(t)) do
+    if isOld(k) then
+      local m, v = map(k), t[k]
+      t[k] = nil
+      if m then
+        if t[m] == nil then t[m] = v else t[m] = merge(t[m], v) end
+        r.remapped = r.remapped + 1
+      else r.removed = r.removed + 1 end
+    end
+  end
+end
+local function maxNum(a, b) if type(a) == "number" and type(b) == "number" then return math.max(a, b) end return a end
+local function minDates(a, b)                                   -- key -> ts: the earliest of both
+  if type(a) ~= "table" or type(b) ~= "table" then return a end
+  for key, ts in pairs(b) do
+    local cur = a[key]
+    if cur == nil or (type(ts) == "number" and type(cur) == "number" and ts < cur) then a[key] = ts end
+  end
+  return a
+end
+local function higherLevel(a, b)                                 -- { lv, ts }: the highest level seen
+  if type(a) == "table" and type(b) == "table" and (tonumber(b.lv) or 0) > (tonumber(a.lv) or 0) then return b end
+  return a
+end
+-- 2.1 (SPEC-v2.1 AC1): the local data keyed by name that the 2.0 migration left (CHANGELOG 2.0.0, known limits):
+-- the membership snapshot of each wipe, the achievements already won, the known levels and the level / hello caches.
+-- Run once per partition (g.idv21), also on a partition the 2.0.0 already migrated. Squad ids are opaque (kept).
+local function step21(root, g, ctx, strict, map, r)
+  local pr = type(g.progress) == "table" and g.progress or nil
+  if pr then
+    if type(pr.snap) == "table" then                              -- { [wipe] = { [sid] = { [name] = true } } }
+      for _, w in ipairs(sortedKeys(pr.snap)) do
+        local bySid = pr.snap[w]
+        if type(bySid) == "table" then
+          for _, sid in ipairs(sortedKeys(bySid)) do
+            local set = bySid[sid]
+            if type(set) == "table" then remapKeysMerge(set, map, r, function(a) return a end) end
+          end
+        end
+      end
+    end
+    if type(pr.ach) == "table" then remapKeysMerge(pr.ach.char, map, r, minDates) end
+    remapKeysMerge(pr.lvKnown, map, r, maxNum)
+  end
+  local ra = type(g.races) == "table" and g.races or nil
+  if ra then
+    if type(ra.ach) == "table" then remapKeysMerge(ra.ach.char, map, r, minDates) end
+    remapKeysMerge(ra.rcache, map, r, maxNum)
+    remapKeysMerge(ra.rseen, map, r, higherLevel)
+    remapKeysMerge(ra.hello, map, r, maxNum)
+  end
+  g.idv21 = M.IDV21
 end
 
 local function step1(root, g, ctx, strict, map, r)
@@ -1186,6 +1245,7 @@ function M.migrateIdentity(root, g, ctx)
   end
   local strict, map = mappers(root, ctx)
   if g.idv ~= M.IDV then step1(root, g, ctx, strict, map, r); r.guild = true end
+  if g.idv21 ~= M.IDV21 then step21(root, g, ctx, strict, map, r); r.v21 = true end
   local mine = false
   for _, rec in ipairs(type(g.resign) == "table" and g.resign or {}) do
     if type(rec) == "table" and (rec.a == ctx.me or rec.a == ctx.oldMe) then mine = true; break end
