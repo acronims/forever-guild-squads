@@ -702,3 +702,37 @@ test("2.1 AC9: the level achievement of the GM offers all the races (guild ones 
   for i, r in ipairs(races) do if r == "Pandaren" or r == "Worgen" or r == "Draenei" then firstOther = firstOther or i end end
   ok(firstOther and firstOther > 12, "the 12 races of the guild come first (first other at " .. tostring(firstOther) .. ")")
 end)
+
+-- 2.1 (SPEC-v2.1 AC11, review 2.0.1 «Huecos de tests» 3): a race table that is empty at start-up is read again (every
+-- 10 s, or at once when the API function changes) and then opens the Skyborne race
+test("2.1 AC11: H.RaceTable empty at start-up is read again after 10 s or when the API appears, then Skyborne opens", function()
+  local ns, env, rec = boot201({ roster = roster201() })
+  local H, R = ns.HallGlue, ns.Races
+  local rows = false
+  local api = { GetRaceInfo = function(id)
+    if not rows then return nil end
+    if id == 1 then return { raceName = "Human", clientFileString = "Human" } end
+    if id == 91 then return { raceName = "Altonato", clientFileString = "SkyborneHighOrder" } end
+  end }
+  env.C_CreatureInfo = api
+  rec.advance(11)
+  eq((H.RaceTable()).SKYBORNEHIGHORDER, nil, "no rows yet")
+  rows = true
+  rec.advance(5)
+  eq((H.RaceTable()).SKYBORNEHIGHORDER, nil, "not read again before 10 s (cached empty)")
+  rec.advance(6)
+  ok((H.RaceTable()).SKYBORNEHIGHORDER, "read again after 10 s: Skyborne known")
+  local T = 1795000000
+  local s = R.newStore()
+  R.add(s, { t = "lv", who = "Sky Apsky", by = "Sky Apsky", ts = T, lv = 10, src = "self", cls = "MAGE", race = "SkyborneHighOrder" })
+  R.add(s, { t = "lv", who = "Sky Apsky", by = "Kas Pitas", ts = T + 30, lv = 10, src = "roster" })
+  local out = R.compute(s, { now = T + 99, raceOk = (H.RaceTable()), races = { "SkyborneHighOrder" } })
+  ok(out["lvl.race.SKYBORNEHIGHORDER.10"] and out["lvl.race.SKYBORNEHIGHORDER.10"].entries[1], "the Skyborne race opens")
+  -- a new API function (the addon loaded before the API existed) is read at once, without waiting 10 s
+  local ns2, env2, rec2 = boot201({ roster = roster201() })
+  env2.C_CreatureInfo = nil
+  rec2.advance(11)
+  eq((ns2.HallGlue.RaceTable()).SKYBORNEHIGHORDER, nil, "no API")
+  env2.C_CreatureInfo = { GetRaceInfo = function(id) if id == 91 then return { raceName = "Altonato", clientFileString = "SkyborneHighOrder" } end end }
+  ok((ns2.HallGlue.RaceTable()).SKYBORNEHIGHORDER, "the API appears: read at once")
+end)
