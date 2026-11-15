@@ -211,6 +211,57 @@ test("migration: dry mode counts what it would do and writes nothing (/gsq diag)
   ok(real.swept > 0 and real.dropped > 0 and real.resigned > 0, "the run did something")
 end)
 
+-- 2.1 (docs/SPEC-v2.1.md AC1): the local data keyed by name that the 2.0 left on the old name
+local function sv21(root)
+  local g = root.guilds[GK]
+  g.progress.ach.char = { ["Kas-Realm"] = { first1 = 100 }, ["Nc-Realm"] = { squad60 = 200 }, ["Zed-Gone"] = { first1 = 5 } }
+  g.progress.ach.squad = { ["Kas-Realm:1795001009"] = { hallOfFame = 300 } }
+  g.races.ach.char = { ["Kas-Realm"] = { top10race = 400 }, ["Mb-Realm"] = { top10class = 500 }, ["Mb Apmb"] = { top10class = 450 } }
+  g.progress.lvKnown = { ["Nc-Realm"] = 30, ["Nc Apnc"] = 20, ["Kas-Realm"] = 40 }
+  return root
+end
+test("2.1 AC1: snap, ach, lvKnown, rcache, rseen and hello move to «Nombre Apellido»; squad ids stay", function()
+  local root = sv21(fixture())
+  local g = root.guilds[GK]
+  main(root)
+  local pr, ra = g.progress, g.races
+  for w, bySid in pairs(pr.snap) do
+    for sid, set in pairs(bySid) do
+      for n in pairs(set) do ok(not old(n), "snap " .. w .. " " .. sid .. ": " .. n) end
+    end
+  end
+  local snapMb = pr.snap.W2967["Mb-Realm:1795000050"]
+  ok(snapMb and snapMb["Mb Apmb"] and snapMb["Nc Apnc"], "the squad snapshot names «Mb Apmb» and «Nc Apnc» (squad id kept)")
+  for _, t in ipairs({ ra.rcache, ra.rseen, ra.hello, pr.lvKnown }) do eq(oldKeys(t), 0, "no old key") end
+  eq(ra.rcache["Mb Apmb"], 60, "rcache re-keyed"); ok(ra.rseen["Gm Apgm"] and ra.rseen["Gm Apgm"].lv == 60, "rseen re-keyed")
+  ok(ra.hello["Nc Apnc"] == 1795000654, "hello re-keyed")
+  eq(pr.lvKnown["Nc Apnc"], 30, "lvKnown merged with the highest level")
+  eq(oldKeys(pr.ach.char), 0, "progress.ach.char: no old owner")
+  eq(oldKeys(ra.ach.char), 0, "races.ach.char: no old owner")
+  ok(pr.ach.char["Kas Pitas"] and pr.ach.char["Kas Pitas"].first1 == 100, "my achievement is mine («Kas-Realm» is me)")
+  eq(pr.ach.char["Nc Apnc"].squad60, 200, "someone else's achievement re-keyed")
+  ok(ra.ach.char["Kas Pitas"] and ra.ach.char["Kas Pitas"].top10race == 400, "my Hall achievement is mine")
+  eq(ra.ach.char["Mb Apmb"].top10class, 450, "merged with the earliest date")
+  ok(pr.ach.squad["Kas-Realm:1795001009"], "squad scope: the squad id is opaque, kept")
+  -- recomputed under the new names, nothing is new (no second announcement)
+  local fresh = { char = { ["Kas Pitas"] = { first1 = 100 }, ["Nc Apnc"] = { squad60 = 200 } }, squad = {} }
+  eq(#NS.Progress.mergeAchievements(pr.ach, fresh), 0, "no achievement announced again")
+  local freshR = { char = { ["Kas Pitas"] = { top10race = 400 }, ["Mb Apmb"] = { top10class = 450 } }, squad = {} }
+  eq(#NS.Progress.mergeAchievements(ra.ach, freshR), 0, "no Hall achievement announced again")
+end)
+test("2.1 AC1: a closed wipe counts its members by their new name (P.memberAt over the migrated snapshot)", function()
+  local root = fixture()
+  local g = root.guilds[GK]
+  main(root)
+  local P = NS.Progress
+  local ts
+  for t = 1795000000, 1796000000, 3600 do if P.wipeOf(t) == "W2967" then ts = t; break end end
+  ok(ts, "a time inside W2967")
+  local isMember = P.memberAt(g.progress.snap, function() return false end, ts + 86400 * 30)
+  ok(isMember("Mb-Realm:1795000050", "Nc Apnc", ts), "«Nc Apnc» was in the squad that wipe")
+  ok(not isMember("Mb-Realm:1795000050", "Gm Apgm", ts), "control: «Gm Apgm» was not")
+end)
+
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)
 SMOKE_CHECKS = SMOKE_CHECKS or {}
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "2.0: the first own manifest of a migrated identity is n = 1, the next ones grow", function(c)
