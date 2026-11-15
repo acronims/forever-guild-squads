@@ -606,3 +606,38 @@ test("2.0.1 review H8: opening Mi perfil for a waiting join asks the current tab
   eq(calls, 1, "one prompt, not two")
   p.opts.beforeLeave = old
 end)
+
+-------------------------------------------------------------------------------
+-- 2.1 (SPEC-v2.1 AC8, review 2.0.1 «Huecos de tests» 7): the card, its tooltip and the join hint painted in esES
+test("2.1 AC8: in esES the card says «(Sin perfil todavía)», with its tooltip, and nothing in English", function()
+  local ns = boot201({ roster = roster201(), locale = "esES" })
+  local L = ns.L
+  eq(L.NO_PROFILE, "Sin perfil todavía", "esES loaded")
+  seed(ns)
+  local fd = finder(ns)
+  ns.UI.Select("finder")
+  local n = 0
+  for i, it in ipairs(fd.grid.items) do
+    local c, t = fd.grid.cells[i], rawget(fd.grid.cells[i].name, "_text") or ""
+    if it.player.noProfile then
+      n = n + 1
+      ok(t:find("(Sin perfil todavía)", 1, true), "card: " .. t)
+      ok(t:find("Nv %d") and not t:find("Lv %d"), "level label in Spanish («Nv N»): " .. t)
+      ok(not t:find("No profile yet", 1, true), "no English on the card")
+      eq(c.tip, "Sin perfil todavía", "tooltip title")
+      eq(c.tipText, "Tiene Guild Squads pero no ha rellenado su perfil. Puedes invitarle a tu squad: para unirse tendrá que rellenarlo.", "tooltip text")
+    end
+  end
+  eq(n, 2, "two cards without a profile")
+end)
+test("2.1 AC8: in esES the waiting join shows the Spanish hint with the squad name and «Cancelar»", function()
+  local ns = boot201({ roster = roster201(), locale = "esES" })
+  local A = ns.Actions
+  local sid = invitedBy(ns)
+  ns.UI.Open("mysquad")
+  eq(select(2, A.RequestJoin(sid)), "profileIncomplete")
+  eq(ns.UI.Current(), "profile", "Mi perfil opened")
+  local prof = ns.UI.ProfileState()
+  eq(rawget(prof.join, "_text"), "Rellena tu rol principal y al menos un objetivo y pulsa «Guardar perfil» para unirte a «Los Lobos».", "hint in Spanish")
+  eq(rawget(prof.joinCancel.text, "_text"), "Cancelar", "«Cancelar»")
+end)
