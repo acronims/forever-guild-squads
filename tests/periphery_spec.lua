@@ -521,3 +521,38 @@ test("2.0 UI: raid editor cells, catalog withdrawal and Hall annulment name «Ka
   eq(bareKas(texts), nil, "a text with «Kas» alone")
   eq(find(texts, "Kas-"), nil, "a text with «Kas-…»")
 end)
+
+-------------------------------------------------------------------------------
+-- 2.1 (SPEC-v2.1 AC12, review D B7): a WoW Forever character without a guild has no key until it joins one (the key is
+-- made after the migration, which needs a partition). The OnUpdate sampler asked ns.myPk() on every frame for the
+-- whole session; now at most once a second once the entropy pool is full
+test("2.1 AC12: without a guild, the key is asked for at most once a second (not every frame)", function()
+  local env, rec = env20({})
+  env.IsInGuild = function() return false end
+  local ns, toc = {}, {}
+  for line in SOURCES["GuildSquads.toc"]:gmatch("[^\r\n]+") do
+    if line:match("%.lua$") then toc[#toc + 1] = (line:gsub("\\", "/")) end
+  end
+  for _, f in ipairs(toc) do
+    local chunk = assert(load(SOURCES[f], "@" .. f, "t", env))
+    chunk("GuildSquads", ns)
+  end
+  -- the events frame of GuildSquads.lua: the one with an OnEvent and the OnUpdate sampler
+  local hasUpd, frame = {}, nil
+  for _, s in ipairs(rec.scripts) do if s[2] == "OnUpdate" then hasUpd[s[1]] = true end end
+  for _, s in ipairs(rec.scripts) do if s[2] == "OnEvent" and hasUpd[s[1]] and not frame then frame = s[1] end end
+  ok(frame, "the events frame")
+  for _, ev in ipairs({ { "ADDON_LOADED", "GuildSquads" }, { "PLAYER_LOGIN" }, { "GUILD_ROSTER_UPDATE" } }) do
+    for _, s in ipairs(rec.scripts) do if s[2] == "OnEvent" then pcall(s[3], s[1], ev[1], ev[2]) end end
+  end
+  eq(ns.ID_MODE, "forever", "forever mode"); ok(not ns.gdb, "no guild partition")
+  local calls, keep = 0, ns.myPk
+  ns.myPk = function(...) calls = calls + 1; return keep(...) end
+  local function tick(n) for _ = 1, n do rec.advance(1 / 60); local fn = rawget(frame, "_OnUpdate"); if fn then fn(frame, 1 / 60) end end end
+  tick(120)                                                       -- 2 s: the pool fills (64 samples)
+  calls = 0
+  tick(600)                                                       -- 10 s more
+  ok(calls <= 11, "ns.myPk() calls in 10 s: " .. calls .. " (was one per frame)")
+  ok(rawget(frame, "_OnUpdate") ~= nil, "still waiting for a guild")
+  ns.myPk = keep
+end)
