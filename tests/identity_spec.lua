@@ -71,7 +71,10 @@ local FOREVER = {
   { "Cyrillic 49 bytes comes back the same", F, CYR, nil, CYR },
   { "Cyrillic 49 bytes, roster form", F, CYR .. "-RealmB", nil, CYR },
   { "accented name, roster spelling", F, "Ñandú Ébano", nil, "Ñandú Ébano" },
-  { "accented in another case: no ASCII rule, typed text stays (not the roster's)", F, "ñandú ébano", nil, "ñandú ébano" },
+  -- 2.1 (SPEC-v2.1 AC10, review D B3): case-insensitive also for the Latin letters with an accent, a diaeresis or a ñ
+  { "2.1 AC10: accented in lower case -> roster spelling", F, "ñandú ébano", nil, "Ñandú Ébano" },
+  { "2.1 AC10: accented in upper case -> roster spelling", F, "ÑANDÚ ÉBANO", nil, "Ñandú Ébano" },
+  { "2.1 AC10: accented link separator, upper case", F, "ÑANDÚ-ÉBANO", nil, "Ñandú Ébano" },
   { "trailing dash", F, "Kas Pitas-", nil, "Kas Pitas" },
   { "no first name «-Realm»", F, "-RealmA", nil, nil },
   { "only blanks", F, "   ", nil, nil },
@@ -155,10 +158,27 @@ test("AC1 identity: the index (§2.4 ns.rosterIndex shape)", function()
   eq(ix.byFirstRealm["mb2-RealmA"][1], "Mb2 Uno"); eq(ix.byFirstRealm["mb2-RealmB"][1], "Mb2 Dos")
   eq(ix.byLower["kas pitas"], "Kas Pitas"); eq(ix.byLower["kas mora"], "Kas Mora")
   ok(ix.realms[MY] and ix.realms.RealmA and ix.realms.RealmB, "realms")
-  eq(I.lower("ÑANDÚ Kas"), "ÑandÚ kas", "ASCII-only lower case")
+  -- 2.1 (AC10): ASCII and the 2-byte Latin-1 letters of UTF-8 (À-Þ -> à-þ, never × -> ÷); other bytes never change
+  eq(I.lower("ÑANDÚ Kas"), "ñandú kas", "Latin lower case")
+  eq(I.lower("ÀÉÎÕÜÇ×Þ"), "àéîõüç×þ", "every 2-byte Latin capital but ×")
+  eq(I.lower(CYR), CYR, "Cyrillic unchanged")
   eq(I.firstOf("Kas Pitas"), "Kas"); eq(I.firstOf("Kas-Realm"), "Kas"); eq(I.firstOf("Kas"), "Kas")
   eq(I.surnameOf("Kas Pitas-R", F), "Pitas"); eq(I.surnameOf("Fire Essency-Reino", R), "Essency"); eq(I.surnameOf("Fire", R), nil)
 end)
+test("2.1 AC10: two members that only differ in an accented capital are ambiguous, never one of them", function()
+  local ix = index({ "Ñandú Ébano-" .. MY, "ñandú Ébano-RealmA" }, "forever", MY)
+  local c = { mode = "forever", myRealm = MY, index = ix, isSecret = isSecret }
+  local got = I.id("ÑANDÚ ÉBANO", nil, c)
+  ok(got ~= "Ñandú Ébano" and got ~= "ñandú Ébano", "typed upper case: ambiguous, neither member (" .. tostring(got) .. ")")
+  eq(ix.byLower["ñandú ébano"], false, "the index marks the lower case as ambiguous")
+  eq(I.id("Ñandú Ébano", nil, c), "Ñandú Ébano", "the exact spelling is still itself")
+end)
+test("2.1 AC10: a name inside the data must still be exactly the identity («ñandú ébano» is an alias of «Ñandú Ébano»)", function()
+  local got = I.id("ñandú ébano", nil, F)
+  eq(got, "Ñandú Ébano", "resolves to the member")
+  ok(got ~= "ñandú ébano", "so ns.isCanon(«ñandú ébano») is false: a record carrying it is refused as «alias»")
+end)
+
 
 end
 
