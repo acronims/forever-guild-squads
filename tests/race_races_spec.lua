@@ -90,3 +90,30 @@ test("race races: two tokens with the same client name get two different labels"
   ok(lab.SKYBORNEA:find("Skyborne", 1, true) == 1, "still starts with the client's name")
   eq(lab.HUMAN, "Humano", "a unique name is left alone")
 end)
+
+-- 2.1 (SPEC-v2.1 AC6, review 2.0.1 H4): the client's race table may list NPC races (Naga_, Skeleton...). A token only
+-- that table knows opens its race with one reporter only when it is the race of a member's signed profile (ctx.races:
+-- Hall.lua racesSeen, my own profile included); otherwise it needs 2 reporters, like any other unknown token
+local NPC_INFO = {}
+for id, row in pairs(INFO) do NPC_INFO[id] = row end
+NPC_INFO[40] = { raceName = "Naga", clientFileString = "Naga_", raceID = 40 }
+local function npcInfo(id) return NPC_INFO[id] end
+test("2.1 AC6: an NPC race of the client table does not open with one reporter whose profile is another race", function()
+  local s = store({ lv("Kas-R", "Kas-R", T0, 10, "self", "WARRIOR", "Naga_"), lv("Kas-R", "Bob-R", T0 + 30, 10, "roster") })
+  local ctx = { now = T0 + 99, raceOk = R.knownRaces(npcInfo), races = { "Human", "SkyborneHighOrder" } }
+  ok(ctx.raceOk.NAGA_, "the client table lists Naga_")
+  local out = R.compute(s, ctx)
+  eq(out["lvl.race.NAGA_.10"], nil, "no Naga_ race with a single reporter")
+  ok(out["lvl.all.10"] and out["lvl.all.10"].entries[1], "the level race still counts him (control)")
+end)
+test("2.1 AC6: Skyborne from a member's profile, and the 17 of R.RACE_OK, still open with one reporter", function()
+  local s = store({ lv("Sky-R", "Sky-R", T0, 10, "self", "MAGE", "SkyborneHighOrder"), lv("Sky-R", "Bob-R", T0 + 30, 10, "roster"),
+                    lv("Ann-R", "Ann-R", T0 + 1, 10, "self", "WARRIOR", "Human"), lv("Ann-R", "Bob-R", T0 + 31, 10, "roster") })
+  local ctx = { now = T0 + 99, raceOk = R.knownRaces(npcInfo), races = { "SkyborneHighOrder" } }
+  local out = R.compute(s, ctx)
+  ok(out["lvl.race.SKYBORNEHIGHORDER.10"] and out["lvl.race.SKYBORNEHIGHORDER.10"].entries[1], "Skyborne opens")
+  ok(out["lvl.race.HUMAN.10"] and out["lvl.race.HUMAN.10"].entries[1], "Human (R.RACE_OK) opens without being in ctx.races")
+  -- two reporters still open a token nobody's profile has (the old rule)
+  local s2 = store({ lv("Kas-R", "Kas-R", T0, 10, "self", "WARRIOR", "Naga_"), lv("Kas-R", "Bob-R", T0 + 30, 10, "roster", nil, "Naga_") })
+  ok(R.compute(s2, ctx)["lvl.race.NAGA_.10"], "2 reporters: open (unchanged rule)")
+end)
