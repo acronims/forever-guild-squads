@@ -1,9 +1,20 @@
 # Changelog
 
-## 2.0.1 — sin publicar — «Sin perfil todavía» en el Buscador y carreras por raza / «No profile yet» in the Finder and race races
+## 2.1.0 — sin publicar — Tus datos de antes en «Nombre Apellido», «Sin perfil todavía» y carreras por raza / Your old data as «Name Surname», «No profile yet» and race races
+
+Incluye todo lo de la 2.0.1, que no llegó a publicarse. / Includes everything of 2.0.1, which was never published.
 
 ### ES
 
+- **Lo que tenías de antes de la 2.0 vuelve a ser tuyo con «Nombre Apellido».** La 2.0 dejaba con el nombre viejo («Nombre-Reino») algunos datos guardados en tu cliente. Ahora pasan al nombre nuevo, una sola vez al entrar (también si ya migraste con la 2.0.0): quién estaba en cada squad en los wipes cerrados (sus puntos de esos wipes vuelven a contar), los logros ya ganados (no se vuelven a anunciar), los niveles conocidos y las filas de las carreras cerradas del Salón de la fama. Un nombre que ya no está en la guild, o que comparten dos personajes, se queda como estaba.
+- **Arreglado: las anulaciones del GM sobre un personaje vuelven a funcionar.** Una anulación (o una confirmación de un oficial) hecha con la 1.x apuntaba al nombre viejo y desde la 2.0 no anulaba nada. Al entrar con la 2.1, el GM (o el oficial) que la hizo la vuelve a firmar con el nombre nuevo. Hasta que entre, sigue sin efecto.
+- Una carrera cerrada que llega de un oficial con la 2.0.0, con nombres viejos, se guarda con los nombres nuevos, igual que la tuya: todos los de la 2.1 tienen la misma.
+- **Las carreras por raza solo se abren con razas de verdad.** La lista de razas del cliente incluye razas de PNJ; una de ellas ya no abre su carrera con un solo informe: tiene que ser la raza del perfil de alguien de la guild (o la tuya). Con 2 informantes, como antes.
+- **Al crear un logro de nivel, el GM elige entre «Cualquier personaje», «Por clase…» y «Por raza…».** La lista única tenía un tope de 30 y, con muchas clases en la guild, perdía las últimas razas sin avisar.
+- **Nombres tecleados con tildes y eñes:** «KÁS PÍTAS» o «ñandú ébano» encuentran a «Kás Pítas» y «Ñandú Ébano» (invitar, `/gsq trust reset`, la lista de RL, insignias). Antes solo funcionaba sin tildes. Los nombres que llegan dentro de los datos tienen que seguir siendo exactos.
+- Un personaje de WoW Forever sin guild ya no comprueba su clave en cada fotograma (una vez por segundo).
+- Las claves, manifiestos y certificados de la 1.2.0 con «Nombre Apellido-Reino» ya no cuentan en `/gsq diag` (`keys strong=`) ni entran en tu certificado (pasaba desde la 2.0; ahora tiene test).
+- Datos guardados: la partición de la guild lleva una marca nueva (`idv21`). Si vuelves a la 2.0.0, la ignora y los datos siguen valiendo.
 - **El Buscador enseña a quien tiene Guild Squads aunque no haya rellenado su perfil**, con «(Sin perfil todavía)» junto al nombre y el tooltip «Tiene Guild Squads pero no ha rellenado su perfil». Hasta ahora salían como «Daño» sin objetivos, igual que un perfil rellenado: el addon publica solo un perfil al entrar y su rol por defecto es Daño. «Rellenado» es lo mismo que pide el «!» de Mi perfil: rol principal y al menos un objetivo. También sale quien tiene el addon (cuenta en el «X/Y miembros») y todavía no ha enviado ningún perfil.
 - Salen al final de la lista, después de los perfiles sin verificar, sin iconos de rol, sin objetivos y sin la puntuación de encaje. Con un filtro de rol, de objetivo o de horario no salen (no se sabe si encajan). Los filtros de clase, nivel y conectado sí se les aplican, porque esos datos vienen de la lista de la guild.
 - Solo cuenta lo que ha firmado el propio miembro y está verificado. Un perfil o una presencia que llega sin firma verificada, de alguien que no está en la guild o con el nombre mal escrito no saca a nadie.
@@ -14,14 +25,24 @@
 - La unión pendiente se olvida si mientras tanto creas o entras en un squad, si el squad deja de invitarte y no está abierto, o si rechazas la invitación. Bajo el aviso de Mi perfil hay un enlace «Cancelar».
 - La raza propia siempre cuenta para su carrera, aunque el cliente no la liste, y `/gsq diag` dice cuántas razas dio el cliente y si la tuya está.
 - Límite que sigue: un miembro sin el addon no entra en las carreras de raza (la lista de la guild no trae la raza). Sí en las de nivel y clase.
-- Sin cambios en el protocolo (sigue el 3): la 2.0.0 y la 2.0.1 se sincronizan entre ellas. Quien sigue en la 2.0.0 ve a esos miembros como «Daño» y puede aceptar sin perfil.
+- Sin cambios en el protocolo (sigue el 3): la 2.0.0 y la 2.1 se sincronizan entre ellas (probado en el simulador con media guild en cada una). Quien sigue en la 2.0.0 ve a los miembros sin perfil como «Daño» y puede aceptar sin perfil; la 2.1 le cuenta igualmente en el squad.
 - **Límites conocidos:**
   - Si alguien no marca ningún objetivo, no puede unirse a un squad hasta marcar uno. En el Buscador solo sale como «Sin perfil todavía» quien no ha tocado nada (el perfil automático); si eligió rol u horario sale con su rol.
   - El aviso de unirte se recuerda solo hasta salir del juego o hacer `/reload`. La invitación sigue en Mi squad y basta con volver a pulsar Aceptar.
   - Sin probar en el juego: cómo se ve «(Sin perfil todavía)» junto a un nombre largo. Se corta a la vista, como el resto de nombres.
+  - Las razas de PNJ se reconocen porque nadie de la guild las tiene en su perfil: si un miembro usa un cliente modificado que firma una raza falsa en su perfil, abre esa carrera.
 
 ### EN
 
+- **What you had from before 2.0 is yours again as «Name Surname».** 2.0 left some data saved in your client on the old name ("Name-Realm"). It now moves to the new name, once, at login (also if you already migrated with 2.0.0): who was in each squad in closed wipes (their points of those wipes count again), achievements already won (not announced again), known levels and the rows of the closed races of the Hall of Fame. A name no longer in the guild, or shared by two characters, stays as it was.
+- **Fixed: the GM's annulments of a character work again.** An annulment (or an officer's confirmation) made with 1.x pointed at the old name and has annulled nothing since 2.0. When the GM (or officer) who made it logs in with 2.1, it is signed again with the new name. Until then it still has no effect.
+- A closed race that arrives from a 2.0.0 officer with old names is stored with the new names, like yours: every 2.1 holds the same one.
+- **Race races only open for real races.** The client's race list includes NPC races; one of them no longer opens its race with a single report: it must be the race of someone's profile in the guild (or yours). With 2 reporters, as before.
+- **When creating a level achievement, the GM picks "Any character", "By class…" or "By race…".** The single list had a cap of 30 and, with many classes in the guild, silently lost the last races.
+- **Typed names with accents and ñ:** "KÁS PÍTAS" or "ñandú ébano" find «Kás Pítas» and «Ñandú Ébano» (invite, `/gsq trust reset`, the RL list, badges). Before, only names without accents worked. Names that arrive inside the data must still be exact.
+- A WoW Forever character without a guild no longer checks for its key on every frame (once a second).
+- 1.2.0 keys, manifests and certificates under «Name Surname-Realm» no longer count in `/gsq diag` (`keys strong=`) nor enter your certificate (true since 2.0; now tested).
+- Saved data: the guild partition gets a new mark (`idv21`). If you go back to 2.0.0 it ignores it and the data stays valid.
 - **The Finder shows who has Guild Squads even without a filled profile**, with "(No profile yet)" next to the name and the tooltip "Has Guild Squads but has not filled in a profile". Until now they showed as "Damage" without goals, the same as a filled profile: the addon publishes a profile by itself at login and its default role is Damage. "Filled" is what the "!" on My profile asks for: a main role and at least one goal. Also listed: who has the addon (counted in "X/Y members") and has not sent any profile yet.
 - They come at the end of the list, after the unverified profiles, without role icons, goals or the fit score. With a role, goal or time filter on they are hidden (nobody knows whether they fit). The class, level and online filters do apply, because that data comes from the guild roster.
 - Only what the member signed and is verified counts. A profile or a presence that arrives without a verified signature, from someone outside the guild or with a misspelled name lists nobody.
@@ -32,11 +53,12 @@
 - The waiting join is forgotten if meanwhile you create or join a squad, if the squad no longer invites you and is not open, or if you decline the invitation. Under the notice on My profile there is a "Cancel" link.
 - Your own race always counts for its race, even if the client does not list it, and `/gsq diag` says how many races the client gave and whether yours is there.
 - Known limit: a member without the addon is not in the race races (the guild roster has no race). He is in the level and class races.
-- No protocol change (still 3): 2.0.0 and 2.0.1 sync with each other. Whoever stays on 2.0.0 sees those members as "Damage" and can accept without a profile.
+- No protocol change (still 3): 2.0.0 and 2.1 sync with each other (tested in the simulator with half the guild on each). Whoever stays on 2.0.0 sees members without a profile as "Damage" and can accept without a profile; 2.1 still counts them in the squad.
 - **Known limits:**
   - Someone who picks no goal cannot join a squad until they pick one. The Finder shows "No profile yet" only for whoever changed nothing (the automatic profile); with a role or a schedule chosen they show with their role.
   - The join notice is remembered only until you log out or `/reload`. The invitation stays in My squad: press Accept again.
   - Not tried in the game: how "(No profile yet)" looks next to a long name. It is cut on screen, like every other name.
+  - NPC races are told apart because nobody in the guild has them in their profile: a member with a modified client that signs a fake race in his profile opens that race.
 
 ## 2.0.0 — 2026-11-09 — Cada personaje es «Nombre Apellido» / Every character is «Name Surname»
 

@@ -83,7 +83,7 @@ Guide for guild masters, officers and raid leaders: [GM-GUIDE.md](GM-GUIDE.md).
 
 **My boss did not score.** Was another squad member with the addon in the group? Did you already kill it today? Is the competition on and the category weight above 0? The addon sends nothing during combat: it sends after the encounter.
 
-**I can't join the squad.** The captain has to accept you **and** your profile has to point to that squad. A character can be in one squad only. Since 2.0.1 a filled profile is needed too: without one, accepting opens My profile and you join when you save it.
+**I can't join the squad.** The captain has to accept you **and** your profile has to point to that squad. A character can be in one squad only. Since 2.1 a filled profile is needed too: without one, accepting opens My profile and you join when you save it.
 
 **The button is grey.** Hover it: the tooltip says why (you are not the captain, the squad is full, select a card first...).
 

@@ -83,7 +83,7 @@ Guía del GM, los oficiales y los líderes de banda: [GM-GUIDE.md](GM-GUIDE.md).
 
 **Mi jefe no puntuó.** ¿Había otro miembro del squad con el addon en el grupo? ¿Ya lo matasteis hoy? ¿La competición está activa y la categoría tiene peso > 0? Durante el combate el addon no envía nada: se envía al terminar.
 
-**No puedo entrar en el squad.** Hace falta que el capitán te acepte **y** que tu perfil apunte a ese squad. Un personaje solo puede estar en un squad. Desde la 2.0.1 también hace falta un perfil rellenado: si no lo tienes, al aceptar se abre Mi perfil y te unes al guardarlo.
+**No puedo entrar en el squad.** Hace falta que el capitán te acepte **y** que tu perfil apunte a ese squad. Un personaje solo puede estar en un squad. Desde la 2.1 también hace falta un perfil rellenado: si no lo tienes, al aceptar se abre Mi perfil y te unes al guardarlo.
 
 **El botón está gris.** Pasa el ratón: el tooltip dice por qué (no eres capitán, el squad está lleno, primero elige una tarjeta...).
 
