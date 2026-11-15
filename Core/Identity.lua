@@ -7,7 +7,7 @@
 -- I.id(a, b, ctx) -> identity or nil. ctx = { mode = "forever"|"realm", myRealm = "Realm", index = I.newIndex(),
 -- isSecret = fn }: no globals. Rules: (a) not a string, empty or secret -> nil; (b) idempotent:
 -- I.id(I.id(x)) == I.id(x); (c) never raises; (d) splits with plain string.find, never %s / %w (locale, UTF-8);
--- (e) case-insensitive only for ASCII (I.lower), the roster spelling wins; (f) in forever "X-Y" is a realm when Y is
+-- (e) case-insensitive for ASCII and the Latin-1 letters (I.lower, 2.1), the roster spelling wins; (f) in forever "X-Y" is a realm when Y is
 -- my realm or a realm of the roster, a surname (chat link separator, «Kas-Pitas») otherwise.
 local _, ns = ...
 ns = ns or {}
@@ -17,12 +17,17 @@ ns.Identity = I
 
 local find, sub, byte, gsub = string.find, string.sub, string.byte, string.gsub
 
--- ASCII-only lower case (rule e): string.lower depends on the C locale, and a non-ASCII byte must never change
+-- lower case by table (rule e): string.lower depends on the C locale. ASCII, and since 2.1 (SPEC-v2.1 AC10, review D
+-- B3) the 2-byte Latin-1 capitals of UTF-8 (U+00C0-U+00DE: À..Þ, Ñ, Ü, Ç ...) to their small letter (+ 0x20 on the 2nd
+-- byte), all but × (U+00D7). No other byte ever changes (Cyrillic, other scripts and broken UTF-8 stay as they are).
 local LOWER = {}
 for c = 65, 90 do LOWER[string.char(c)] = string.char(c + 32) end
+local LATIN = {}
+for b = 128, 158 do if b ~= 151 then LATIN["\195" .. string.char(b)] = "\195" .. string.char(b + 32) end end
 function I.lower(s)
   if type(s) ~= "string" then return s end
-  return (gsub(s, "[A-Z]", LOWER))
+  s = gsub(s, "[A-Z]", LOWER)
+  return (gsub(s, "\195[\128-\158]", LATIN))
 end
 
 -- surrounding blanks off, runs of spaces inside become one (typed names). Plain bytes, no %s.
