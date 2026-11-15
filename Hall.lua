@@ -63,6 +63,9 @@ local function racesSeen()
     local rc = p and type(p.d) == "table" and p.d.race
     if type(rc) == "string" and rc ~= "" and not seen[rc] then seen[rc] = true; out[#out + 1] = rc end
   end
+  -- 2.1 (SPEC-v2.1 AC6): my own race (UnitRace) always counts, also before my profile carries it (review H3)
+  local okU, _, tok = pcall(function() return UnitRace("player") end)
+  if okU and type(tok) == "string" and tok ~= "" and not seen[tok] then seen[tok] = true; out[#out + 1] = tok end
   table.sort(out)
   return out
 end
