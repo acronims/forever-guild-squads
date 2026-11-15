@@ -134,7 +134,19 @@ function R.raceLabels(get)
   end
   return out
 end
-local function raceWhite(ru, ctx) return R.RACE_OK[ru] or (ctx.raceOk and ctx.raceOk[ru]) or false end
+-- 2.1 (SPEC-v2.1 AC6, review 2.0.1 H4): the client's table may list NPC races too. With ctx.races (the races of the
+-- members' signed profiles, Hall.lua racesSeen) a token only the table knows is whitelisted when a member is of that
+-- race; without ctx.races (pure callers) the table alone, as in the 2.0.1
+local function raceWhite(ru, ctx)
+  if R.RACE_OK[ru] then return true end
+  if not (ctx.raceOk and ctx.raceOk[ru]) then return false end
+  if type(ctx.races) ~= "table" then return true end
+  if not ctx.raceSet then
+    ctx.raceSet = {}
+    for _, rc in ipairs(ctx.races) do if type(rc) == "string" then ctx.raceSet[slug(rc):upper()] = true end end
+  end
+  return ctx.raceSet[ru] or false
+end
 local function isInt(v) return type(v) == "number" and v == floor(v) end
 
 function R.sanitize(ev)
