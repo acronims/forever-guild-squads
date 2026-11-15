@@ -301,6 +301,49 @@ test("2.1 AC2: a closed race moves to the identity in the migration and on impor
   eq(R.packClosed(s2.closed["lvl.all.10"]), oldText, "realm mode: unchanged")
 end)
 
+-- 2.1 (SPEC-v2.1 AC3): a partition the published 2.0.0 already migrated (tests/fixtures/sv-2.0.0.lua, made by
+-- tests/tools/make-sv-200.js with the code of the tag v2.0.0) gets the 2.1 pass once when it loads
+local function fixture200()
+  local src = SOURCES["tests/fixtures/sv-2.0.0.lua"]
+  ok(type(src) == "string", "tests/fixtures/sv-2.0.0.lua is loaded by tests/run.js")
+  return load(src, "@tests/fixtures/sv-2.0.0.lua")()
+end
+test("2.1 AC3: the 2.0.0 fixture is migrated by the 2.0.0 and still has the old names the 2.1 moves", function()
+  local root = fixture200()
+  local g = root.guilds[GK]
+  eq(g.idv, 2, "partition migrated by the 2.0.0"); eq(root.idv["Kas Pitas"], 2, "the main migrated")
+  eq(g.idv21, nil, "no 2.1 mark")
+  ok(g.progress.snap.W2967["Mb-Realm:1795000050"]["Nc-Realm"], "snap still on the old name")
+  ok(g.races.closed["lvl.all.10"].rows[1].key == "Nc-Realm", "closed race on the old name")
+  ok(g.progress.lvKnown["Nc-Realm"] and g.races.rcache["Nc-Realm"], "lvKnown and rcache on the old name")
+  ok(g.progress.ach.char["Nc-Realm"], "achievements on the old name")
+end)
+test("2.1 AC3: on a 2.0.0 partition the pass runs once (g.idv21), is idempotent, dry writes nothing, realm does nothing", function()
+  local root = fixture200()
+  local g = root.guilds[GK]
+  local bytes = S.encode(root)
+  local rr = M.migrateIdentity(root, g, ctxFor("Kas Pitas", "Kas-Realm", { mode = "realm" }))
+  eq(S.encode(root), bytes, "realm mode: nothing changes"); eq(rr.remapped, 0)
+  local dry = M.migrateIdentity(root, g, ctxFor("Kas Pitas", "Kas-Realm", { dry = true }))
+  eq(S.encode(root), bytes, "dry: nothing written")
+  local r = main(root)
+  ok(not r.guild, "the 2.0 step 1 does not run again"); ok(r.v21, "the 2.1 pass ran")
+  eq(dry.remapped, r.remapped, "dry counts the same"); ok(r.remapped > 0, "it moved names: " .. r.remapped)
+  eq(g.idv21, 1, "the 2.1 mark")
+  local snapMb = g.progress.snap.W2967["Mb-Realm:1795000050"]
+  ok(snapMb["Nc Apnc"] and snapMb["Mb Apmb"] and not snapMb["Nc-Realm"], "snap moved")
+  eq(g.races.closed["lvl.all.10"].rows[1].key, "Nc Apnc", "closed race moved"); eq(g.races.closed["lvl.all.10"].rows[2].key, "Mb Apmb")
+  eq(g.progress.lvKnown["Nc Apnc"], 30, "lvKnown moved"); eq(g.races.rcache["Nc Apnc"], 60, "rcache moved")
+  eq(g.progress.ach.char["Nc Apnc"].squad60, 1795000200, "achievements moved")
+  ok(g.progress.ach.squad["Kas-Realm:1795001009"], "squad ids kept")
+  local once = S.encode(root)
+  local r2 = main(root)
+  eq(S.encode(root), once, "a second load changes nothing"); ok(not r2.v21, "the pass runs once")
+  g.idv21 = nil
+  main(root)
+  eq(S.encode(root), once, "without the mark: the same bytes")
+end)
+
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)
 SMOKE_CHECKS = SMOKE_CHECKS or {}
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "2.0: the first own manifest of a migrated identity is n = 1, the next ones grow", function(c)
