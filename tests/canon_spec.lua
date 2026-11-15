@@ -328,6 +328,43 @@ test("A1 saved data: keys, manifests, certificates, pending copies and records u
   ok(n and n >= 6, "counted: " .. tostring(n))
 end)
 
+-- 2.1 (SPEC-v2.1 AC5, hotfix-121 «Pendiente»): the 1.2.0 leftovers «Name Surname-Realm» (keys, manifests,
+-- certificates) neither count in `keys strong=` nor reach my own certificate (Cert.own reads trust.keys), in both modes
+local function leftoverDB(key, me, good, leftovers)
+  local pk, sig = string.rep("ab", 32), string.rep("0", 128)
+  local keys, man, crt = { [good] = { pk = pk, s = "strong", t = 1000000, seen = 1000000 } }, {}, {}
+  for _, n in ipairs(leftovers) do
+    keys[n] = { pk = pk, s = "strong", t = 1000000, seen = 1000000 }
+    man[n] = { n = 1, h = {}, s = sig, strength = "strong", pk = pk }
+    crt[n] = { n = 1, pk = pk, e = {}, s = sig }
+  end
+  return { idv = { [me] = 2 }, guilds = { [key] = { idv = 2, idv21 = 1, records = {},
+    trust = { keys = keys, pend = {}, contested = {}, suspects = {}, alerts = {} }, sig = { man = man }, cert = { crt = crt } } } }
+end
+test("2.1 AC5: 1.2.0 leftovers «Name Surname-Realm» are not strong keys nor in my certificate (forever)", function()
+  local leftovers = { "Ann Oak-" .. MY, "Bob Stone-RealmA", "Kas Mora-" .. MY }
+  local ns, _, _, diag = boot(F({ db = leftoverDB("Por Honor-" .. MY, "Kas Pitas", "Bob Stone", leftovers) }))
+  ok(ns.gdb, "partition loaded")
+  local out = diag()
+  eq(out:match("keys own=%a+ strong=(%d+)"), "1", "keys strong= counts only «Bob Stone»")
+  for _, n in ipairs(leftovers) do
+    eq(ns.trustDB.keys[n], nil, "key " .. n); eq(ns.sigDB.man[n], nil, "manifest " .. n); eq(ns.certDB.crt[n], nil, "certificate " .. n)
+  end
+  local names = {}
+  for n, k in pairs(ns.trustDB.keys) do if k.s == "strong" then names[#names + 1] = n end end
+  eq(table.concat(names, ","), "Bob Stone", "what Cert.own certifies (the strong keys of trust.keys)")
+end)
+test("2.1 AC5: the same leftovers in realm mode («Name-Realm» is the identity there)", function()
+  local leftovers = { "Ann Oak-" .. MY, "Bob Stone-RealmA" }
+  local ns, _, _, diag = boot(F({ regional = false, db = leftoverDB("Por Honor-" .. MY, "Kas-" .. MY, "Bob-RealmA", leftovers) }))
+  ok(ns.gdb, "partition loaded")
+  eq(ns.ID_MODE, "realm", "realm mode")
+  local out = diag()
+  eq(out:match("keys own=%a+ strong=(%d+)"), "1", "keys strong= counts only «Bob-RealmA»")
+  for _, n in ipairs(leftovers) do eq(ns.trustDB.keys[n], nil, "key " .. n); eq(ns.sigDB.man[n], nil, "manifest " .. n) end
+  ok(ns.trustDB.keys["Bob-RealmA"], "the identity key stays (control)")
+end)
+
 -------------------------------------------------------------------------------
 -- M1 (D4)
 test("M1 (D4): realm at ADDON_LOADED, the roster before PLAYER_LOGIN, forever at PLAYER_LOGIN: forever, migrated", function()
