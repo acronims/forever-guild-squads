@@ -43,7 +43,8 @@ local function fixture()
 end
 local function ctxFor(me, oldMe, extra)
   local c = { mode = "forever", id = idOf, me = me, oldMe = oldMe, now = NOW, eventId = NS.Progress.eventId,
-              obsId = NS.Races.obsId, rsvpId = NS.Roster.rsvpId, grantId = NS.Catalog.grantId }
+              obsId = NS.Races.obsId, rsvpId = NS.Roster.rsvpId, grantId = NS.Catalog.grantId,
+              remapClosed = NS.Races.remapClosed }
   for k, v in pairs(extra or {}) do c[k] = v end
   return c
 end
@@ -260,6 +261,44 @@ test("2.1 AC1: a closed wipe counts its members by their new name (P.memberAt ov
   local isMember = P.memberAt(g.progress.snap, function() return false end, ts + 86400 * 30)
   ok(isMember("Mb-Realm:1795000050", "Nc Apnc", ts), "«Nc Apnc» was in the squad that wipe")
   ok(not isMember("Mb-Realm:1795000050", "Gm Apgm", ts), "control: «Gm Apgm» was not")
+end)
+
+-- 2.1 (SPEC-v2.1 AC2): the rows of a closed race carry names (key of a character race, chars, sup)
+local function closedFixture(n)
+  local rows = {}
+  for i = 1, n do
+    local who = (i == 1) and "Nc-Realm" or (i == 2 and "Kas-Realm" or (i == 3 and "Zed-Gone" or ("Mb" .. i .. " Ap" .. i)))
+    rows[i] = { key = who, ts = 1795000000 + i, chars = { who }, squads = (i == 1) and { "Mb-Realm:1795000050" } or {},
+                sup = (i == 1) and { "Mb-Realm" } or {}, wit = 2 }
+  end
+  return { rows = rows, at = 1795000900 }
+end
+local function strictOf(n) local v = idOf(n); if v and not old(v) then return v end end
+test("2.1 AC2: a closed race moves to the identity in the migration and on import (same text, same bucket hash)", function()
+  local R = NS.Races
+  local size = R.def("lvl.all.10").size
+  local root = fixture()
+  local g = root.guilds[GK]
+  g.races.closed = { ["lvl.all.10"] = closedFixture(size) }
+  local oldText = R.packClosed(g.races.closed["lvl.all.10"])
+  main(root)
+  local c = g.races.closed["lvl.all.10"]
+  ok(c and #c.rows == size, "the closed Top keeps its " .. size .. " rows")
+  eq(c.rows[1].key, "Nc Apnc", "key of a character race remapped"); eq(c.rows[1].chars[1], "Nc Apnc", "chars remapped")
+  eq(c.rows[1].sup[1], "Mb Apmb", "sup remapped"); eq(c.rows[1].squads[1], "Mb-Realm:1795000050", "squad id kept (opaque)")
+  eq(c.rows[2].key, "Kas-Realm", "an ambiguous name stays as it was (strict: nobody can tell which «Kas»)")
+  eq(c.rows[3].key, "Zed-Gone", "a name without identity stays as it was (no row removed)")
+  -- a fresh 2.1 imports the old text from a 2.0.0 officer: the same rows as the client that migrated
+  local store = R.newStore()
+  ok(R.importClosed(store, "lvl.all.10", oldText, 1795000900, nil, strictOf), "imported")
+  eq(R.packClosed(store.closed["lvl.all.10"]), R.packClosed(c), "same text as the migrated client")
+  local h1 = R.bucketHashes({ obs = {}, closed = { ["lvl.all.10"] = c } })
+  local h2 = R.bucketHashes(store)
+  eq(table.concat(h1, ","), table.concat(h2, ","), "same bucket hashes")
+  -- without a map (realm mode) the import keeps the text as it came
+  local s2 = R.newStore()
+  ok(R.importClosed(s2, "lvl.all.10", oldText, 1795000900), "imported in realm mode")
+  eq(R.packClosed(s2.closed["lvl.all.10"]), oldText, "realm mode: unchanged")
 end)
 
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)
