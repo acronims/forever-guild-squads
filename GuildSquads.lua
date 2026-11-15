@@ -970,6 +970,7 @@ end
 local pool = ns.Trust and ns.Trust.entropy()
 local ownPk
 local f, sampler                       -- the events frame and its OnUpdate key sampler (defined below)
+local keyAskedAt                       -- GetTime() of the sampler's last ns.myPk() (2.1 AC12)
 local function sample(tag)
   if not pool or ownPk then return end
   local cx, cy
@@ -1083,7 +1084,13 @@ local rosterQueued = false
 sampler = function()
   if ownPk or not pool then f:SetScript("OnUpdate", nil); return end
   sample("f")
-  if pool.n >= ns.Trust.MIN_SAMPLES and db and ns.myPk() then f:SetScript("OnUpdate", nil) end
+  -- 2.1 (SPEC-v2.1 AC12, review D B7): with the pool full, the key is asked for at most once a second. A WoW Forever
+  -- character without a guild has none until a partition migrates it, and asked on every frame all session
+  if pool.n < ns.Trust.MIN_SAMPLES or not db then return end
+  local t = GetTime and GetTime() or 0
+  if keyAskedAt and t >= keyAskedAt and t - keyAskedAt < 1 then return end
+  keyAskedAt = t
+  if ns.myPk() then f:SetScript("OnUpdate", nil) end
 end
 f:SetScript("OnUpdate", sampler)
 -- v1.2 annex F: at most one manifest verify per frame, never in combat nor during a boss encounter
