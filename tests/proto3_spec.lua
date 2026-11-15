@@ -201,3 +201,35 @@ test("proto3: a 49-byte «Name Surname» survives every character-name field (ca
   local ob = Rc.sanitize({ t = "kill", who = N49, by = N49, ts = NOW, inst = "x", it = "raid", enc = 1, pres = { N49 } })
   ok(ob and ob.who == N49 and ob.by == N49 and ob.pres[1] == N49, "race who / by / pres")
 end)
+
+-- 2.1 (SPEC-v2.1 AC7, review 2.0.1 «Huecos de tests» 6): the wire of the 2.1 is the wire of the published 2.0.0.
+-- Fingerprints of every signed record schema (Model.SCHEMA with every registered kind), the race observation schema
+-- and the message types the addon sends, computed with the code of the tag v2.0.0 (9415c4f). If one changes, the
+-- 2.0.0 and the 2.1 stop understanding each other: that is a PROTO change, out of the 2.1 scope.
+local function canon(v, depth)
+  depth = depth or 0
+  if type(v) ~= "table" then return tostring(v) end
+  local keys = {}
+  for k in pairs(v) do keys[#keys + 1] = k end
+  table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+  local out = {}
+  for _, k in ipairs(keys) do out[#out + 1] = tostring(k) .. "=" .. canon(v[k], depth + 1) end
+  return "{" .. table.concat(out, ",") .. "}"
+end
+local function msgTypes()
+  local set, list = {}, {}
+  for f, src in pairs(SOURCES) do
+    if type(f) == "string" and f:match("%.lua$") and not f:match("^tests/") then
+      for t in src:gmatch('Send%("([A-Z][A-Z0-9]*)"') do if not set[t] then set[t] = true; list[#list + 1] = t end end
+    end
+  end
+  table.sort(list)
+  return table.concat(list, ",")
+end
+test("2.1 AC7: PROTO 3 and the fingerprint of every schema and message type are the ones of the 2.0.0", function()
+  local S = NS.Serialize
+  eq(NS.Model.PROTO, 3, "PROTO")
+  eq(S.hash(canon(NS.Model.SCHEMA)), "11c263ca0d868cad", "Model.SCHEMA (all kinds) = v2.0.0")
+  eq(S.hash(canon(NS.Races.SCHEMA)), "2ad289811bfe6605", "Races.SCHEMA = v2.0.0")
+  eq(msgTypes(), "C,CL,D,E,H,RO,RP,SQ,SR", "message types = v2.0.0")
+end)
