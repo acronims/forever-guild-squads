@@ -779,6 +779,8 @@ L.CAT_M_manual = "Badge granted by the GM"
 L.CAT_P_ANY = "Any character"
 L.CAT_P_CLASS = "Class: %s"
 L.CAT_P_RACE = "Race: %s"
+L.CAT_P_BYCLASS = "By class…"
+L.CAT_P_BYRACE = "By race…"
 -- race names for the Hall of Fame race titles and the catalog (token from UnitRace / the guild roster)
 L.RACE_HUMAN = "Human"
 L.RACE_DWARF = "Dwarf"

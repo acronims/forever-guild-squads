@@ -99,14 +99,23 @@ local function seenKeys(kind)   -- keys reported in the observations we hold (pr
   end
   return out
 end
-local function paramItems(spec, nextStep)
+local function paramItems(spec, nextStep, owner)
   local items = {}
   local function add(text, param) items[#items + 1] = { text = text, func = function() spec.param = param; nextStep() end } end
   if spec.metric == "level" then
+    -- 2.1 (SPEC-v2.1 AC9, review 2.0.1 H8): «any», then a menu of classes and one of races. One list of 30 for the three
+    -- dropped the last races with many classes in the guild; each sub-list fits on its own
     add(L.CAT_P_ANY, "")
-    local classes = {}
+    local function sub(title, list)
+      items[#items + 1] = { text = title, func = function()
+        local m = { { text = title, title = true } }
+        for _, e in ipairs(list) do m[#m + 1] = { text = e[1], func = function() spec.param = e[2]; nextStep() end } end
+        W.Menu(owner, m)
+      end }
+    end
+    local classes, clist = {}, {}
     for _, r in pairs(ns.rosterList and ns.rosterList() or {}) do if type(r.class) == "string" then classes[r.class] = true end end
-    for _, c in ipairs(sortedKeys(classes)) do add(L.CAT_P_CLASS:format(UI.ClassName and UI.ClassName(c) or c), "class:" .. c) end
+    for _, c in ipairs(sortedKeys(classes)) do clist[#clist + 1] = { L.CAT_P_CLASS:format(UI.ClassName and UI.ClassName(c) or c), "class:" .. c } end
     -- 2.0.1: the guild's own races first (Skyborne has no entry in R.RACE_OK), then the known list
     local h, rlist, rseen = ns.HallGlue, {}, {}
     local ok2 = h and h.RaceTable and (h.RaceTable()) or {}
@@ -115,9 +124,13 @@ local function paramItems(spec, nextStep)
       if (R.RACE_OK[ru] or ok2[ru]) and not rseen[ru] then rseen[ru] = true; rlist[#rlist + 1] = ru end
     end
     for _, ru in ipairs(sortedKeys(R.RACE_OK)) do if not rseen[ru] then rseen[ru] = true; rlist[#rlist + 1] = ru end end
+    local relist, labels = {}, {}
     for _, rc in ipairs(rlist) do
-      if #items < 30 then add(L.CAT_P_RACE:format(UI.RaceName(rc)), "race:" .. rc) end
+      local label = L.CAT_P_RACE:format(UI.RaceName(rc))
+      if not labels[label] and #relist < 40 then labels[label] = true; relist[#relist + 1] = { label, "race:" .. rc } end
     end
+    if #clist > 0 then sub(L.CAT_P_BYCLASS, clist) end
+    if #relist > 0 then sub(L.CAT_P_BYRACE, relist) end
   elseif spec.metric == "boss" then
     for _, b in ipairs(ns.Content.bossList and ns.Content.bossList() or {}) do
       if #items < 30 then
@@ -172,7 +185,7 @@ function UI.CatalogWizard(owner)
     W.Menu(owner, items)
   end
   local function step2()
-    local items = paramItems(spec, step3)
+    local items = paramItems(spec, step3, owner)
     if #items == 0 then ns.print(L.CAT_W2_EMPTY); return end
     table.insert(items, 1, { text = L.CAT_W2, title = true })
     W.Menu(owner, items)

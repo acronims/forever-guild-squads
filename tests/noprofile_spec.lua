@@ -695,7 +695,8 @@ test("2.1 AC9: the level achievement of the GM offers all the races (guild ones 
   local seen, dup = {}, {}
   for _, r in ipairs(races) do if seen[r] then dup[#dup + 1] = r end seen[r] = true end
   eq(#dup, 0, "no race twice: " .. table.concat(dup, ","))
-  eq(#races, 19, "17 of R.RACE_OK + the 2 Skyborne: " .. table.concat(races, ","))
+  -- R.RACE_OK has SCOURGE and UNDEAD, the same race with the same name («Undead»; UnitRace gives «Scourge»): once
+  eq(#races, 18, "the 17 of R.RACE_OK (Undead once) + the 2 Skyborne: " .. table.concat(races, ","))
   ok(seen["Altonato (Alta Orden)"] and seen["Altonato (Ventolera)"], "both Skyborne by their client name")
   local firstOther
   for i, r in ipairs(races) do if r == "Pandaren" or r == "Worgen" or r == "Draenei" then firstOther = firstOther or i end end

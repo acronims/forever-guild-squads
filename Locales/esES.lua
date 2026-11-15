@@ -768,6 +768,8 @@ L.CAT_M_manual = "Insignia que otorga el GM"
 L.CAT_P_ANY = "Cualquier personaje"
 L.CAT_P_CLASS = "Clase: %s"
 L.CAT_P_RACE = "Raza: %s"
+L.CAT_P_BYCLASS = "Por clase…"
+L.CAT_P_BYRACE = "Por raza…"
 -- race names for the Hall of Fame race titles and the catalog (token from UnitRace / the guild roster)
 L.RACE_HUMAN = "Humano"
 L.RACE_DWARF = "Enano"
