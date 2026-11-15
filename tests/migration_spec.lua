@@ -362,7 +362,9 @@ local function checkAnnuls(g, label)
   ok(sqA and sqA.id == "sq.kill.1|Mb-Realm:1795000050" and sqA.d.key == "Mb-Realm:1795000050", label .. ": a squad annulment is not touched")
   ok(vc and vc.id == "Nc Apnc|kill|1795001120|e1443" and vc.d.oid == vc.id, label .. ": vconfirm id = the moved observation id (" .. tostring(vc and vc.id) .. ")")
   ok(g.races.obs[vc.id] ~= nil, label .. ": that observation is held under that id")
-  local am = NS.Races.annulMap(g.records)
+  local only = {}
+  for _, r in ipairs(g.records) do if r.k == "annul" then only[#only + 1] = r end end
+  local am = NS.Races.annulMap(only)
   ok(am["lvl.all.10"] and am["lvl.all.10"]["Nc Apnc"], label .. ": the annulment applies to «Nc Apnc» again")
   return an, sqA, vc
 end

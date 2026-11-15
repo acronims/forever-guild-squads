@@ -1146,9 +1146,58 @@ local function step1(root, g, ctx, strict, map, r)
   g.idMigratedAt = g.idMigratedAt or ctx.now
 end
 
+-- 2.1 (SPEC-v2.1 AC4): the ids that embed a name. annul: id = race .. "|" .. key, where key is a character (a name) or a
+-- squad id («Name:ct», opaque: kept). vconfirm: id = d.oid = the observation id (Races.obsId: by|t|ts|tail, tail =
+-- «who#lv» for a level), remapped like the observations themselves (strict). Returns true when it changed the record,
+-- nil when there was nothing to change, false when the name has no identity (the record must go).
+local function remapObsId(id, strict)
+  if type(id) ~= "string" then return nil end
+  local parts, i = {}, 1
+  while true do
+    local j = string.find(id, "|", i, true)
+    if not j then parts[#parts + 1] = string.sub(id, i); break end
+    parts[#parts + 1] = string.sub(id, i, j - 1); i = j + 1
+  end
+  if #parts < 4 then return nil end
+  local any = false
+  if isOld(parts[1]) then local m = strict(parts[1]); if not m then return false end; parts[1] = m; any = true end
+  if parts[2] == "lv" then
+    local tail = parts[4]
+    local h = #tail
+    while h > 0 and string.sub(tail, h, h) ~= "#" do h = h - 1 end
+    local who = h > 0 and string.sub(tail, 1, h - 1) or nil
+    if who and isOld(who) then local m = strict(who); if not m then return false end; parts[4] = m .. string.sub(tail, h); any = true end
+  end
+  if not any then return nil end
+  return table.concat(parts, "|")
+end
+M.remapObsId = remapObsId
+function M.fixOwnNamedId(rec, map, strict, r)
+  local d = type(rec.d) == "table" and rec.d or nil
+  if not d then return nil end
+  if rec.k == "annul" then
+    local key = d.key
+    if type(key) ~= "string" or string.find(key, ":", 1, true) or not isOld(key) then return nil end
+    local m = map(key)
+    if not m then return false end
+    d.key = m
+    rec.id = tostring(d.race) .. "|" .. m
+    if r then r.remapped = r.remapped + 1 end
+    return true
+  elseif rec.k == "vconfirm" then
+    local nid = remapObsId(d.oid, strict)
+    if nid == nil then return nil end
+    if nid == false then return false end
+    d.oid, rec.id = nid, nid
+    if r then r.remapped = r.remapped + 1 end
+    return true
+  end
+  return nil
+end
+
 -- my record r, waiting for its re-signature: the names inside remapped; false = it must go
 local NAME_ID = { profile = true, presence = true }
-local function fixOwn(rec, ctx, map, r)
+local function fixOwn(rec, ctx, map, r, strict)
   local d = type(rec.d) == "table" and rec.d or {}
   local k = rec.k
   if k == "repudiate" then return false end                         -- it denies a 1.x version: nothing left to deny
@@ -1189,11 +1238,13 @@ local function fixOwn(rec, ctx, map, r)
     if not single("who") then return false end
     if d.who ~= was and type(ctx.grantId) == "function" then rec.id = ctx.grantId(d.ach, d.who) end
   elseif k == "settings" then many("rlList")
+  elseif k == "annul" or k == "vconfirm" then
+    return M.fixOwnNamedId(rec, map, strict or map, r) ~= false
   end
   return true
 end
 
-local function step2(root, g, ctx, map, r)
+local function step2(root, g, ctx, map, r, strict)
   local me, oldMe = ctx.me, ctx.oldMe
   -- 1. the 1.x key of this character
   if isOld(oldMe) then
@@ -1212,7 +1263,7 @@ local function step2(root, g, ctx, map, r)
     local at = {}                                                    -- kid -> index in g.records (one version per kid)
     for i, rec in ipairs(g.records) do if type(rec) == "table" then at[tostring(rec.k) .. ":" .. tostring(rec.id)] = i end end
     for _, rec in ipairs(back) do
-      if fixOwn(rec, ctx, map, r) then
+      if fixOwn(rec, ctx, map, r, strict) then
         rec.a = me
         rec.sq = (tonumber(rec.sq) or 0) + 1
         rec.ts = math.max(tonumber(rec.ts) or 0, tonumber(ctx.now) or 0)
@@ -1237,6 +1288,41 @@ local function step2(root, g, ctx, map, r)
   root.idv[me] = M.IDV
 end
 
+-- 2.1 (SPEC-v2.1 AC4): my annulments / confirmations the 2.0.0 already re-signed with a 1.x name inside their id (it did
+-- not remap them): a new version with the identity (sq + 1, ts now), on every load until none is left (idempotent).
+-- One that names nobody goes. Only the author can sign it, so each character fixes its own.
+local function ownNamedIds(g, ctx, map, strict, r)
+  if type(g.records) ~= "table" then return end
+  local keep, changed = {}, false
+  local at = {}
+  for _, rec in ipairs(g.records) do
+    if type(rec) == "table" and rec.a == ctx.me and (rec.k == "annul" or rec.k == "vconfirm") then
+      local res = M.fixOwnNamedId(rec, map, strict, r)
+      if res == false then changed = true; r.dropped = r.dropped + 1; rec = nil
+      elseif res == true then
+        changed = true
+        rec.sq = (tonumber(rec.sq) or 0) + 1
+        rec.ts = math.max(tonumber(rec.ts) or 0, tonumber(ctx.now) or 0)
+        r.resigned = r.resigned + 1
+        if type(ctx.note) == "function" then pcall(ctx.note, rec) end
+      end
+    end
+    if rec then
+      local kid = type(rec) == "table" and (tostring(rec.k) .. ":" .. tostring(rec.id)) or nil
+      local i = kid and at[kid]
+      if i then                                                    -- one version per kid: the newest stays
+        local cur = keep[i]
+        if (tonumber(rec.ts) or 0) > (tonumber(cur.ts) or 0) or ((tonumber(rec.ts) or 0) == (tonumber(cur.ts) or 0) and (tonumber(rec.sq) or 0) > (tonumber(cur.sq) or 0)) then keep[i] = rec end
+        changed = true
+      else
+        keep[#keep + 1] = rec
+        if kid then at[kid] = #keep end
+      end
+    end
+  end
+  if changed then g.records = keep end
+end
+
 function M.migrateIdentity(root, g, ctx)
   local r = { swept = 0, dropped = 0, resign = 0, remapped = 0, removed = 0, resigned = 0 }
   ctx = type(ctx) == "table" and ctx or {}
@@ -1257,7 +1343,8 @@ function M.migrateIdentity(root, g, ctx)
   for _, rec in ipairs(type(g.resign) == "table" and g.resign or {}) do
     if type(rec) == "table" and (rec.a == ctx.me or rec.a == ctx.oldMe) then mine = true; break end
   end
-  if mine or not (type(root.idv) == "table" and root.idv[ctx.me] == M.IDV) then step2(root, g, ctx, map, r); r.char = true end
+  if mine or not (type(root.idv) == "table" and root.idv[ctx.me] == M.IDV) then step2(root, g, ctx, map, r, strict); r.char = true end
+  ownNamedIds(g, ctx, map, strict, r)
   return r
 end
 function M.guildKey(name, realm)
