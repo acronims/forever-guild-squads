@@ -281,4 +281,63 @@ function S25(seed) {
   return { pass: pass(), checks, metrics: { ref: REF200, tJoin, trafficA, trafficB, ...sim.stats } };
 }
 
-module.exports = { S23, S17v2, S24, S25 };
+// S26 (2.1, review-2.1 R1 and R2): a guild on the published 2.0.0 (Gm, Of officer, Mb1, Mb2) that holds 1.x-era data
+// with old names (6 closed races with «Xx-Realm» rows; two GM annulments of an old name, one of a member who left)
+// upgrades to the 2.1 in steps: Of + Mb2, then Gm, then Mb1. Criteria: 0 Lua errors; the Hall traffic (RO + RP) and
+// the record traffic (D) of a reload round stay near the all-2.0.0 round in every mix (bounds below); at the end the
+// four models converge (sim.converged) and the GM's annulments still annul on every client.
+function S26(seed) {
+  const sim = new Sim({ seed, forever: true });
+  const { check, checks, pass } = checker();
+  const v200 = sourcesAt(REF200);
+  for (const [n, r] of [['Gm', 0], ['Of', 1], ['Mb1', 5], ['Mb2', 5]]) sim.addMember(n, r);
+  for (let i = 1; i <= 10; i++) sim.addMember('Xx' + i, 5);
+  const cs = {};
+  for (const n of ['Gm', 'Of', 'Mb1', 'Mb2']) cs[n] = sim.client(n, { code: v200 });
+  const all = Object.values(cs);
+  const { Gm: gm, Of: of, Mb1: mb1, Mb2: mb2 } = cs;
+  const hook = (c) => c.run(`local C = NS.Comm; local o = C.Send; SIM_N = { RO = 0, RP = 0, D = 0 }
+    C.Send = function(tag, ...) if SIM_N[tag] then SIM_N[tag] = SIM_N[tag] + 1 end return o(tag, ...) end return true`);
+  const cnt = (c) => [num(c, '(SIM_N and (SIM_N.RO + SIM_N.RP)) or 0'), num(c, '(SIM_N and SIM_N.D) or 0')];
+  for (const c of all) { c.login(); hook(c); sim.run(3); }
+  sim.run(60);
+  check('GM settings', gm.run('return A.SaveSettings({ squadsEnabled = true, bench = 2, minCreateRank = 9, officerRanks = { 1 }, banned = {} })')[0] === true);
+  sim.run(60);
+  const inject = (id) => `(function() local R, H = NS.Races, NS.HallGlue; local id = ${luaStr(id)}
+    local rows = {} for i = 1, R.def(id).size do rows[i] = { key = "Xx" .. i .. "-Realm", ts = 1795000000 + i, chars = { "Xx" .. i .. "-Realm" }, squads = {}, sup = {}, wit = 2 } end
+    return tostring(R.importClosed(H.Store(), id, R.packClosed({ rows = rows }), 1795000000)) end)()`;
+  const RACES = ['lvl.class.WARRIOR.10', 'lvl.class.MAGE.10', 'lvl.class.PRIEST.10', 'lvl.class.ROGUE.10', 'lvl.class.HUNTER.10', 'lvl.class.DRUID.10'];
+  for (const c of all) for (const id of RACES) c.run('return ' + inject(id));
+  check('the 2.0.0 GM annuls «Xx1-Realm» and «Zed-Realm» (a member who left)', gm.run('return NS.HallGlue.Annul("lvl.all.20", "Xx1-Realm", "cheat")')[0] === true &&
+    gm.run('return NS.HallGlue.Annul("lvl.all.20", "Zed-Realm", "cheat, kicked")')[0] === true);
+  sim.run(240);
+  const round = () => {
+    let h = 0, d = 0;
+    for (const c of all) { const [a, b] = cnt(c); h += a; d += b; c.reload(); hook(c); sim.run(5 + sim.rand() * 5); }
+    for (const c of all) { const [a, b] = cnt(c); h += a; d += b; hook(c); }
+    sim.run(1500);   // one anti-entropy period too
+    for (const c of all) { const [a, b] = cnt(c); h += a; d += b; hook(c); }
+    return [h, d];
+  };
+  // each count is added up before the hook that resets it (a reload is a new Lua state, hooked again)
+  const base = round();
+  of.code = null; mb2.code = null;
+  const mixA = round(), mixA2 = round();
+  gm.code = null;
+  const mixB = round(), mixB2 = round();
+  mb1.code = null;
+  const all21 = round(), all21b = round();
+  const rounds = { base, mixA, mixA2, mixB, mixB2, all21, all21b };
+  const hMax = base[0] + 10, dMax = 2 * base[1] + 10;
+  const over = Object.entries(rounds).filter(([k, v]) => k !== 'base' && (v[0] > hMax || v[1] > dMax)).map(([k, v]) => k + '=' + v.join('/'));
+  check(`every mixed or 2.1 round: Hall <= ${hMax} and D <= ${dMax} messages (all-2.0.0 round: ${base.join('/')})`, over.length === 0, JSON.stringify(rounds));
+  check('the four models converge at the end (sim.converged)', sim.converged());
+  const annulled = (c) => s(c, `(function() local A = NS.Races.annulMap((function() local o = {} for _, r in pairs(NS.state.annuls or {}) do o[#o + 1] = r end return o end)())
+    local m = A["lvl.all.20"] or {} local o = {} for k in pairs(m) do o[#o + 1] = k end table.sort(o) return table.concat(o, ",") end)()`);
+  const an = all.map((c) => c.name + ':' + annulled(c));
+  check('the GM\'s annulment of «Xx1» still annuls on every client (by the old or the new name)', all.every((c) => /Xx1/.test(annulled(c))), an.join(' ; '));
+  errorsCheck(sim, check);
+  return { pass: pass(), checks, metrics: { rounds, ...sim.stats } };
+}
+
+module.exports = { S23, S17v2, S24, S25, S26 };
