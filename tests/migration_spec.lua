@@ -470,6 +470,34 @@ test("2.1 R1: a name without identity never drops my annul / vconfirm (2.0.0 par
   ok(z and z.a == "Kas Pitas" and z.d.on ~= false, "1.2.2: the annulment of a member who left is re-signed as it is, not dropped")
 end)
 
+-- rereview-2.1 H1: a closed race with 1.x names whose observations are still held (all the level 60s, or a level whose
+-- class / race race is open) was frozen again by the 2.1 with another text than the 2.0.0 keeps (they merge, the 2.0.0
+-- counts two). While the stored rows carry a 1.x name, the race is never frozen again: the text stays the inherited one
+test("2.1 H1: a closed race with 1.x names and observations still held keeps its stored text when computed", function()
+  local R = NS.Races
+  local id = "lvl.all.60"
+  local size = R.def(id).size
+  local store = R.newStore()
+  local rows = {}
+  for i = 1, size do rows[i] = { key = "Xx" .. i .. "-Realm", ts = 1795000000 + i, mark = "approx", chars = { "Xx" .. i .. "-Realm" }, squads = {}, sup = {} } end
+  ok(R.importClosed(store, id, R.packClosed({ rows = rows }), 1795000000), "imported")
+  local text = R.packClosed(store.closed[id])
+  -- the reviewer's probe (rereview-2.1 probe_r2.js): one level-60 observation per row, under the identity; 12 resolve
+  -- (here also an own report + a witness for the first 12, so the identity's candidate differs from the stored row)
+  for i = 1, size do R.add(store, { t = "lv", who = "Xx" .. i .. " Apxx" .. i, by = "Gm Apgm", lv = 60, ts = 1795000000 + i }) end
+  for i = 1, 12 do
+    local who = "Xx" .. i .. " Apxx" .. i
+    R.add(store, { t = "lv", who = who, by = who, src = "self", lv = 60, ts = 1795000000 + i, cls = "WARRIOR", race = "Human" })
+  end
+  local map = function(n) local f = n:match("^(Xx%d+)%-Realm$"); if f and tonumber(f:sub(3)) <= 12 then return f .. " Ap" .. f:lower() end end
+  local r = R.compute(store, { now = 1795100000, closedMap = map })[id]
+  ok(r, "computed (" .. tostring(r and r.state) .. ")")
+  local seen = {}
+  for _, e in ipairs(r.entries) do seen[e.key] = true end
+  ok(seen["Xx1 Apxx1"] and not seen["Xx1-Realm"], "read as the identity")
+  eq(R.packClosed(store.closed[id]), text, "the stored text is the inherited one (2.0.0 bucket hash)")
+end)
+
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)
 SMOKE_CHECKS = SMOKE_CHECKS or {}
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "2.0: the first own manifest of a migrated identity is n = 1, the next ones grow", function(c)
