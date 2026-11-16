@@ -815,6 +815,18 @@ function H.Restore(raceId, key)
   if not (cur and cur.d and cur.d.on ~= false) then return false, "notAnnulled" end
   local okW, why = ns.Actions.WriteRecord("annul", raceId .. "|" .. key,
     { race = raceId, key = key, reason = cur.d.reason, on = false })
+  -- rereview-2.1 H2: the old annulment (1.x name) the migration left next to it, mine and active, that reads as this
+  -- identity is signed off too: the 2.0.0 clients still apply that one
+  local map = okW and H.closedMap()
+  if map then
+    local me = ns.me()
+    for id, rec in pairs(ns.state.annuls or {}) do
+      local d = rec.d
+      if rec.a == me and type(d) == "table" and d.race == raceId and d.on ~= false and d.key ~= key and map(d.key) == key then
+        ns.Actions.WriteRecord("annul", id, { race = raceId, key = d.key, reason = d.reason, on = false })
+      end
+    end
+  end
   if okW then markDirty() end
   return okW, why
 end
