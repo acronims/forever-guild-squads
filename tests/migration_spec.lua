@@ -278,7 +278,7 @@ local function closedFixture(n)
   return { rows = rows, at = 1795000900 }
 end
 local function strictOf(n) local v = idOf(n); if v and not old(v) then return v end end
-test("2.1 AC2: a closed race moves to the identity in the migration and on import (same text, same bucket hash)", function()
+test("2.1 AC2 (amended, review-2.1 R2): a closed race keeps its stored text (2.0.0 hash); the Top shows the identities", function()
   local R = NS.Races
   local size = R.def("lvl.all.10").size
   local root = fixture()
@@ -286,23 +286,23 @@ test("2.1 AC2: a closed race moves to the identity in the migration and on impor
   g.races.closed = { ["lvl.all.10"] = closedFixture(size) }
   local oldText = R.packClosed(g.races.closed["lvl.all.10"])
   main(root)
-  local c = g.races.closed["lvl.all.10"]
-  ok(c and #c.rows == size, "the closed Top keeps its " .. size .. " rows")
-  eq(c.rows[1].key, "Nc Apnc", "key of a character race remapped"); eq(c.rows[1].chars[1], "Nc Apnc", "chars remapped")
-  eq(c.rows[1].sup[1], "Mb Apmb", "sup remapped"); eq(c.rows[1].squads[1], "Mb-Realm:1795000050", "squad id kept (opaque)")
-  eq(c.rows[2].key, "Kas-Realm", "an ambiguous name stays as it was (strict: nobody can tell which «Kas»)")
-  eq(c.rows[3].key, "Zed-Gone", "a name without identity stays as it was (no row removed)")
-  -- a fresh 2.1 imports the old text from a 2.0.0 officer: the same rows as the client that migrated
+  eq(R.packClosed(g.races.closed["lvl.all.10"]), oldText, "the migration does not touch the stored text")
   local store = R.newStore()
   ok(R.importClosed(store, "lvl.all.10", oldText, 1795000900, nil, strictOf), "imported")
-  eq(R.packClosed(store.closed["lvl.all.10"]), R.packClosed(c), "same text as the migrated client")
-  local h1 = R.bucketHashes({ obs = {}, closed = { ["lvl.all.10"] = c } })
-  local h2 = R.bucketHashes(store)
-  eq(table.concat(h1, ","), table.concat(h2, ","), "same bucket hashes")
-  -- without a map (realm mode) the import keeps the text as it came
-  local s2 = R.newStore()
-  ok(R.importClosed(s2, "lvl.all.10", oldText, 1795000900), "imported in realm mode")
-  eq(R.packClosed(s2.closed["lvl.all.10"]), oldText, "realm mode: unchanged")
+  eq(R.packClosed(store.closed["lvl.all.10"]), oldText, "the import keeps the text as it came (same bucket hash as a 2.0.0)")
+  -- computed: the rows show the identities; an annulment by the new name applies; the stored text stays
+  local ctx = { now = 1795100000, closedMap = strictOf, annul = { ["lvl.all.10"] = { ["Nc Apnc"] = { reason = "x", by = "Gm Apgm", ts = 1 } } } }
+  local r = R.compute(store, ctx)["lvl.all.10"]
+  ok(r, "the race is computed")
+  local keys = {}
+  for _, e in ipairs(r.entries) do keys[e.key] = true end
+  ok(keys["Kas-Realm"] and keys["Zed-Gone"], "names without a single identity show as they are")
+  ok(not keys["Nc-Realm"] and not keys["Nc Apnc"], "«Nc-Realm» read as «Nc Apnc», annulled by that name")
+  ok(#r.history >= 1 and r.history[1].key == "Nc Apnc", "the annulment is in the history under the identity")
+  eq(R.packClosed(store.closed["lvl.all.10"]), oldText, "computing (and freezing again) keeps the stored text")
+  local r2 = R.compute(store, { now = 1795100000, closedMap = strictOf })["lvl.all.10"]
+  eq(r2.entries[1].key, "Nc Apnc", "without the annulment: «Nc Apnc» first")
+  eq(R.packClosed(store.closed["lvl.all.10"]), oldText, "still the stored text")
 end)
 
 -- 2.1 (SPEC-v2.1 AC3): a partition the published 2.0.0 already migrated (tests/fixtures/sv-2.0.0.lua, made by
@@ -335,7 +335,7 @@ test("2.1 AC3: on a 2.0.0 partition the pass runs on load, is idempotent, dry wr
   eq(dry.remapped, r.remapped, "dry counts the same"); ok(r.remapped > 0, "it moved names: " .. r.remapped)
   local snapMb = g.progress.snap.W2967["Mb-Realm:1795000050"]
   ok(snapMb["Nc Apnc"] and snapMb["Mb Apmb"] and not snapMb["Nc-Realm"], "snap moved")
-  eq(g.races.closed["lvl.all.10"].rows[1].key, "Nc Apnc", "closed race moved"); eq(g.races.closed["lvl.all.10"].rows[2].key, "Mb Apmb")
+  eq(g.races.closed["lvl.all.10"].rows[1].key, "Nc-Realm", "review-2.1 R2: the closed race keeps its stored text")
   eq(g.progress.lvKnown["Nc Apnc"], 30, "lvKnown moved"); eq(g.races.rcache["Nc Apnc"], 60, "rcache moved")
   eq(g.progress.ach.char["Nc Apnc"].squad60, 1795000200, "achievements moved")
   ok(g.progress.ach.squad["Kas-Realm:1795001009"], "squad ids kept")
