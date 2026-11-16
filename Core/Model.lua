@@ -1241,7 +1241,8 @@ local function fixOwn(rec, ctx, map, r, strict)
     if d.who ~= was and type(ctx.grantId) == "function" then rec.id = ctx.grantId(d.ach, d.who) end
   elseif k == "settings" then many("rlList")
   elseif k == "annul" or k == "vconfirm" then
-    return M.fixOwnNamedId(rec, map, strict or map, r) ~= false
+    M.fixOwnNamedId(rec, map, strict or map, r)                     -- review-2.1 R1: no identity = kept as it is
+    return true
   end
   return true
 end
@@ -1290,39 +1291,41 @@ local function step2(root, g, ctx, map, r, strict)
   root.idv[me] = M.IDV
 end
 
--- 2.1 (SPEC-v2.1 AC4): my annulments / confirmations the 2.0.0 already re-signed with a 1.x name inside their id (it did
--- not remap them): a new version with the identity (sq + 1, ts now), on every load until none is left (idempotent).
--- One that names nobody goes. Only the author can sign it, so each character fixes its own.
+-- 2.1 (SPEC-v2.1 AC4, amended by review-2.1 R1): my annulments / confirmations the 2.0.0 already re-signed with a 1.x name
+-- inside their id. The peers keep that record (signed by me), so it is never dropped here: an old annul gets a new version
+-- off (on = false, sq + 1) and a new annul with the identity is added; an old vconfirm stays as it is (it points at
+-- nothing) next to a new one. A name without identity leaves the record untouched. Idempotent: an annul already off, or
+-- a new id already held, is not done again. Only the author can sign them, so each character fixes its own.
 local function ownNamedIds(g, ctx, map, strict, r)
   if type(g.records) ~= "table" then return end
-  local keep, changed = {}, false
-  local at = {}
+  local held, add = {}, {}
   for _, rec in ipairs(g.records) do
-    if type(rec) == "table" and rec.a == ctx.me and (rec.k == "annul" or rec.k == "vconfirm") then
-      local res = M.fixOwnNamedId(rec, map, strict, r)
-      if res == false then changed = true; r.dropped = r.dropped + 1; rec = nil
-      elseif res == true then
-        changed = true
-        rec.sq = (tonumber(rec.sq) or 0) + 1
-        rec.ts = math.max(tonumber(rec.ts) or 0, tonumber(ctx.now) or 0)
-        r.resigned = r.resigned + 1
-        if type(ctx.note) == "function" then pcall(ctx.note, rec) end
-      end
-    end
-    if rec then
-      local kid = type(rec) == "table" and (tostring(rec.k) .. ":" .. tostring(rec.id)) or nil
-      local i = kid and at[kid]
-      if i then                                                    -- one version per kid: the newest stays
-        local cur = keep[i]
-        if (tonumber(rec.ts) or 0) > (tonumber(cur.ts) or 0) or ((tonumber(rec.ts) or 0) == (tonumber(cur.ts) or 0) and (tonumber(rec.sq) or 0) > (tonumber(cur.sq) or 0)) then keep[i] = rec end
-        changed = true
-      else
-        keep[#keep + 1] = rec
-        if kid then at[kid] = #keep end
+    if type(rec) == "table" then held[tostring(rec.k) .. ":" .. tostring(rec.id)] = true end
+  end
+  local now = tonumber(ctx.now) or 0
+  for _, rec in ipairs(g.records) do
+    if type(rec) == "table" and rec.a == ctx.me and (rec.k == "annul" or rec.k == "vconfirm") and type(rec.d) == "table"
+       and not (rec.k == "annul" and rec.d.on == false) then
+      local copy = deepCopy(rec, {})
+      if M.fixOwnNamedId(copy, map, strict, nil) == true then
+        local kid = copy.k .. ":" .. tostring(copy.id)
+        if not held[kid] then
+          copy.sq, copy.ts = (tonumber(rec.sq) or 0) + 1, math.max(tonumber(rec.ts) or 0, now)
+          add[#add + 1] = copy; held[kid] = true
+          r.remapped = r.remapped + 1; r.resigned = r.resigned + 1
+          if type(ctx.note) == "function" then pcall(ctx.note, copy) end
+        end
+        if rec.k == "annul" then
+          rec.d.on = false
+          rec.sq = (tonumber(rec.sq) or 0) + 1
+          rec.ts = math.max(tonumber(rec.ts) or 0, now)
+          r.resigned = r.resigned + 1
+          if type(ctx.note) == "function" then pcall(ctx.note, rec) end
+        end
       end
     end
   end
-  if changed then g.records = keep end
+  for _, rec in ipairs(add) do g.records[#g.records + 1] = rec end
 end
 
 function M.migrateIdentity(root, g, ctx)
