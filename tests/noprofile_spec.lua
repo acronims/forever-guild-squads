@@ -736,3 +736,20 @@ test("2.1 AC11: H.RaceTable empty at start-up is read again after 10 s or when t
   env2.C_CreatureInfo = { GetRaceInfo = function(id) if id == 91 then return { raceName = "Altonato", clientFileString = "SkyborneHighOrder" } end end }
   ok((ns2.HallGlue.RaceTable()).SKYBORNEHIGHORDER, "the API appears: read at once")
 end)
+
+-- rereview-2.1 H2: restoring (un-annulling) in 2.1 an annulment the migration carried over also reverts the old one
+-- (1.x name), so the 2.0.0 clients, which still apply the old one, see it restored too
+test("2.1 H2: Restore of a migrated annulment signs the old 1.x one off too", function()
+  local ns = boot201({ roster = roster201() })
+  local A, H = ns.Actions, ns.HallGlue
+  local oldKey = "Dan-" .. REALM
+  eq(ns.id(oldKey), "Dan Ash", "the 1.x name reads as «Dan Ash»")
+  ok(A.WriteRecord("annul", "lvl.all.10|" .. oldKey, { race = "lvl.all.10", key = oldKey, reason = "cheat", on = true }), "old annulment")
+  ok(A.WriteRecord("annul", "lvl.all.10|Dan Ash", { race = "lvl.all.10", key = "Dan Ash", reason = "cheat", on = true }), "carried over")
+  ok(A.WriteRecord("annul", "lvl.all.10|Eva-" .. REALM, { race = "lvl.all.10", key = "Eva-" .. REALM, reason = "other", on = true }), "another one")
+  ok(H.Restore("lvl.all.10", "Dan Ash"), "restored")
+  local an = ns.state.annuls
+  eq(an["lvl.all.10|Dan Ash"].d.on, false, "the new one off")
+  eq(an["lvl.all.10|" .. oldKey].d.on, false, "the old one off too")
+  ok(an["lvl.all.10|Eva-" .. REALM].d.on ~= false, "another member's annulment untouched")
+end)
