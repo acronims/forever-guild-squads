@@ -1048,13 +1048,8 @@ local function step21(root, g, ctx, strict, map, r)
     remapKeysMerge(ra.rcache, strict, r, maxNum)
     remapKeysMerge(ra.rseen, strict, r, higherLevel)
     remapKeysMerge(ra.hello, strict, r, maxNum)
-    -- AC2: the rows of the closed races (strict: a peer that imports the same text from a 2.0.0 gets the same rows)
-    if type(ra.closed) == "table" and type(ctx.remapClosed) == "function" then
-      for _, id in ipairs(sortedKeys(ra.closed)) do
-        local okC, n = pcall(ctx.remapClosed, ra.closed[id], strict)
-        if okC and type(n) == "number" then r.remapped = r.remapped + n end
-      end
-    end
+    -- AC2 (review-2.1 R2): the closed races keep their stored text (its hash is the bucket item of the 2.0.0 too); their
+    -- names are read as identities when a race is computed (Races.place, ctx.closedMap)
   end
 end
 

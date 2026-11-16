@@ -43,8 +43,7 @@ local function fixture()
 end
 local function ctxFor(me, oldMe, extra)
   local c = { mode = "forever", id = idOf, me = me, oldMe = oldMe, now = NOW, eventId = NS.Progress.eventId,
-              obsId = NS.Races.obsId, rsvpId = NS.Roster.rsvpId, grantId = NS.Catalog.grantId,
-              remapClosed = NS.Races.remapClosed }
+              obsId = NS.Races.obsId, rsvpId = NS.Roster.rsvpId, grantId = NS.Catalog.grantId }
   for k, v in pairs(extra or {}) do c[k] = v end
   return c
 end

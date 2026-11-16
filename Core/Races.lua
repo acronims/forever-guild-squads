@@ -1015,10 +1015,31 @@ function R.place(store, r, ctx)
   -- with the candidates and the Top is recomputed deterministically (same data -> same Top, whatever the order
   -- it arrived in); the rows only matter for observations already compacted away.
   local frozen = store and store.closed and store.closed[r.id]
+  -- 2.1 (SPEC-v2.1 AC2, review-2.1 R2): the stored rows keep the names they were frozen with (1.x «Name-Realm»
+  -- included: the text is the bucket item every version hashes). ctx.closedMap (WoW Forever) reads them as identities
+  -- here; `back` turns them into the stored form again when the race is frozen below, so the text never changes
+  local back = {}
+  local cmap = ctx and type(ctx.closedMap) == "function" and ctx.closedMap or nil
+  local function rd(n)
+    if not cmap or type(n) ~= "string" or not string.find(n, "-", 1, true) or string.find(n, ":", 1, true) then return n end
+    local okM, m = pcall(cmap, n)
+    if okM and type(m) == "string" and m ~= "" and not string.find(m, "-", 1, true) then
+      if back[m] == nil then back[m] = n end
+      return m
+    end
+    return n
+  end
+  local function rdList(l)
+    if type(l) ~= "table" or not cmap then return l end
+    local out = {}
+    for i, v in ipairs(l) do out[i] = rd(v) end
+    return out
+  end
   if frozen then
     for _, row in ipairs(frozen.rows) do
-      r.cands[#r.cands + 1] = { key = row.key, ts = row.ts, mark = row.mark, chars = row.chars, squads = row.squads,
-                                sup = row.sup, wit = row.wit, name = row.key }
+      local key = rd(row.key)
+      r.cands[#r.cands + 1] = { key = key, ts = row.ts, mark = row.mark, chars = rdList(row.chars), squads = row.squads,
+                                sup = rdList(row.sup), wit = row.wit, name = key }
     end
     table.sort(r.cands, candLess)
   end
@@ -1038,7 +1059,14 @@ function R.place(store, r, ctx)
   local quiet = not (ctx and ctx.syncing) and not (store and store.lastRx and ctx and ctx.now and ctx.now - store.lastRx < R.QUIET)
   if r.state == "closed" and quiet and store and store.closed then
     local rows = {}
-    for i, e in ipairs(out) do rows[i] = { key = e.key, ts = e.ts, mark = e.mark, chars = e.chars, squads = e.squads, sup = e.sup, wit = e.wit } end
+    local function un(n) return back[n] or n end
+    local function unList(l)
+      if type(l) ~= "table" or next(back) == nil then return l end
+      local o = {}
+      for i, v in ipairs(l) do o[i] = un(v) end
+      return o
+    end
+    for i, e in ipairs(out) do rows[i] = { key = un(e.key), ts = e.ts, mark = e.mark, chars = unList(e.chars), squads = e.squads, sup = unList(e.sup), wit = e.wit } end
     store.closed[r.id] = { rows = rows, at = (ctx and ctx.now) or 0 }
   end
   return r
@@ -1167,37 +1195,12 @@ function R.unpackClosed(text)
   end
   return { rows = rows }
 end
--- 2.1 (SPEC-v2.1 AC2): the names of a closed race in the 1.x form («Name-Realm», with «-») moved to the identity:
--- the key of a character race (a squad id «Name:ct» is opaque), chars and sup. map(name) -> identity | nil; a name
--- without one stays as it was (a closed Top never loses a row). Returns how many names changed.
-local function oldForm(n) return type(n) == "string" and string.find(n, "-", 1, true) ~= nil end
-function R.remapClosed(c, map)
-  if type(c) ~= "table" or type(c.rows) ~= "table" or type(map) ~= "function" then return 0 end
-  local n = 0
-  local function one(v)
-    if not oldForm(v) then return v end
-    local okM, m = pcall(map, v)
-    if okM and type(m) == "string" and m ~= "" and not oldForm(m) then n = n + 1; return m end
-    return v
-  end
-  for _, row in ipairs(c.rows) do
-    if type(row) == "table" then
-      if type(row.key) == "string" and not string.find(row.key, ":", 1, true) then row.key = one(row.key) end
-      for _, f in ipairs({ "chars", "sup" }) do
-        if type(row[f]) == "table" then for i, v in ipairs(row[f]) do row[f][i] = one(v) end end
-      end
-    end
-  end
-  return n
-end
 -- a closed race received from a peer is only taken when we have none (closed = immutable)
 -- `size` is the effective one (the GM's achdef when valid, R.def); defs optional (default: the catalog in use)
--- map (optional, 2.1 AC2, WoW Forever): a 2.0.0 peer still sends the 1.x names of an old closed race; they are
--- moved to the identity like the migration does, so every 2.1 holds the same text (same bucket hash)
-function R.importClosed(store, id, text, at, defs, map)
+-- 2.1 (review-2.1 R2): the text is kept as it came, 1.x names included (same bucket hash on every version)
+function R.importClosed(store, id, text, at, defs)
   if type(id) ~= "string" or store.closed[id] then return false end
   local c = R.unpackClosed(text)
-  if c and map then R.remapClosed(c, map) end
   -- a closed Top must be complete (exactly `size` rows) with non-decreasing dates
   if not c or #c.rows ~= R.def(id, defs).size then return false end
   for i = 2, #c.rows do if c.rows[i].ts < c.rows[i - 1].ts then return false end end

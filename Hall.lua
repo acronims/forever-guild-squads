@@ -130,7 +130,7 @@ function H.Ctx()
            trusted = function(n) return P.isOfficer(ns.roster, n, settings()) end,
            inGuild = function(n) return ns.roster(n) ~= nil end,
            squads = squadsMap, annul = R.annulMap(ns.state.annuls), nodata = H.NoData(), season = H.SeasonId(),
-           classes = classesSeen(), races = racesSeen(), raceOk = (H.RaceTable()), syncing = ns.Sync and ns.Sync.Syncing and ns.Sync.Syncing() or false }
+           classes = classesSeen(), races = racesSeen(), raceOk = (H.RaceTable()), closedMap = H.closedMap(), syncing = ns.Sync and ns.Sync.Syncing and ns.Sync.Syncing() or false }
 end
 
 local function markDirty() dirty = true; if ns.UI and ns.UI.Dirty then ns.UI.Dirty() end end
@@ -482,12 +482,12 @@ function H.OnObs(payload, sender, relayed, sentAt)
     end
   end
   if type(payload.c) == "string" and type(payload.x) == "string" and relayed and officer
-     and R.importClosed(store, payload.c, payload.x, t, nil, H.closedMap()) then any = true end
+     and R.importClosed(store, payload.c, payload.x, t) then any = true end
   if any then markDirty() end
 end
 
--- 2.1 (SPEC-v2.1 AC2): WoW Forever only (in realm mode «Name-Realm» is the identity): an old name of a closed race
--- that a 2.0.0 officer still sends goes to its identity, the same way the migration moved ours
+-- 2.1 (SPEC-v2.1 AC2, review-2.1 R2): WoW Forever only (in realm mode «Name-Realm» is the identity): the 1.x names of a
+-- closed race are read as identities when the race is computed (Races.place); the stored text never changes
 function H.closedMap()
   if ns.ID_MODE ~= "forever" or type(ns.id) ~= "function" then return nil end
   return function(n)
