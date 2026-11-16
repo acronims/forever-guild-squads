@@ -1035,6 +1035,18 @@ function R.place(store, r, ctx)
     for i, v in ipairs(l) do out[i] = rd(v) end
     return out
   end
+  -- rereview-2.1 H1: while the stored rows carry a 1.x name (WoW Forever), the race is never frozen again: a 2.0.0
+  -- re-freezes it with the old row and the identity's observation as two competitors, the 2.1 merges them; the text
+  -- (bucket item) must stay the inherited one. Checked on the stored rows, whether the roster resolves them or not
+  local legacy = false
+  if frozen and cmap then
+    local function oldName(n) return type(n) == "string" and string.find(n, "-", 1, true) and not string.find(n, ":", 1, true) end
+    for _, row in ipairs(frozen.rows) do
+      if oldName(row.key) then legacy = true; break end
+      for _, l in ipairs({ row.chars or {}, row.sup or {} }) do for _, v in ipairs(l) do if oldName(v) then legacy = true end end end
+      if legacy then break end
+    end
+  end
   if frozen then
     for _, row in ipairs(frozen.rows) do
       local key = rd(row.key)
@@ -1057,7 +1069,7 @@ function R.place(store, r, ctx)
   -- freeze (snapshot for compaction / peers) only when the data is quiet: not during the initial sync and not
   -- before R.QUIET seconds after the last observation received
   local quiet = not (ctx and ctx.syncing) and not (store and store.lastRx and ctx and ctx.now and ctx.now - store.lastRx < R.QUIET)
-  if r.state == "closed" and quiet and store and store.closed then
+  if r.state == "closed" and quiet and store and store.closed and not legacy then
     local rows = {}
     local function un(n) return back[n] or n end
     local function unList(l)
