@@ -432,7 +432,7 @@ end)
 -- The old annul gets a new version off (on = false) and a new one with the identity is added; the old vconfirm stays
 -- as it is next to the new one. A name without identity never drops my record.
 local function recById(g, k, id) for _, r in ipairs(g.records) do if r.k == k and r.id == id then return r end end end
-test("2.1 R1: my old annul gets a version off and a new one is added; the old vconfirm stays; a second load adds nothing", function()
+test("2.1 R1: my old annul and vconfirm stay as the peers hold them; a new one with the identity is added; a second load adds nothing", function()
   local root = fixture200()
   local g = root.guilds[GK]
   local old0 = recById(g, "annul", "lvl.all.10|Nc-Realm")
@@ -441,7 +441,9 @@ test("2.1 R1: my old annul gets a version off and a new one is added; the old vc
   main(root)
   local oldA, newA = recById(g, "annul", "lvl.all.10|Nc-Realm"), recById(g, "annul", "lvl.all.10|Nc Apnc")
   ok(oldA, "the old annulment is still there")
-  ok(oldA and oldA.d.on == false and oldA.sq == sq0 + 1 and oldA.d.key == "Nc-Realm", "a new version of it, off (sq + 1)")
+  -- the old one stays as the peers hold it, on: a 2.0.0 (old names in its closed races) still applies it; the 2.1 reads
+  -- the rows as identities and applies the new one
+  ok(oldA and oldA.d.on ~= false and oldA.sq == sq0 and oldA.d.key == "Nc-Realm", "the old annulment unchanged (same version, on)")
   ok(newA and newA.d.on ~= false and newA.d.key == "Nc Apnc" and newA.a == "Kas Pitas", "a new annulment with the identity")
   ok(recById(g, "vconfirm", vOld) and recById(g, "vconfirm", vOld).d.oid == vOld, "the old vconfirm stays as it is")
   ok(recById(g, "vconfirm", "Nc Apnc|kill|1795001120|e1443"), "a new vconfirm with the moved observation id")
