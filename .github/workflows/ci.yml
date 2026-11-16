@@ -63,8 +63,14 @@ jobs:
           - "S24 --seed 7303"
           # the 1.2.x world (RegionalUniqueNamesEnabled absent): the realm mode keeps working
           - "S19 --seed 7303 --realm"
+          # 2.1 (SPEC-v2.1 AC7, review-2.1 R1/R2): guilds mixing the published 2.0.0 (the tag v2.0.0, read with
+          # git show: full history below) and the 2.1; S26 upgrades a guild with 1.x-era closed races and annulments
+          - "S25 --seed 7303"
+          - "S26 --seed 7303"
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
