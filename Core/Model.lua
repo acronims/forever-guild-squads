@@ -1287,10 +1287,10 @@ local function step2(root, g, ctx, map, r, strict)
 end
 
 -- 2.1 (SPEC-v2.1 AC4, amended by review-2.1 R1): my annulments / confirmations the 2.0.0 already re-signed with a 1.x name
--- inside their id. The peers keep that record (signed by me), so it is never dropped here: an old annul gets a new version
--- off (on = false, sq + 1) and a new annul with the identity is added; an old vconfirm stays as it is (it points at
--- nothing) next to a new one. A name without identity leaves the record untouched. Idempotent: an annul already off, or
--- a new id already held, is not done again. Only the author can sign them, so each character fixes its own.
+-- inside their id. The peers keep that record (signed by me), so it stays exactly as they hold it (a 2.0.0, whose closed
+-- races keep the 1.x names, still applies the old annul; the 2.1 reads those rows as identities, Races.place) and a new
+-- one with the identity is added next to it. A name without identity adds nothing. Idempotent: a new id already held is
+-- not added again. Only the author can sign them, so each character fixes its own.
 local function ownNamedIds(g, ctx, map, strict, r)
   if type(g.records) ~= "table" then return end
   local held, add = {}, {}
@@ -1300,7 +1300,7 @@ local function ownNamedIds(g, ctx, map, strict, r)
   local now = tonumber(ctx.now) or 0
   for _, rec in ipairs(g.records) do
     if type(rec) == "table" and rec.a == ctx.me and (rec.k == "annul" or rec.k == "vconfirm") and type(rec.d) == "table"
-       and not (rec.k == "annul" and rec.d.on == false) then
+       and not (rec.k == "annul" and rec.d.on == false) then   -- a reverted annulment is not carried over
       local copy = deepCopy(rec, {})
       if M.fixOwnNamedId(copy, map, strict, nil) == true then
         local kid = copy.k .. ":" .. tostring(copy.id)
@@ -1309,13 +1309,6 @@ local function ownNamedIds(g, ctx, map, strict, r)
           add[#add + 1] = copy; held[kid] = true
           r.remapped = r.remapped + 1; r.resigned = r.resigned + 1
           if type(ctx.note) == "function" then pcall(ctx.note, copy) end
-        end
-        if rec.k == "annul" then
-          rec.d.on = false
-          rec.sq = (tonumber(rec.sq) or 0) + 1
-          rec.ts = math.max(tonumber(rec.ts) or 0, now)
-          r.resigned = r.resigned + 1
-          if type(ctx.note) == "function" then pcall(ctx.note, rec) end
         end
       end
     end
