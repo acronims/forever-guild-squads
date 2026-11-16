@@ -397,6 +397,36 @@ test("2.1 AC4: in the 1.2.2 migration my annul / vconfirm come out of resign wit
   checkAnnuls(g, "1.2.2")
 end)
 
+-- review-2.1 R3: with a partial roster the 2.1 pass keeps what it cannot resolve, and a later load with the full roster
+-- moves it (no mark stops it). R5: shared data goes through the strict map, so «Kas-Realm» (two Kas) never becomes me
+local function partialId(n) if n == "Kas-Realm" or n == "Kas Pitas-Realm" then return "Kas Pitas" end return nil end
+test("2.1 R3: a partial roster loses nothing; the full roster later moves it", function()
+  local root = fixture200()
+  local g = root.guilds[GK]
+  M.migrateIdentity(root, g, ctxFor("Kas Pitas", "Kas-Realm", { id = partialId }))
+  ok(g.progress.snap.W2967["Mb-Realm:1795000050"]["Nc-Realm"], "snap: «Nc-Realm» kept")
+  eq(g.progress.lvKnown["Nc-Realm"], 30, "lvKnown kept"); eq(g.races.rcache["Nc-Realm"], 60, "rcache kept")
+  ok(g.races.rseen["Gm-Realm"] and g.races.hello["Nc-Realm"], "rseen / hello kept")
+  ok(g.progress.ach.char["Nc-Realm"], "achievements kept")
+  local an = 0
+  for _, r in ipairs(g.records) do if r.k == "annul" or r.k == "vconfirm" then an = an + 1 end end
+  ok(an >= 3, "my annul / vconfirm records kept (" .. an .. ")")
+  main(root)
+  ok(g.progress.snap.W2967["Mb-Realm:1795000050"]["Nc Apnc"] and not g.progress.snap.W2967["Mb-Realm:1795000050"]["Nc-Realm"], "full roster: snap moved")
+  eq(g.progress.lvKnown["Nc Apnc"], 30, "full roster: lvKnown moved"); eq(g.races.rcache["Nc Apnc"], 60, "full roster: rcache moved")
+  eq(g.progress.ach.char["Nc Apnc"].squad60, 1795000200, "full roster: achievements moved")
+end)
+test("2.1 R5: shared data never maps the ambiguous «Kas-Realm» to me; the result does not depend on who logs in first", function()
+  local a, b = fixture(), fixture()
+  for _, root in ipairs({ a, b }) do root.guilds[GK].races.rcache["Kas-Realm"] = 44 end
+  main(a); alt(a)
+  alt(b); main(b)
+  eq(a.guilds[GK].races.rcache["Kas Pitas"], nil, "rcache: «Kas-Realm» is not me (two Kas)")
+  eq(a.guilds[GK].races.rcache["Kas-Realm"], 44, "kept under the old name")
+  eq(S.encode(a.guilds[GK].races), S.encode(b.guilds[GK].races), "main first or alt first: the same races data")
+  eq(S.encode(a.guilds[GK].progress), S.encode(b.guilds[GK].progress), "main first or alt first: the same progress data")
+end)
+
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)
 SMOKE_CHECKS = SMOKE_CHECKS or {}
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "2.0: the first own manifest of a migrated identity is n = 1, the next ones grow", function(c)
