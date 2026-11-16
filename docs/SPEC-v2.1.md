@@ -165,3 +165,26 @@ Anton (o un revisor a ciegas que él lance). El constructor (gsq-21) no juzga su
    latinas de 2 bytes de UTF-8 (U+00C0-U+00DE ↔ U+00E0-U+00FE); otras escrituras siguen como antes.
 6. Sin cliente: nada de esto se ha probado en el juego. Lo que depende del juego (B1, B11, Skyborne real) sigue en
    «Límites conocidos».
+
+## Enmiendas tras la revisión a ciegas (16-nov-2026, `wt/agents/review-2.1.md`)
+
+- **AC2 (R2).** Las carreras cerradas **no** se reescriben: ni en la migración ni al importarlas. Su texto es el ítem que
+  todos hashean en los cubos del Salón; cambiarlo hacía que un 2.1 y un 2.0.0 se las reenviaran en cada hello (81-88
+  mensajes por ronda en la sonda del revisor). Ahora `Races.place` lee los nombres 1.x como identidades
+  (`ctx.closedMap`, solo WoW Forever) y, al volver a congelar, los escribe como estaban. Criterio nuevo: el texto
+  guardado e importado es el de la 2.0.0; el Top calculado enseña la identidad y una anulación por la identidad le
+  aplica.
+- **AC3 (R3, R5).** Sin marca `g.idv21` (ningún campo nuevo en las SavedVariables): la pasada de la 2.1 corre en cada
+  carga y es idempotente. Lo que el roster no resuelve se queda con su nombre viejo y se pasa en una carga posterior.
+  Los niveles y hellos de otros usan el mapeo estricto; lo de la cuenta (instantáneas de sus squads, logros), el de la
+  cuenta. El resultado ya no depende de qué personaje entra primero.
+- **AC4 (R1).** La anulación o confirmación vieja **se queda tal cual** (los demás la tienen firmada por mí; borrarla
+  dejaba al GM sin converger nunca) y se añade una nueva con la identidad. Un nombre sin identidad no añade nada y
+  nunca borra el registro. (El revisor proponía firmar la vieja con `on = false`; se descarta porque un 2.0.0, cuyas
+  carreras cerradas siguen con nombres viejos, dejaría de aplicarla.)
+- **AC7.** Escenario nuevo **S26**: guild en v2.0.0 con carreras cerradas de la 1.x y anulaciones de nombre viejo que
+  pasa a la 2.1 por partes. Tráfico de Salón y de registros (D) por ronda acotado por la ronda toda-2.0.0, modelos que
+  convergen y la anulación que sigue anulando. S25 y S26 entran en `.github/workflows/ci.yml` (con historia completa).
+- **Para la 2.2 (🟡 no arreglados):** R4 claves `mix:` de grupos mixtos sin remapear (límite en el CHANGELOG); R6 test
+  del camino real de AC4 por carga/pares/manifiesto más allá de S26, y la huella de `RP.x`; R8 doble escaneo de la tabla
+  de razas.
