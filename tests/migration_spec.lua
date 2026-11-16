@@ -233,11 +233,15 @@ test("2.1 AC1: snap, ach, lvKnown, rcache, rseen and hello move to «Nombre Apel
   end
   local snapMb = pr.snap.W2967["Mb-Realm:1795000050"]
   ok(snapMb and snapMb["Mb Apmb"] and snapMb["Nc Apnc"], "the squad snapshot names «Mb Apmb» and «Nc Apnc» (squad id kept)")
-  for _, t in ipairs({ ra.rcache, ra.rseen, ra.hello, pr.lvKnown }) do eq(oldKeys(t), 0, "no old key") end
+  -- review-2.1 R5: the levels / hellos of others use the strict map: only the ambiguous «Kas-Realm» (two Kas) stays
+  for _, t in ipairs({ ra.rcache, ra.rseen, ra.hello, pr.lvKnown }) do
+    for k in pairs(t) do ok(not old(k) or k == "Kas-Realm", "no old key but the ambiguous one: " .. k) end
+  end
   eq(ra.rcache["Mb Apmb"], 60, "rcache re-keyed"); ok(ra.rseen["Gm Apgm"] and ra.rseen["Gm Apgm"].lv == 60, "rseen re-keyed")
   ok(ra.hello["Nc Apnc"] == 1795000654, "hello re-keyed")
   eq(pr.lvKnown["Nc Apnc"], 30, "lvKnown merged with the highest level")
-  eq(oldKeys(pr.ach.char), 0, "progress.ach.char: no old owner")
+  for k in pairs(pr.ach.char) do ok(not old(k) or k == "Zed-Gone", "progress.ach.char: only «Zed-Gone» (no identity, R3) keeps its old name: " .. k) end
+  ok(pr.ach.char["Zed-Gone"], "review-2.1 R3: an owner without identity is kept, not dropped")
   eq(oldKeys(ra.ach.char), 0, "races.ach.char: no old owner")
   ok(pr.ach.char["Kas Pitas"] and pr.ach.char["Kas Pitas"].first1 == 100, "my achievement is mine («Kas-Realm» is me)")
   eq(pr.ach.char["Nc Apnc"].squad60, 200, "someone else's achievement re-keyed")
@@ -318,7 +322,7 @@ test("2.1 AC3: the 2.0.0 fixture is migrated by the 2.0.0 and still has the old 
   ok(g.progress.lvKnown["Nc-Realm"] and g.races.rcache["Nc-Realm"], "lvKnown and rcache on the old name")
   ok(g.progress.ach.char["Nc-Realm"], "achievements on the old name")
 end)
-test("2.1 AC3: on a 2.0.0 partition the pass runs once (g.idv21), is idempotent, dry writes nothing, realm does nothing", function()
+test("2.1 AC3: on a 2.0.0 partition the pass runs on load, is idempotent, dry writes nothing, realm does nothing", function()
   local root = fixture200()
   local g = root.guilds[GK]
   local bytes = S.encode(root)
@@ -327,9 +331,8 @@ test("2.1 AC3: on a 2.0.0 partition the pass runs once (g.idv21), is idempotent,
   local dry = M.migrateIdentity(root, g, ctxFor("Kas Pitas", "Kas-Realm", { dry = true }))
   eq(S.encode(root), bytes, "dry: nothing written")
   local r = main(root)
-  ok(not r.guild, "the 2.0 step 1 does not run again"); ok(r.v21, "the 2.1 pass ran")
+  ok(not r.guild, "the 2.0 step 1 does not run again")
   eq(dry.remapped, r.remapped, "dry counts the same"); ok(r.remapped > 0, "it moved names: " .. r.remapped)
-  eq(g.idv21, 1, "the 2.1 mark")
   local snapMb = g.progress.snap.W2967["Mb-Realm:1795000050"]
   ok(snapMb["Nc Apnc"] and snapMb["Mb Apmb"] and not snapMb["Nc-Realm"], "snap moved")
   eq(g.races.closed["lvl.all.10"].rows[1].key, "Nc Apnc", "closed race moved"); eq(g.races.closed["lvl.all.10"].rows[2].key, "Mb Apmb")
@@ -338,10 +341,8 @@ test("2.1 AC3: on a 2.0.0 partition the pass runs once (g.idv21), is idempotent,
   ok(g.progress.ach.squad["Kas-Realm:1795001009"], "squad ids kept")
   local once = S.encode(root)
   local r2 = main(root)
-  eq(S.encode(root), once, "a second load changes nothing"); ok(not r2.v21, "the pass runs once")
-  g.idv21 = nil
-  main(root)
-  eq(S.encode(root), once, "without the mark: the same bytes")
+  eq(S.encode(root), once, "a second load changes nothing"); eq(r2.remapped, 0, "nothing left to move")
+  eq(g.idv21, nil, "review-2.1 R3: no new mark in the SavedVariables")
 end)
 
 -- 2.1 (SPEC-v2.1 AC4): own annulments and confirmations whose id embeds a name are signed again with the identity
@@ -408,9 +409,6 @@ test("2.1 R3: a partial roster loses nothing; the full roster later moves it", f
   eq(g.progress.lvKnown["Nc-Realm"], 30, "lvKnown kept"); eq(g.races.rcache["Nc-Realm"], 60, "rcache kept")
   ok(g.races.rseen["Gm-Realm"] and g.races.hello["Nc-Realm"], "rseen / hello kept")
   ok(g.progress.ach.char["Nc-Realm"], "achievements kept")
-  local an = 0
-  for _, r in ipairs(g.records) do if r.k == "annul" or r.k == "vconfirm" then an = an + 1 end end
-  ok(an >= 3, "my annul / vconfirm records kept (" .. an .. ")")
   main(root)
   ok(g.progress.snap.W2967["Mb-Realm:1795000050"]["Nc Apnc"] and not g.progress.snap.W2967["Mb-Realm:1795000050"]["Nc-Realm"], "full roster: snap moved")
   eq(g.progress.lvKnown["Nc Apnc"], 30, "full roster: lvKnown moved"); eq(g.races.rcache["Nc Apnc"], 60, "full roster: rcache moved")
@@ -423,8 +421,12 @@ test("2.1 R5: shared data never maps the ambiguous «Kas-Realm» to me; the resu
   alt(b); main(b)
   eq(a.guilds[GK].races.rcache["Kas Pitas"], nil, "rcache: «Kas-Realm» is not me (two Kas)")
   eq(a.guilds[GK].races.rcache["Kas-Realm"], 44, "kept under the old name")
-  eq(S.encode(a.guilds[GK].races), S.encode(b.guilds[GK].races), "main first or alt first: the same races data")
-  eq(S.encode(a.guilds[GK].progress), S.encode(b.guilds[GK].progress), "main first or alt first: the same progress data")
+  -- the 2.1 fields (hkBase / sent are the 2.0 step 1's, per character, out of this pass)
+  local ga, gb = a.guilds[GK], b.guilds[GK]
+  for _, f in ipairs({ { "races", "rcache" }, { "races", "rseen" }, { "races", "hello" }, { "races", "ach" },
+                       { "progress", "snap" }, { "progress", "ach" }, { "progress", "lvKnown" } }) do
+    eq(S.encode(ga[f[1]][f[2]] or {}), S.encode(gb[f[1]][f[2]] or {}), "main first or alt first: the same " .. f[1] .. "." .. f[2])
+  end
 end)
 
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)

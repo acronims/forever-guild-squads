@@ -882,7 +882,6 @@ function M.whisperTarget(key, surname, myRealm, alt) return ns.Identity.realmWhi
 --   Progress / Races / Roster / Catalog, note = fn(rec) (the ledger of my versions) }.
 -- Returns { swept, dropped, resign, remapped, removed, resigned, guild = step 1 ran, char = step 2 ran }.
 M.IDV = 2
-M.IDV21 = 1   -- 2.1 (SPEC-v2.1 AC1-AC3): the local data by name of a partition moved to the identity
 local function isOld(n) return type(n) == "string" and string.find(n, "-", 1, true) ~= nil end
 M.isOldName = isOld
 local function sortedKeys(t)
@@ -992,17 +991,19 @@ local function remapEntries(t, must, lists, idOf, map, r)
 end
 
 -- 2.1 (SPEC-v2.1 AC1): a map keyed by names whose old keys are re-keyed; when the new key is there already, merge(cur,
--- old) decides the value (the earliest date, the highest level). The ones without an identity go.
+-- old) decides the value (the earliest date, the highest level). review-2.1 R3: one without an identity (a partial
+-- roster, a member who left) stays under its old key, untouched: a later load moves it when the roster resolves it.
 local function remapKeysMerge(t, map, r, merge)
   if type(t) ~= "table" then return end
   for _, k in ipairs(sortedKeys(t)) do
     if isOld(k) then
-      local m, v = map(k), t[k]
-      t[k] = nil
+      local m = map(k)
       if m then
+        local v = t[k]
+        t[k] = nil
         if t[m] == nil then t[m] = v else t[m] = merge(t[m], v) end
         r.remapped = r.remapped + 1
-      else r.removed = r.removed + 1 end
+      end
     end
   end
 end
@@ -1021,7 +1022,9 @@ local function higherLevel(a, b)                                 -- { lv, ts }: 
 end
 -- 2.1 (SPEC-v2.1 AC1): the local data keyed by name that the 2.0 migration left (CHANGELOG 2.0.0, known limits):
 -- the membership snapshot of each wipe, the achievements already won, the known levels and the level / hello caches.
--- Run once per partition (g.idv21), also on a partition the 2.0.0 already migrated. Squad ids are opaque (kept).
+-- Run on every load (idempotent: only old keys that now resolve move; review-2.1 R3, no mark), also on a partition the
+-- 2.0.0 already migrated. Squad ids are opaque (kept). review-2.1 R5: what this account built (wipe snapshots of its
+-- squads, its achievements) uses the account map (my old key is me); the levels and hellos of others use the strict one.
 local function step21(root, g, ctx, strict, map, r)
   local pr = type(g.progress) == "table" and g.progress or nil
   if pr then
@@ -1037,14 +1040,14 @@ local function step21(root, g, ctx, strict, map, r)
       end
     end
     if type(pr.ach) == "table" then remapKeysMerge(pr.ach.char, map, r, minDates) end
-    remapKeysMerge(pr.lvKnown, map, r, maxNum)
+    remapKeysMerge(pr.lvKnown, strict, r, maxNum)
   end
   local ra = type(g.races) == "table" and g.races or nil
   if ra then
     if type(ra.ach) == "table" then remapKeysMerge(ra.ach.char, map, r, minDates) end
-    remapKeysMerge(ra.rcache, map, r, maxNum)
-    remapKeysMerge(ra.rseen, map, r, higherLevel)
-    remapKeysMerge(ra.hello, map, r, maxNum)
+    remapKeysMerge(ra.rcache, strict, r, maxNum)
+    remapKeysMerge(ra.rseen, strict, r, higherLevel)
+    remapKeysMerge(ra.hello, strict, r, maxNum)
     -- AC2: the rows of the closed races (strict: a peer that imports the same text from a 2.0.0 gets the same rows)
     if type(ra.closed) == "table" and type(ctx.remapClosed) == "function" then
       for _, id in ipairs(sortedKeys(ra.closed)) do
@@ -1053,7 +1056,6 @@ local function step21(root, g, ctx, strict, map, r)
       end
     end
   end
-  g.idv21 = M.IDV21
 end
 
 local function step1(root, g, ctx, strict, map, r)
@@ -1338,7 +1340,7 @@ function M.migrateIdentity(root, g, ctx)
   end
   local strict, map = mappers(root, ctx)
   if g.idv ~= M.IDV then step1(root, g, ctx, strict, map, r); r.guild = true end
-  if g.idv21 ~= M.IDV21 then step21(root, g, ctx, strict, map, r); r.v21 = true end
+  step21(root, g, ctx, strict, map, r)
   local mine = false
   for _, rec in ipairs(type(g.resign) == "table" and g.resign or {}) do
     if type(rec) == "table" and (rec.a == ctx.me or rec.a == ctx.oldMe) then mine = true; break end
