@@ -429,6 +429,46 @@ test("2.1 R5: shared data never maps the ambiguous «Kas-Realm» to me; the resu
   end
 end)
 
+-- review-2.1 R1: the peers keep my old annul / vconfirm (signed by me); dropping it locally left the GM never converging.
+-- The old annul gets a new version off (on = false) and a new one with the identity is added; the old vconfirm stays
+-- as it is next to the new one. A name without identity never drops my record.
+local function recById(g, k, id) for _, r in ipairs(g.records) do if r.k == k and r.id == id then return r end end end
+test("2.1 R1: my old annul gets a version off and a new one is added; the old vconfirm stays; a second load adds nothing", function()
+  local root = fixture200()
+  local g = root.guilds[GK]
+  local old0 = recById(g, "annul", "lvl.all.10|Nc-Realm")
+  local sq0 = old0.sq
+  local vOld = "Nc-Realm|kill|1795001120|e1443"
+  main(root)
+  local oldA, newA = recById(g, "annul", "lvl.all.10|Nc-Realm"), recById(g, "annul", "lvl.all.10|Nc Apnc")
+  ok(oldA, "the old annulment is still there")
+  ok(oldA and oldA.d.on == false and oldA.sq == sq0 + 1 and oldA.d.key == "Nc-Realm", "a new version of it, off (sq + 1)")
+  ok(newA and newA.d.on ~= false and newA.d.key == "Nc Apnc" and newA.a == "Kas Pitas", "a new annulment with the identity")
+  ok(recById(g, "vconfirm", vOld) and recById(g, "vconfirm", vOld).d.oid == vOld, "the old vconfirm stays as it is")
+  ok(recById(g, "vconfirm", "Nc Apnc|kill|1795001120|e1443"), "a new vconfirm with the moved observation id")
+  local once = S.encode(root)
+  main(root)
+  eq(S.encode(root), once, "a second load adds nothing")
+end)
+test("2.1 R1: a name without identity never drops my annul / vconfirm (2.0.0 partition and 1.2.2 migration)", function()
+  local root = fixture200()
+  local g = root.guilds[GK]
+  local n0 = 0
+  for _, r in ipairs(g.records) do if r.k == "annul" or r.k == "vconfirm" then n0 = n0 + 1 end end
+  M.migrateIdentity(root, g, ctxFor("Kas Pitas", "Kas-Realm", { id = partialId }))
+  local n1 = 0
+  for _, r in ipairs(g.records) do if r.k == "annul" or r.k == "vconfirm" then n1 = n1 + 1 end end
+  eq(n1, n0, "partial roster: all kept")
+  ok(recById(g, "annul", "lvl.all.10|Nc-Realm").d.on ~= false, "and untouched (still on)")
+  local r2 = fixture()
+  local g2 = r2.guilds[GK]
+  g2.records[#g2.records + 1] = { a = "Kas-Realm", k = "annul", id = "lvl.all.10|Zed-Gone", sq = 12, ts = 1795001030,
+    d = { race = "lvl.all.10", key = "Zed-Gone", reason = "kicked", on = true } }
+  main(r2)
+  local z = recById(g2, "annul", "lvl.all.10|Zed-Gone")
+  ok(z and z.a == "Kas Pitas" and z.d.on ~= false, "1.2.2: the annulment of a member who left is re-signed as it is, not dropped")
+end)
+
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)
 SMOKE_CHECKS = SMOKE_CHECKS or {}
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "2.0: the first own manifest of a migrated identity is n = 1, the next ones grow", function(c)
