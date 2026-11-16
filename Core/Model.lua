@@ -993,11 +993,19 @@ end
 -- 2.1 (SPEC-v2.1 AC1): a map keyed by names whose old keys are re-keyed; when the new key is there already, merge(cur,
 -- old) decides the value (the earliest date, the highest level). review-2.1 R3: one without an identity (a partial
 -- roster, a member who left) stays under its old key, untouched: a later load moves it when the roster resolves it.
-local function remapKeysMerge(t, map, r, merge)
+local function remapKeysMerge(t, map, r, merge, levelOf)
   if type(t) ~= "table" then return end
   for _, k in ipairs(sortedKeys(t)) do
     if isOld(k) then
       local m = map(k)
+      -- rereview-2.1 H3 (levels only): a known level above the identity's roster level is someone else's (a member who
+      -- left, now a namesake): levels never go down. The old key goes, nothing is moved
+      if m and levelOf then
+        local v = t[k]
+        local okL, now = pcall(levelOf, m)
+        local was = type(v) == "table" and tonumber(v.lv) or tonumber(v)
+        if okL and type(now) == "number" and was and was > now then t[k] = nil; r.removed = r.removed + 1; m = nil end
+      end
       if m then
         local v = t[k]
         t[k] = nil
@@ -1040,13 +1048,13 @@ local function step21(root, g, ctx, strict, map, r)
       end
     end
     if type(pr.ach) == "table" then remapKeysMerge(pr.ach.char, map, r, minDates) end
-    remapKeysMerge(pr.lvKnown, strict, r, maxNum)
+    remapKeysMerge(pr.lvKnown, strict, r, maxNum, ctx.levelOf)
   end
   local ra = type(g.races) == "table" and g.races or nil
   if ra then
     if type(ra.ach) == "table" then remapKeysMerge(ra.ach.char, map, r, minDates) end
-    remapKeysMerge(ra.rcache, strict, r, maxNum)
-    remapKeysMerge(ra.rseen, strict, r, higherLevel)
+    remapKeysMerge(ra.rcache, strict, r, maxNum, ctx.levelOf)
+    remapKeysMerge(ra.rseen, strict, r, higherLevel, ctx.levelOf)
     remapKeysMerge(ra.hello, strict, r, maxNum)
     -- AC2 (review-2.1 R2): the closed races keep their stored text (its hash is the bucket item of the 2.0.0 too); their
     -- names are read as identities when a race is computed (Races.place, ctx.closedMap)
