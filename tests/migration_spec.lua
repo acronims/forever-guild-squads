@@ -498,6 +498,24 @@ test("2.1 H1: a closed race with 1.x names and observations still held keeps its
   eq(R.packClosed(store.closed[id]), text, "the stored text is the inherited one (2.0.0 bucket hash)")
 end)
 
+-- rereview-2.1 H3: the pass runs on every load, so the levels of a member who left could go to a new namesake. A
+-- level above the one the roster gives now cannot be that character (levels never go down): the old key is dropped
+test("2.1 H3: a known level above the roster level of the identity is not moved to it (a namesake)", function()
+  local root = fixture200()
+  local g = root.guilds[GK]
+  local lv = { ["Nc Apnc"] = 20, ["Mb Apmb"] = 60 }
+  main(root)
+  local root2 = fixture200()
+  local g2 = root2.guilds[GK]
+  M.migrateIdentity(root2, g2, ctxFor("Kas Pitas", "Kas-Realm", { levelOf = function(n) return lv[n] end }))
+  eq(g.races.rcache["Nc Apnc"], 60, "control, no roster level: moved")
+  eq(g2.races.rcache["Nc Apnc"], nil, "rcache 60 > roster level 20: not given to «Nc Apnc»")
+  eq(g2.races.rcache["Nc-Realm"], nil, "and dropped")
+  eq(g2.progress.lvKnown["Nc Apnc"], nil, "lvKnown 30 > 20: not moved")
+  eq(g2.races.rseen["Nc Apnc"], nil, "rseen 60 > 20: not moved")
+  eq(g2.races.rcache["Mb Apmb"], 60, "60 <= 60: moved")
+end)
+
 -- the first manifest after the migration is n = 1 (§5 step 2, AC5 b); later ones keep n = max(n + 1, server time)
 SMOKE_CHECKS = SMOKE_CHECKS or {}
 SMOKE_CHECKS[#SMOKE_CHECKS + 1] = { "2.0: the first own manifest of a migrated identity is n = 1, the next ones grow", function(c)
