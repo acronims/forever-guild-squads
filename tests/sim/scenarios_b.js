@@ -308,14 +308,26 @@ function S26(seed) {
     return tostring(R.importClosed(H.Store(), id, R.packClosed({ rows = rows }), 1795000000)) end)()`;
   const RACES = ['lvl.class.WARRIOR.10', 'lvl.class.MAGE.10', 'lvl.class.PRIEST.10', 'lvl.class.ROGUE.10', 'lvl.class.HUNTER.10', 'lvl.class.DRUID.10'];
   for (const c of all) for (const id of RACES) c.run('return ' + inject(id));
-  check('the 2.0.0 GM annuls «Xx1-Realm» and «Zed-Realm» (a member who left)', gm.run('return NS.HallGlue.Annul("lvl.all.20", "Xx1-Realm", "cheat")')[0] === true &&
-    gm.run('return NS.HallGlue.Annul("lvl.all.20", "Zed-Realm", "cheat, kicked")')[0] === true);
+  // rereview-2.1 H1: a closed race whose observations are still held (level 60s are never compacted): the old rows
+  // plus a level-60 report for each row under the identity
+  const inject60 = `(function() local R, H = NS.Races, NS.HallGlue; local id = "lvl.all.60"
+    local n = R.def(id).size
+    local rows = {} for i = 1, n do rows[i] = { key = "Xx" .. i .. "-Realm", ts = 1795000000 + i, mark = "approx", chars = { "Xx" .. i .. "-Realm" }, squads = {}, sup = {} } end
+    local okI = R.importClosed(H.Store(), id, R.packClosed({ rows = rows }), 1795000000)
+    for i = 1, n do R.add(H.Store(), { t = "lv", who = "Xx" .. i .. " Apxx" .. i, by = "Gm Apgm", lv = 60, ts = 1795000000 + i }) end
+    H.MarkDirty() return tostring(okI) end)()`;
+  check('a closed lvl.all.60 with its level-60 observations on the 4', all.every((c) => c.run('return ' + inject60)[0] === 'true'));
+  check('the 2.0.0 GM annuls «Xx1-Realm» and «Zed-Realm» (a member who left), and «Xx2-Realm» in a closed race', gm.run('return NS.HallGlue.Annul("lvl.all.20", "Xx1-Realm", "cheat")')[0] === true &&
+    gm.run('return NS.HallGlue.Annul("lvl.all.20", "Zed-Realm", "cheat, kicked")')[0] === true &&
+    gm.run('return NS.HallGlue.Annul("lvl.class.WARRIOR.10", "Xx2-Realm", "cheat2")')[0] === true);
   sim.run(240);
   const round = () => {
     let h = 0, d = 0;
     for (const c of all) { const [a, b] = cnt(c); h += a; d += b; c.reload(); hook(c); sim.run(5 + sim.rand() * 5); }
     for (const c of all) { const [a, b] = cnt(c); h += a; d += b; hook(c); }
-    sim.run(1500);   // one anti-entropy period too
+    // the Hall is computed mid-round (in the game: opening the Hall), so a closed race is frozen again if it would be
+    sim.run(700); for (const c of all) c.run('NS.HallGlue.MarkDirty(); NS.HallGlue.Races(); return true');
+    sim.run(800);    // with the 700 s above, one anti-entropy period too
     for (const c of all) { const [a, b] = cnt(c); h += a; d += b; hook(c); }
     return [h, d];
   };
@@ -336,6 +348,12 @@ function S26(seed) {
     local m = A["lvl.all.20"] or {} local o = {} for k in pairs(m) do o[#o + 1] = k end table.sort(o) return table.concat(o, ",") end)()`);
   const an = all.map((c) => c.name + ':' + annulled(c));
   check('the GM\'s annulment of «Xx1» still annuls on every client (by the old or the new name)', all.every((c) => /Xx1/.test(annulled(c))), an.join(' ; '));
+  // rereview-2.1 H4: the annulled row stops scoring, on the 2.0.0 history and the 2.1 alike (old or new name)
+  const scored = (c) => s(c, `(function() NS.HallGlue.MarkDirty(); local r = NS.HallGlue.Races()["lvl.class.WARRIOR.10"]
+    local o = {} for _, e in ipairs(r and r.entries or {}) do if e.key:find("^Xx2[ %-]") then o[#o + 1] = e.key end end return table.concat(o, ",") end)()`);
+  check('the annulled «Xx2» row of the closed race scores on no client', all.every((c) => scored(c) === ''), all.map((c) => c.name + ':' + scored(c)).join(' ; '));
+  const h60 = all.map((c) => s(c, '(function() local x = NS.HallGlue.Store().closed["lvl.all.60"]; return x and NS.Serialize.hash(NS.Races.packClosed(x)):sub(1, 8) or "nil" end)()'));
+  check('the closed lvl.all.60 has the same stored text on the 4', h60.every((x) => x === h60[0] && x !== 'nil'), h60.join(','));
   errorsCheck(sim, check);
   return { pass: pass(), checks, metrics: { rounds, ...sim.stats } };
 }
