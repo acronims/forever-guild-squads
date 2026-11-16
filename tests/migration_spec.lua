@@ -429,8 +429,8 @@ test("2.1 R5: shared data never maps the ambiguous «Kas-Realm» to me; the resu
 end)
 
 -- review-2.1 R1: the peers keep my old annul / vconfirm (signed by me); dropping it locally left the GM never converging.
--- The old annul gets a new version off (on = false) and a new one with the identity is added; the old vconfirm stays
--- as it is next to the new one. A name without identity never drops my record.
+-- The old annul / vconfirm stay exactly as the peers hold them (a 2.0.0 still applies the old annul) and a new one with
+-- the identity is added next to it. A name without identity never drops my record.
 local function recById(g, k, id) for _, r in ipairs(g.records) do if r.k == k and r.id == id then return r end end end
 test("2.1 R1: my old annul and vconfirm stay as the peers hold them; a new one with the identity is added; a second load adds nothing", function()
   local root = fixture200()

@@ -97,8 +97,8 @@ A. Datos y sincronización
   (mismo `R.packClosed`, mismo hash de cubo). Un nombre sin identidad se queda como está (no se quitan filas: el Top
   cerrado no cambia de tamaño).
 - [ ] **AC3** `migration_spec` + fixture nuevo `tests/fixtures/sv-2.0.0.lua` (el 1.2.2 migrado por el código del tag
-  v2.0.0, generado por `tests/tools/make-sv-200.js`): al cargar con la 2.1, una sola vez (marca `g.idv21`), quedan
-  remapeados los datos de AC1, AC2 y AC4; dos pasadas dan los mismos bytes; el modo dry de `/gsq diag` cuenta y no
+  v2.0.0, generado por `tests/tools/make-sv-200.js`): al cargar con la 2.1 (en cada carga, sin marca: enmienda
+  R3) quedan remapeados los datos de AC1 y AC4 (AC2: las carreras cerradas no se reescriben, enmienda R2); dos pasadas dan los mismos bytes; el modo dry de `/gsq diag` cuenta y no
   escribe; en modo realm no hace nada.
 - [ ] **AC4** `migration_spec`: una anulación propia del GM sobre una entrada de personaje («lvl.all.10|Kas-Realm»)
   sale con `d.key = "Kas Pitas"`, `id = "lvl.all.10|Kas Pitas"`, `sq` mayor y en espera de firma; una sobre una
@@ -148,10 +148,10 @@ Anton (o un revisor a ciegas que él lance). El constructor (gsq-21) no juzga su
 
 **Riesgos / suposiciones**
 
-1. **SavedVariables (AC3, riesgo principal).** Campo nuevo `g.idv21` en la partición de la guild. No cambia el formato
-   de nada que ya existe. Migración probada con un fixture real de la 2.0.0 (AC3: una vez, idempotente, dry). Si un
-   jugador vuelve a la 2.0.0, la marca se ignora y los datos remapeados siguen siendo válidos para la 2.0.0 (usan la
-   identidad que ella misma usa).
+1. **SavedVariables (AC3, riesgo principal).** Sin campos nuevos (la marca `g.idv21` de la primera versión se quitó,
+   enmienda R3). No cambia el formato de nada que ya existe. Migración probada con un fixture real de la 2.0.0 (AC3: en
+   cada carga, idempotente, dry). Si un jugador vuelve a la 2.0.0, los datos remapeados siguen siendo válidos para ella
+   (usan la identidad que ella misma usa).
 2. **Protocolo.** Ningún cambio: AC7 lo vigila con la huella de esquemas. AC4 vuelve a firmar registros propios con
    el esquema de siempre (una versión nueva, `sq` + 1), como ya hace la migración de la 2.0. Si algún punto exigiera
    PROTO 4, se para y se escala a BRO.
@@ -188,3 +188,15 @@ Anton (o un revisor a ciegas que él lance). El constructor (gsq-21) no juzga su
 - **Para la 2.2 (🟡 no arreglados):** R4 claves `mix:` de grupos mixtos sin remapear (límite en el CHANGELOG); R6 test
   del camino real de AC4 por carga/pares/manifiesto más allá de S26, y la huella de `RP.x`; R8 doble escaneo de la tabla
   de razas.
+
+## Enmiendas tras la re-revisión (16-nov-2026, `wt/agents/rereview-2.1.md`)
+
+- **AC2 (H1).** Una carrera cerrada cuyas filas guardadas llevan algún nombre 1.x no se vuelve a congelar nunca (modo
+  WoW Forever): su texto es el heredado de la 2.0.0, también cuando aún tiene observaciones (niveles 60, carreras de
+  clase o raza abiertas). S26 lo mide con un `lvl.all.60` de 100 filas y sus observaciones, calculando el Salón a
+  mitad de ronda.
+- **AC4 (H2).** Restaurar una anulación en la 2.1 firma también `on = false` en mi anulación vieja que se lee como esa
+  identidad (los 2.0.0 aplican la vieja).
+- **AC3 (H3).** Al mover niveles (`rcache`, `rseen`, `lvKnown`) se descarta el nivel viejo si es mayor que el nivel
+  actual de esa identidad en el roster (sería de otro: un homónimo nuevo). Los logros de un homónimo quedan como límite
+  conocido.

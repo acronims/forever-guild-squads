@@ -6,7 +6,7 @@ Incluye todo lo de la 2.0.1, que no llegó a publicarse. / Includes everything o
 
 ### ES
 
-- **Lo que tenías de antes de la 2.0 vuelve a ser tuyo con «Nombre Apellido».** La 2.0 dejaba con el nombre viejo («Nombre-Reino») algunos datos guardados en tu cliente. Ahora pasan al nombre nuevo, una sola vez al entrar (también si ya migraste con la 2.0.0): quién estaba en cada squad en los wipes pasados, los logros ya ganados (no se vuelven a anunciar) y los niveles conocidos. Las carreras cerradas del Salón de la fama se guardan como estaban (así cuadran con quien sigue en la 2.0.0) y se enseñan con el nombre nuevo. Un nombre que ya no está en la guild, o que comparten dos personajes, se queda como estaba y se pasa en cuanto la lista de la guild lo resuelve.
+- **Lo que tenías de antes de la 2.0 vuelve a ser tuyo con «Nombre Apellido».** La 2.0 dejaba con el nombre viejo («Nombre-Reino») algunos datos guardados en tu cliente. Ahora pasan al nombre nuevo al entrar (también si ya migraste con la 2.0.0): quién estaba en cada squad en los wipes pasados, los logros ya ganados (no se vuelven a anunciar) y los niveles conocidos. Las carreras cerradas del Salón de la fama se guardan como estaban (así cuadran con quien sigue en la 2.0.0) y se enseñan con el nombre nuevo. Un nombre que ya no está en la guild, o que comparten dos personajes, se queda como estaba y se pasa en cuanto la lista de la guild lo resuelve.
 - **Arreglado: las anulaciones del GM sobre un personaje vuelven a funcionar.** Una anulación (o una confirmación de un oficial) hecha con la 1.x apuntaba al nombre viejo y desde la 2.0 no anulaba nada. Al entrar con la 2.1, el GM (o el oficial) que la hizo firma otra con el nombre nuevo; la vieja se queda igual, para quien siga en la 2.0.0. Hasta que entre, sigue sin efecto en la 2.1.
 - **Las carreras por raza solo se abren con razas de verdad.** La lista de razas del cliente incluye razas de PNJ; una de ellas ya no abre su carrera con un solo informe: tiene que ser la raza del perfil de alguien de la guild (o la tuya). Con 2 informantes, como antes.
 - **Al crear un logro de nivel, el GM elige entre «Cualquier personaje», «Por clase…» y «Por raza…».** La lista única tenía un tope de 30 y, con muchas clases en la guild, perdía las últimas razas sin avisar.
@@ -31,10 +31,12 @@ Incluye todo lo de la 2.0.1, que no llegó a publicarse. / Includes everything o
   - Sin probar en el juego: cómo se ve «(Sin perfil todavía)» junto a un nombre largo. Se corta a la vista, como el resto de nombres.
   - Las razas de PNJ se reconocen porque nadie de la guild las tiene en su perfil: si un miembro usa un cliente modificado que firma una raza falsa en su perfil, abre esa carrera.
   - Las anulaciones de un grupo mixto (varios personajes sin squad) hechas con la 1.x siguen con los nombres viejos y sin efecto.
+  - Si un miembro se va y años después entra otro con su mismo nombre de pila, este puede heredar los logros ya ganados que el cliente guardaba con el nombre viejo (solo en tu cliente; los niveles no, porque un personaje no baja de nivel).
+  - Mientras quede alguien en la 2.0.0, una carrera cerrada de antes de la 2.0 que aún tiene sus observaciones (los niveles 60, por ejemplo) se queda como estaba guardada; la 2.0.0 la sigue viendo con algún nombre repetido.
 
 ### EN
 
-- **What you had from before 2.0 is yours again as «Name Surname».** 2.0 left some data saved in your client on the old name ("Name-Realm"). It now moves to the new name, once, at login (also if you already migrated with 2.0.0): who was in each squad in past wipes, achievements already won (not announced again) and known levels. The closed races of the Hall of Fame are kept as they were (so they match whoever stays on 2.0.0) and shown with the new name. A name no longer in the guild, or shared by two characters, stays as it was and moves as soon as the guild roster resolves it.
+- **What you had from before 2.0 is yours again as «Name Surname».** 2.0 left some data saved in your client on the old name ("Name-Realm"). It now moves to the new name at login (also if you already migrated with 2.0.0): who was in each squad in past wipes, achievements already won (not announced again) and known levels. The closed races of the Hall of Fame are kept as they were (so they match whoever stays on 2.0.0) and shown with the new name. A name no longer in the guild, or shared by two characters, stays as it was and moves as soon as the guild roster resolves it.
 - **Fixed: the GM's annulments of a character work again.** An annulment (or an officer's confirmation) made with 1.x pointed at the old name and has annulled nothing since 2.0. When the GM (or officer) who made it logs in with 2.1, he signs another one with the new name; the old one stays as it is, for whoever is still on 2.0.0. Until then it still has no effect on 2.1.
 - **Race races only open for real races.** The client's race list includes NPC races; one of them no longer opens its race with a single report: it must be the race of someone's profile in the guild (or yours). With 2 reporters, as before.
 - **When creating a level achievement, the GM picks "Any character", "By class…" or "By race…".** The single list had a cap of 30 and, with many classes in the guild, silently lost the last races.
@@ -59,6 +61,8 @@ Incluye todo lo de la 2.0.1, que no llegó a publicarse. / Includes everything o
   - Not tried in the game: how "(No profile yet)" looks next to a long name. It is cut on screen, like every other name.
   - NPC races are told apart because nobody in the guild has them in their profile: a member with a modified client that signs a fake race in his profile opens that race.
   - Annulments of a mixed group (several characters without a squad) made with 1.x keep the old names and still have no effect.
+  - If a member leaves and much later someone with the same first name joins, he may inherit the achievements your client kept under the old name (only on your client; not the levels, since a character never loses levels).
+  - While someone is on 2.0.0, a pre-2.0 closed race that still has its observations (level 60s, for example) stays as stored; 2.0.0 keeps showing it with some name twice.
 
 ## 2.0.0 — 2026-11-09 — Cada personaje es «Nombre Apellido» / Every character is «Name Surname»
 
